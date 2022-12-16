@@ -127,3 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+src/autogluon/cloud/version.py
+VERSION.minor
