@@ -115,7 +115,7 @@ install_requires = [
     # TODO: update to the latest after 0.6 container is out
     "sagemaker>=2.94",
     "pyarrow>=9.0,<10.0",
-    "PyYAML>=6.0,<7.0"
+    "PyYAML>=6.0,<7.0",
     "Pillow>=9.3.0,<10.0",
 ]
 
