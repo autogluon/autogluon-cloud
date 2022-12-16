@@ -106,7 +106,7 @@ version = update_version(version, use_file_if_exists=False, create_file=True)
 install_requires = [
     "autogluon.common>=0.6",
     "boto3<2.0",
-    "numpy>=1.21,<2.0",
+    "numpy>=1.21.4,<2.0",
     "packaging>=21.0,<22.0",
     "pandas>=1.2.5,<2.0",
     # TODO: update to the latest after 0.6 container is out
