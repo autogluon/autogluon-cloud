@@ -13,7 +13,7 @@ def create_version_file(*, version):
     print('-- Building version ' + version)
     version_path = os.path.join('src', AUTOGLUON, CLOUD, 'version.py')
     with open(version_path, 'w') as f:
-        f.write(f'"""This is the {AUTOGLUON} version file."""\n')
+        f.write(f'"""This is the {AUTOGLUON}.{CLOUD} version file."""\n')
         f.write("__version__ = '{}'\n".format(version))
 
 
