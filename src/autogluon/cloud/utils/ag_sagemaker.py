@@ -138,7 +138,14 @@ class AutoGluonSagemakerInferenceModel(Model):
                 instance_type=instance_type,
             )
         # setting PYTHONUNBUFFERED to disable output buffering for endpoints logging
-        super().__init__(model_data=model_data, role=role, entry_point=entry_point, image_uri=image_uri, env={"PYTHONUNBUFFERED": "1"}, **kwargs)
+        super().__init__(
+            model_data=model_data,
+            role=role,
+            entry_point=entry_point,
+            image_uri=image_uri,
+            env={"PYTHONUNBUFFERED": "1"},
+            **kwargs,
+        )
 
     def transformer(
         self,
