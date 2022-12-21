@@ -3,41 +3,6 @@ import tempfile
 from autogluon.cloud import TabularCloudPredictor
 
 
-def test_tabular(test_helper):
-    train_data = "tabular_train.csv"
-    tune_data = "tabular_tune.csv"
-    test_data = "tabular_test.csv"
-    timestamp = test_helper.get_utc_timestamp_now()
-    with tempfile.TemporaryDirectory() as _:
-        test_helper.prepare_data(train_data, tune_data, test_data)
-        time_limit = 60
-
-        predictor_init_args = dict(label="class", eval_metric="roc_auc")
-        predictor_fit_args = dict(
-            train_data=train_data,
-            tuning_data=tune_data,
-            time_limit=time_limit,
-        )
-        cloud_predictor = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular/{timestamp}",
-            local_output_path="test_tabular_cloud_predictor",
-        )
-        cloud_predictor_no_train = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-no-train/{timestamp}",
-            local_output_path="test_tabular_cloud_predictor_no_train",
-        )
-        test_helper.test_functionality(
-            cloud_predictor,
-            predictor_init_args,
-            predictor_fit_args,
-            cloud_predictor_no_train,
-            test_data,
-            fit_kwargs=dict(custom_image_uri=test_helper.cpu_training_image),
-            deploy_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
-            predict_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
-        )
-
-
 def test_tabular_tabular_text_image(test_helper):
     train_data = "tabular_text_image_train.csv"
     test_data = "tabular_text_image_test.csv"
@@ -67,15 +32,10 @@ def test_tabular_tabular_text_image(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-tabular-text-image/{timestamp}",
             local_output_path="test_tabular_tabular_text_image_cloud_predictor",
         )
-        cloud_predictor_no_train = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-tabular-text-image-no-train/{timestamp}",
-            local_output_path="test_tabular_tabular_text_image_cloud_predictor_no_train",
-        )
-        test_helper.test_functionality(
+        test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
             predictor_fit_args,
-            cloud_predictor_no_train,
             test_data,
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
@@ -90,46 +50,4 @@ def test_tabular_tabular_text_image(test_helper):
                 test_data_image_column="Images",
                 custom_image_uri=test_helper.cpu_inference_image,
             ),
-        )
-
-
-def test_tabular_tabular_text(test_helper):
-    train_data = "tabular_text_train.csv"
-    test_data = "tabular_text_test.csv"
-    timestamp = test_helper.get_utc_timestamp_now()
-    with tempfile.TemporaryDirectory() as _:
-        test_helper.prepare_data(train_data, test_data)
-        time_limit = 120
-
-        predictor_init_args = dict(
-            label="Sentiment",
-        )
-        predictor_fit_args = dict(
-            train_data=train_data,
-            time_limit=time_limit,
-            hyperparameters={
-                "XGB": {},
-                "AG_TEXT_NN": {"presets": "medium_quality_faster_train"},
-            },
-        )
-        cloud_predictor = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-tabular-text/{timestamp}",
-            local_output_path="test_tabular_tabular_text_cloud_predictor",
-        )
-        cloud_predictor_no_train = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-tabular-text-no-train/{timestamp}",
-            local_output_path="test_tabular_tabular_text_cloud_predictor_no_train",
-        )
-        test_helper.test_functionality(
-            cloud_predictor,
-            predictor_init_args,
-            predictor_fit_args,
-            cloud_predictor_no_train,
-            test_data,
-            fit_kwargs=dict(
-                instance_type="ml.g4dn.2xlarge",
-                custom_image_uri=test_helper.gpu_training_image,
-            ),
-            deploy_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
-            predict_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
         )

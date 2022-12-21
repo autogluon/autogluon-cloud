@@ -18,15 +18,10 @@ def test_text(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-text/{timestamp}",
             local_output_path="test_text_cloud_predictor",
         )
-        cloud_predictor_no_train = TextCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-text-no-train/{timestamp}",
-            local_output_path="test_text_cloud_predictor_no_train",
-        )
-        test_helper.test_functionality(
+        test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
             predictor_fit_args,
-            cloud_predictor_no_train,
             test_data,
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
@@ -52,15 +47,10 @@ def test_multimodal_text_only(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-text/{timestamp}",
             local_output_path="test_multimodal_text_cloud_predictor",
         )
-        cloud_predictor_no_train = MultiModalCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-text-no-train/{timestamp}",
-            local_output_path="test_multimodal_text_cloud_predictor_no_train",
-        )
-        test_helper.test_functionality(
+        test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
             predictor_fit_args,
-            cloud_predictor_no_train,
             test_data,
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",

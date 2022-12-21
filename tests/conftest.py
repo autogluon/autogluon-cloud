@@ -51,6 +51,50 @@ class CloudTestHelper:
             raise e
 
     @staticmethod
+    def test_basic_functionality(
+        cloud_predictor,
+        predictor_init_args,
+        predictor_fit_args,
+        test_data,
+        fit_kwargs=None,
+        deploy_kwargs=None,
+        predict_real_time_kwargs=None,
+        predict_kwargs=None,
+    ):
+        if fit_kwargs is None:
+            fit_kwargs = dict(instance_type="ml.m5.2xlarge")
+        cloud_predictor.fit(
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            **fit_kwargs,
+        )
+        info = cloud_predictor.info()
+        assert info["local_output_path"] is not None
+        assert info["cloud_output_path"] is not None
+        assert info["fit_job"]["name"] is not None
+        assert info["fit_job"]["status"] == "Completed"
+
+        if deploy_kwargs is None:
+            deploy_kwargs = dict()
+        if predict_real_time_kwargs is None:
+            predict_real_time_kwargs = dict()
+        cloud_predictor.deploy(**deploy_kwargs)
+        CloudTestHelper.test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs)
+        cloud_predictor.cleanup_deployment()
+
+        info = cloud_predictor.info()
+        assert info["local_output_path"] is not None
+        assert info["cloud_output_path"] is not None
+        assert info["fit_job"]["name"] is not None
+        assert info["fit_job"]["status"] == "Completed"
+
+        if predict_kwargs is None:
+            predict_kwargs = dict()
+        cloud_predictor.predict(test_data, **predict_kwargs)
+        info = cloud_predictor.info()
+        assert info["recent_transform_job"]["status"] == "Completed"
+
+    @staticmethod
     def test_functionality(
         cloud_predictor,
         predictor_init_args,

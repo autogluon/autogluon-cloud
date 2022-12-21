@@ -22,15 +22,10 @@ def test_image(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-image/{timestamp}",
             local_output_path="test_image_cloud_predictor",
         )
-        cloud_predictor_no_train = ImageCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-image-no-train/{timestamp}",
-            local_output_path="test_image_cloud_predictor_no_train",
-        )
-        test_helper.test_functionality(
+        test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
             predictor_fit_args,
-            cloud_predictor_no_train,
             test_data,
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
@@ -61,15 +56,10 @@ def test_multimodal_image_only(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-image/{timestamp}",
             local_output_path="test_multimodal_image_cloud_predictor",
         )
-        cloud_predictor_no_train = MultiModalCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-image-no-train/{timestamp}",
-            local_output_path="test_multimodal_image_cloud_predictor_no_train",
-        )
-        test_helper.test_functionality(
+        test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
             predictor_fit_args,
-            cloud_predictor_no_train,
             test_data,
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
