@@ -7,10 +7,10 @@ set -ex
 
 source $(dirname "$0")/env_setup.sh
 
-if [ MODULE = "tabular" ]
+if [ $MODULE = "tabular" ]
 then
     install_tabular $AG_VERSION
-elif [ MODULE = "multimodal" ]
+elif [ $MODULE = "multimodal" ]
 then
     install_multimodal $AG_VERSION
 fi
