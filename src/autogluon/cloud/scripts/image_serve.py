@@ -15,13 +15,6 @@ from autogluon.vision import ImagePredictor
 image_dir = os.path.join("/tmp", "ag_images")
 
 
-def _cleanup_images():
-    files = os.listdir(image_dir)
-    for file in files:
-        if file.endswith(".png"):
-            os.remove(file)
-
-
 def _save_images(im, im_name):
     os.makedirs(image_dir, exist_ok=True)
     im_path = os.path.join(image_dir, im_name)
@@ -83,7 +76,5 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         output = prediction.to_csv(index=None)
     else:
         raise ValueError(f"{output_content_type} content type not supported")
-
-    _cleanup_images()
 
     return output, output_content_type
