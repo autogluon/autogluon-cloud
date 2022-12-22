@@ -22,11 +22,12 @@ def _cleanup_images():
         if file.endswith(".png"):
             os.remove(file)
 
+
 def _save_images(im, im_name):
     os.makedirs(image_dir, exist_ok=True)
     im_path = os.path.join(image_dir, im_name)
     im.save(im_path)
-    
+
     return im_path
 
 
