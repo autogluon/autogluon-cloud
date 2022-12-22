@@ -13,11 +13,21 @@ from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.vision import ImagePredictor
 
 
+image_dir = os.path.join("/tmp", "ag_images")
+
+
 def _cleanup_images():
-    files = os.listdir("/temp")
+    files = os.listdir(image_dir)
     for file in files:
         if file.endswith(".png"):
             os.remove(file)
+
+def _save_images(im, im_name):
+    os.makedirs(image_dir, exist_ok=True)
+    im_path = os.path.join(image_dir, im_name)
+    im.save(im_path)
+    
+    return im_path
 
 
 def model_fn(model_dir):
@@ -38,9 +48,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
             # nosec B303 - not a cryptographic use
             im_hash = hashlib.sha1(im_bytes).hexdigest()
             im_name = f"image_{im_hash}.png"
-            im_path = os.path.join("/temp", im_name)
             im = Image.open(BytesIO(im_bytes))
-            im.save(im_path)
+            im_path = _save_images(im, im_name)
             image_paths.append(im_path)
 
     elif input_content_type == "application/x-image":
@@ -48,8 +57,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         im = Image.open(buf)
         image_paths = []
         im_name = "test.png"
-        im_path = os.path.join("/temp", im_name)
-        im.save(im_path)
+        im_path = _save_images(im, im_name)
         image_paths.append(im_path)
 
     else:
