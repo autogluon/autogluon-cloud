@@ -14,7 +14,7 @@ from autogluon.vision import ImagePredictor
 
 
 def _cleanup_images():
-    files = os.listdir(".")
+    files = os.listdir("/temp")
     for file in files:
         if file.endswith(".png"):
             os.remove(file)
@@ -38,17 +38,19 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
             # nosec B303 - not a cryptographic use
             im_hash = hashlib.sha1(im_bytes).hexdigest()
             im_name = f"image_{im_hash}.png"
+            im_path = os.path.join("/temp", im_name)
             im = Image.open(BytesIO(im_bytes))
-            im.save(im_name)
-            image_paths.append(im_name)
+            im.save(im_path)
+            image_paths.append(im_path)
 
     elif input_content_type == "application/x-image":
         buf = BytesIO(request_body)
         im = Image.open(buf)
         image_paths = []
         im_name = "test.png"
-        im.save(im_name)
-        image_paths.append(im_name)
+        im_path = os.path.join("/temp", im_name)
+        im.save(im_path)
+        image_paths.append(im_path)
 
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")

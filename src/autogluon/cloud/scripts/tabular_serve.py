@@ -1,6 +1,7 @@
 # flake8: noqa
 import base64
 import hashlib
+import os
 from io import BytesIO, StringIO
 
 import pandas as pd
@@ -11,16 +12,23 @@ from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.tabular import TabularPredictor
 
 
+def _cleanup_images():
+    files = os.listdir("/temp")
+    for file in files:
+        if file.endswith(".png"):
+            os.remove(file)
+
 def _save_image_and_update_dataframe_column(bytes):
     im_bytes = base64.b85decode(bytes)
     # nosec B303 - not a cryptographic use
     im_hash = hashlib.sha1(im_bytes).hexdigest()
     im = Image.open(BytesIO(im_bytes))
     im_name = f"tabular_image_{im_hash}.png"
-    im.save(im_name)
-    print(f"Image saved as {im_name}")
+    im_path = os.path.join("/temp", im_name)
+    im.save(im_path)
+    print(f"Image saved as {im_path}")
 
-    return im_name
+    return im_path
 
 
 def model_fn(model_dir):
@@ -84,5 +92,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         output = prediction.to_csv(index=None)
     else:
         raise ValueError(f"{output_content_type} content type not supported")
+    
+    _cleanup_images()
 
     return output, output_content_type
