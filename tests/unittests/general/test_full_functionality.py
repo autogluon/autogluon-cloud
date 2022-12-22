@@ -37,16 +37,7 @@ def test_full_functionality(test_helper, framework_version="latest"):
             predictor_fit_args,
             cloud_predictor_no_train,
             test_data,
-            fit_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=training_custom_image_uri
-            ),
-            deploy_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
-            ),
-            predict_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
-            ),
+            fit_kwargs=dict(framework_version=framework_version, custom_image_uri=training_custom_image_uri),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
+            predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
         )

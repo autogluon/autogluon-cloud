@@ -27,16 +27,10 @@ def test_text(test_helper, framework_version="latest"):
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
                 framework_version=framework_version,
-                custom_image_uri=training_custom_image_uri
+                custom_image_uri=training_custom_image_uri,
             ),
-            deploy_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
-            ),
-            predict_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
-            ),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
+            predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
         )
 
 
@@ -64,14 +58,8 @@ def test_multimodal_text_only(test_helper, framework_version="latest"):
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
                 framework_version=framework_version,
-                custom_image_uri=training_custom_image_uri
+                custom_image_uri=training_custom_image_uri,
             ),
-            deploy_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
-            ),
-            predict_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
-            ),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
+            predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
         )

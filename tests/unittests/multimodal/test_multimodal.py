@@ -34,17 +34,14 @@ def test_multimodal_tabular_text_image(test_helper, framework_version="latest"):
                 instance_type="ml.g4dn.2xlarge",
                 image_column=image_column,
                 framework_version=framework_version,
-                custom_image_uri=training_custom_image_uri
+                custom_image_uri=training_custom_image_uri,
             ),
-            deploy_kwargs=dict(
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
-            ),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
             predict_real_time_kwargs=dict(test_data_image_column=image_column),
             predict_kwargs=dict(
                 test_data_image_column=image_column,
                 framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
+                custom_image_uri=inference_custom_image_uri,
             ),
         )
         local_predictor = cloud_predictor.to_local_predictor()
