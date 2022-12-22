@@ -13,6 +13,16 @@ class CloudTestHelper:
     gpu_training_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-training:gpu-latest"
     cpu_inference_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-inference:cpu-latest"
     gpu_inference_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-inference:gpu-latest"
+    
+    @staticmethod
+    def get_custom_image_uri(framework_version="latest"):
+        training_custom_image_uri = CloudTestHelper.cpu_training_image
+        inference_custom_image_uri = CloudTestHelper.cpu_inference_image
+        if framework_version == "latest":
+            training_custom_image_uri = None
+            inference_custom_image_uri = None
+
+        return training_custom_image_uri, inference_custom_image_uri
 
     @staticmethod
     def prepare_data(*args):
@@ -155,6 +165,12 @@ class CloudTestHelper:
         info = cloud_predictor_no_train.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 
+def pytest_addoption(parser):
+    parser.addoption("--framework_version", action="store", default="latest")
+    
+@pytest.fixture(scope="session")
+def version(pytestconfig):
+    return pytestconfig.getoption("framework_version")
 
 @pytest.fixture
 def test_helper():
