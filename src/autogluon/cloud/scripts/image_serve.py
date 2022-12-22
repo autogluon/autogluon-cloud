@@ -12,7 +12,6 @@ from autogluon.core.constants import REGRESSION
 from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.vision import ImagePredictor
 
-
 image_dir = os.path.join("/tmp", "ag_images")
 
 
