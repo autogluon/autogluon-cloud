@@ -1,7 +1,7 @@
 #!/bin/bash
 
 MODULE=$1
-AG_VERSION="${2:-latest}"
+AG_VERSION="${2:-source}"
 
 set -ex
 

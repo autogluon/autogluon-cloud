@@ -27,20 +27,9 @@ class MultiModalCloudPredictor(CloudPredictor):
         return AutoGluonMultiModalRealtimePredictor
 
     def _get_local_predictor_cls(self):
-        from distutils.version import LooseVersion
+        from autogluon.multimodal import MultiModalPredictor
 
-        import autogluon.text
-
-        if LooseVersion(autogluon.text.__version__) < LooseVersion("0.5"):
-            from autogluon.text.automm import AutoMMPredictor
-
-            multimodal_predictor_cls = AutoMMPredictor
-        else:
-            from autogluon.multimodal import MultiModalPredictor
-
-            multimodal_predictor_cls = MultiModalPredictor
-
-        predictor_cls = multimodal_predictor_cls
+        predictor_cls = MultiModalPredictor
         return predictor_cls
 
     def predict_real_time(self, test_data, test_data_image_column=None, accept="application/x-parquet"):

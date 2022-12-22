@@ -15,10 +15,10 @@ class CloudTestHelper:
     gpu_inference_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-inference:gpu-latest"
 
     @staticmethod
-    def get_custom_image_uri(framework_version="latest"):
+    def get_custom_image_uri(framework_version="source"):
         training_custom_image_uri = CloudTestHelper.cpu_training_image
         inference_custom_image_uri = CloudTestHelper.cpu_inference_image
-        if framework_version == "latest":
+        if framework_version != "source":
             training_custom_image_uri = None
             inference_custom_image_uri = None
 
@@ -167,7 +167,7 @@ class CloudTestHelper:
 
 
 def pytest_addoption(parser):
-    parser.addoption("--framework_version", action="store", default="latest")
+    parser.addoption("--framework_version", action="store", default="source")
 
 
 @pytest.fixture(scope="session")

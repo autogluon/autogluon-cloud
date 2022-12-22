@@ -3,7 +3,7 @@ import tempfile
 from autogluon.cloud import MultiModalCloudPredictor
 
 
-def test_multimodal_tabular_text_image(test_helper, framework_version="latest"):
+def test_multimodal_tabular_text_image(test_helper, framework_version="source"):
     train_data = "tabular_text_image_train.csv"
     test_data = "tabular_text_image_test.csv"
     images = "tabular_text_image_images.zip"

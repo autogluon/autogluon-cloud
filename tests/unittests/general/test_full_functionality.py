@@ -3,7 +3,7 @@ import tempfile
 from autogluon.cloud import TabularCloudPredictor
 
 
-def test_full_functionality(test_helper, framework_version="latest"):
+def test_full_functionality(test_helper, framework_version="source"):
     """
     Use tabular as an example to test full functionality.
     Those functionalities shouldn't differ between modality
