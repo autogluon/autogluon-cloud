@@ -9,20 +9,20 @@ function install_cloud {
 }
 
 function install_latest_tabular_and_multimodal_dependencies {
-    git clone https://github.com/autogluon/autogluon-cloud.git
-    python3 -m pip install -e common/
-    python3 -m pip install -e core/[all]
-    python3 -m pip install -e features/
+    git clone https://github.com/autogluon/autogluon.git
+    python3 -m pip install -e autogluon/common/
+    python3 -m pip install -e autogluon/core/[all]
+    python3 -m pip install -e autogluon/features/
 }
 
 function install_latest_tabular {
     install_latest_tabular_and_multimodal_dependencies
-    python3 -m pip install -e tabular/[all]
+    python3 -m pip install -e autogluon/tabular/[all]
 }
 
 function install_latest_multimodal {
     install_latest_tabular_and_multimodal_dependencies
-    python3 -m pip install -e multimodal/
+    python3 -m pip install -e autogluon/multimodal/
 }
 
 function install_tabular {
