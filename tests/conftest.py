@@ -171,7 +171,7 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture(scope="session")
-def version(pytestconfig):
+def framework_version(pytestconfig):
     return pytestconfig.getoption("framework_version")
 
 

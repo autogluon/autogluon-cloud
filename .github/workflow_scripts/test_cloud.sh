@@ -17,4 +17,4 @@ fi
 
 install_cloud
 
-python3 -m pytest -n 2 --junitxml=results.xml tests/unittests/$MODULE/ $AG_VERSION
+python3 -m pytest -n 2 --junitxml=results.xml tests/unittests/$MODULE/ --framework_version $AG_VERSION
