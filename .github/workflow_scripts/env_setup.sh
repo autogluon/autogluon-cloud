@@ -27,7 +27,7 @@ function install_latest_multimodal {
 
 function install_tabular {
     VERSION=$1
-    if [ VERSION == "latest" ]
+    if [ $VERSION = "source" ]
     then
         install_latest_tabular
     else
@@ -37,7 +37,7 @@ function install_tabular {
 
 function install_multimodal {
     VERSION=$1
-    if [ VERSION == "latest" ]
+    if [ $VERSION = "source" ]
     then
         install_latest_multimodal
     else
