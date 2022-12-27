@@ -2,6 +2,7 @@ import tempfile
 
 from autogluon.cloud import TabularCloudPredictor
 
+
 def test_tabular_tabular_text_image(test_helper, framework_version):
     train_data = "tabular_text_image_train.csv"
     test_data = "tabular_text_image_test.csv"
