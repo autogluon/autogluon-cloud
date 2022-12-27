@@ -3,7 +3,7 @@ import tempfile
 from autogluon.cloud import MultiModalCloudPredictor
 
 
-def test_multimodal_text_only(test_helper, framework_version="source"):
+def test_multimodal_text_only(test_helper, framework_version):
     train_data = "text_train.csv"
     tune_data = "text_tune.csv"
     test_data = "text_test.csv"
