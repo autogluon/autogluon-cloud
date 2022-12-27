@@ -2,6 +2,9 @@ name: "Test Cloud Module"
 inputs:
   submodule-to-test:
     required: true
+  ag_version:
+    required: false
+    default: source
 
 runs:
   using: "composite"
@@ -15,4 +18,4 @@ runs:
     - name: Test Cloud Submodule
       shell: bash
       run: |
-        chmod +x ./.github/workflow_scripts/test_cloud.sh && ./.github/workflow_scripts/test_cloud.sh '${{ inputs.submodule-to-test }}'
+        chmod +x ./.github/workflow_scripts/test_cloud.sh && ./.github/workflow_scripts/test_cloud.sh '${{ inputs.submodule-to-test }}' '${{ inputs.ag_version }}'
