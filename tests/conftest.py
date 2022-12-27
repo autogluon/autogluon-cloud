@@ -15,6 +15,16 @@ class CloudTestHelper:
     gpu_inference_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-inference:gpu-latest"
 
     @staticmethod
+    def get_custom_image_uri(framework_version="source"):
+        training_custom_image_uri = CloudTestHelper.cpu_training_image
+        inference_custom_image_uri = CloudTestHelper.cpu_inference_image
+        if framework_version != "source":
+            training_custom_image_uri = None
+            inference_custom_image_uri = None
+
+        return training_custom_image_uri, inference_custom_image_uri
+
+    @staticmethod
     def prepare_data(*args):
         # TODO: make this handle more general structured directory format
         """
@@ -154,6 +164,15 @@ class CloudTestHelper:
         cloud_predictor_no_train.predict(test_data, predictor_path=trained_predictor_path, **predict_kwargs)
         info = cloud_predictor_no_train.info()
         assert info["recent_transform_job"]["status"] == "Completed"
+
+
+def pytest_addoption(parser):
+    parser.addoption("--framework_version", action="store", default="source")
+
+
+@pytest.fixture(scope="session")
+def framework_version(pytestconfig):
+    return pytestconfig.getoption("framework_version")
 
 
 @pytest.fixture

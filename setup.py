@@ -2,7 +2,6 @@ import os
 
 from setuptools import setup
 
-
 AUTOGLUON = "autogluon"
 CLOUD = "cloud"
 

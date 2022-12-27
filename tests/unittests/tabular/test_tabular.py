@@ -3,7 +3,7 @@ import tempfile
 from autogluon.cloud import TabularCloudPredictor
 
 
-def test_tabular_tabular_text_image(test_helper):
+def test_tabular_tabular_text_image(test_helper, framework_version="source"):
     train_data = "tabular_text_image_train.csv"
     test_data = "tabular_text_image_test.csv"
     images = "tabular_text_image_images.zip"
@@ -19,19 +19,22 @@ def test_tabular_tabular_text_image(test_helper):
         predictor_init_args = dict(
             label="AdoptionSpeed",
         )
+        text_model = "AG_TEXT_NN"
+        image_model = "AG_IMAGE_NN"
         predictor_fit_args = dict(
             train_data=train_data,
             time_limit=time_limit,
             hyperparameters={
                 "XGB": {},
-                "AG_TEXT_NN": {"presets": "medium_quality_faster_train"},
-                "AG_IMAGE_NN": {},
+                text_model: {"presets": "medium_quality_faster_train"},
+                image_model: {},
             },
         )
         cloud_predictor = TabularCloudPredictor(
             cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-tabular-text-image/{timestamp}",
             local_output_path="test_tabular_tabular_text_image_cloud_predictor",
         )
+        training_custom_image_uri, inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version)
         test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
@@ -40,14 +43,19 @@ def test_tabular_tabular_text_image(test_helper):
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
                 image_column=image_column,
-                custom_image_uri=test_helper.gpu_training_image,
+                framework_version=framework_version,
+                custom_image_uri=training_custom_image_uri,
             ),
-            deploy_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
             predict_real_time_kwargs=dict(
-                test_data_image_column="Images",
+                test_data_image_column=image_column,
             ),
             predict_kwargs=dict(
-                test_data_image_column="Images",
-                custom_image_uri=test_helper.cpu_inference_image,
+                test_data_image_column=image_column,
+                framework_version=framework_version,
+                custom_image_uri=inference_custom_image_uri,
             ),
         )
+        local_predictor = cloud_predictor.to_local_predictor()
+        models = local_predictor.get_model_names()
+        assert "ImagePredictor" in models

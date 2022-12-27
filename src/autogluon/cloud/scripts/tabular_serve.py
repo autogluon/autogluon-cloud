@@ -1,6 +1,7 @@
 # flake8: noqa
 import base64
 import hashlib
+import os
 from io import BytesIO, StringIO
 
 import pandas as pd
@@ -10,17 +11,21 @@ from autogluon.core.constants import REGRESSION
 from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.tabular import TabularPredictor
 
+image_dir = os.path.join("/tmp", "ag_images")
+
 
 def _save_image_and_update_dataframe_column(bytes):
+    os.makedirs(image_dir, exist_ok=True)
     im_bytes = base64.b85decode(bytes)
     # nosec B303 - not a cryptographic use
     im_hash = hashlib.sha1(im_bytes).hexdigest()
     im = Image.open(BytesIO(im_bytes))
     im_name = f"tabular_image_{im_hash}.png"
-    im.save(im_name)
-    print(f"Image saved as {im_name}")
+    im_path = os.path.join(image_dir, im_name)
+    im.save(im_path)
+    print(f"Image saved as {im_path}")
 
-    return im_name
+    return im_path
 
 
 def model_fn(model_dir):

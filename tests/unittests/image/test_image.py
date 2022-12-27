@@ -3,7 +3,7 @@ import tempfile
 from autogluon.cloud import ImageCloudPredictor, MultiModalCloudPredictor
 
 
-def test_image(test_helper):
+def test_image(test_helper, framework_version="source"):
     train_data = "image_train_relative.csv"
     train_image = "shopee-iet.zip"
     test_data = "test_images/BabyPants_1035.jpg"
@@ -22,6 +22,7 @@ def test_image(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-image/{timestamp}",
             local_output_path="test_image_cloud_predictor",
         )
+        training_custom_image_uri, inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version)
         test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
@@ -30,14 +31,15 @@ def test_image(test_helper):
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
                 image_column=image_column,
-                custom_image_uri=test_helper.gpu_training_image,
+                framework_version=framework_version,
+                custom_image_uri=training_custom_image_uri,
             ),
-            deploy_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
-            predict_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
+            predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
         )
 
 
-def test_multimodal_image_only(test_helper):
+def test_multimodal_image_only(test_helper, framework_version="source"):
     train_data = "image_train_relative.csv"
     train_image = "shopee-iet.zip"
     test_data = "test_images/BabyPants_1035.jpg"
@@ -56,6 +58,7 @@ def test_multimodal_image_only(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-image/{timestamp}",
             local_output_path="test_multimodal_image_cloud_predictor",
         )
+        training_custom_image_uri, inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version)
         test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
@@ -64,8 +67,9 @@ def test_multimodal_image_only(test_helper):
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
                 image_column=image_column,
-                custom_image_uri=test_helper.gpu_training_image,
+                framework_version=framework_version,
+                custom_image_uri=training_custom_image_uri,
             ),
-            deploy_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
-            predict_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
+            predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
         )

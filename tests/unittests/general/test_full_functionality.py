@@ -3,7 +3,7 @@ import tempfile
 from autogluon.cloud import TabularCloudPredictor
 
 
-def test_full_functionality(test_helper):
+def test_full_functionality(test_helper, framework_version="source"):
     """
     Use tabular as an example to test full functionality.
     Those functionalities shouldn't differ between modality
@@ -30,13 +30,14 @@ def test_full_functionality(test_helper):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-no-train/{timestamp}",
             local_output_path="test_tabular_cloud_predictor_no_train",
         )
+        training_custom_image_uri, inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version)
         test_helper.test_functionality(
             cloud_predictor,
             predictor_init_args,
             predictor_fit_args,
             cloud_predictor_no_train,
             test_data,
-            fit_kwargs=dict(custom_image_uri=test_helper.cpu_training_image),
-            deploy_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
-            predict_kwargs=dict(custom_image_uri=test_helper.cpu_inference_image),
+            fit_kwargs=dict(framework_version=framework_version, custom_image_uri=training_custom_image_uri),
+            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
+            predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
         )
