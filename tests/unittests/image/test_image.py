@@ -3,7 +3,7 @@ import tempfile
 from autogluon.cloud import ImageCloudPredictor, MultiModalCloudPredictor
 
 
-def test_image(test_helper, framework_version="source"):
+def test_image(test_helper, framework_version):
     train_data = "image_train_relative.csv"
     train_image = "shopee-iet.zip"
     test_data = "test_images/BabyPants_1035.jpg"

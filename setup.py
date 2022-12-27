@@ -111,8 +111,7 @@ install_requires = [
     "numpy>=1.21.4,<2.0",
     "packaging>=21.0,<22.0",
     "pandas>=1.2.5,<2.0",
-    # TODO: update to the latest after 0.6 container is out
-    "sagemaker>=2.94",
+    "sagemaker>=2.126.0",
     "pyarrow>=9.0,<10.0",
     "PyYAML>=6.0,<7.0",
     "Pillow>=9.3.0,<10.0",

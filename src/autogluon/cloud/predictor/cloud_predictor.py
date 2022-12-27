@@ -424,6 +424,7 @@ class CloudPredictor(ABC):
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
             If None, CloudPredictor will create one with prefix ag-cloudpredictor
@@ -639,6 +640,7 @@ class CloudPredictor(ABC):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
+            If `custom_image_uri` is set, this argument will be ignored.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance to be deployed for the endpoint
         initial_instance_count: int, default = 1,
@@ -856,6 +858,7 @@ class CloudPredictor(ABC):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
             If None, CloudPredictor will create one with prefix ag-cloudpredictor.

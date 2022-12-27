@@ -55,6 +55,9 @@ jobs:
         run: |
           chmod +x ./.github/workflow_scripts/cloud_lint_check.sh && ./.github/workflow_scripts/cloud_lint_check.sh
   test_general_cloud:
+    strategy:
+      matrix:
+        AG_VERSION: ["source", "0.6.1"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -73,7 +76,11 @@ jobs:
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: general
+          ag_version: '${{ matrix.AG_VERSION }}'
   test_tabular_cloud:
+    strategy:
+      matrix:
+        AG_VERSION: ["source", "0.6.1"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -92,7 +99,11 @@ jobs:
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: tabular
+          ag_version: '${{ matrix.AG_VERSION }}'
   test_text_cloud:
+    strategy:
+      matrix:
+        AG_VERSION: ["source", "0.6.1"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -111,7 +122,11 @@ jobs:
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: text
+          ag_version: '${{ matrix.AG_VERSION }}'
   test_image_cloud:
+    strategy:
+      matrix:
+        AG_VERSION: ["source", "0.6.1"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -130,7 +145,11 @@ jobs:
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: image
+          ag_version: '${{ matrix.AG_VERSION }}'
   test_multimodal_cloud:
+    strategy:
+      matrix:
+        AG_VERSION: ["source", "0.6.1"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -149,3 +168,4 @@ jobs:
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: multimodal
+          ag_version: '${{ matrix.AG_VERSION }}'
