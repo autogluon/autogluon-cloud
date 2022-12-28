@@ -35,7 +35,7 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
             local_output_path="test_tabular_tabular_text_image_cloud_predictor",
         )
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=True)
-        inference_custom_image_uri  = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
         test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
