@@ -102,17 +102,18 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         prediction = pd.concat([pred, pred_proba], axis=1)
     else:
         prediction = model.predict(data, as_pandas=True)
-
     if isinstance(prediction, pd.Series):
         prediction = prediction.to_frame()
-    if output_content_type == "application/json":
-        output = prediction.to_json()
-    elif output_content_type == "application/x-parquet":
-        if isinstance(prediction, pd.DataFrame):
-            prediction.columns = prediction.columns.astype(str)
+
+    if "application/x-parquet" in output_content_type:
         output = prediction.to_parquet()
-    elif output_content_type == "text/csv":
+        output_content_type = "application/x-parquet"
+    elif "application/json" in output_content_type:
+        output = prediction.to_json()
+        output_content_type = "application/json"
+    elif "text/csv" in output_content_type:
         output = prediction.to_csv(index=None)
+        output_content_type = "text/csv"
     else:
         raise ValueError(f"{output_content_type} content type not supported")
 
