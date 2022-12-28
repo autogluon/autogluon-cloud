@@ -15,14 +15,22 @@ class CloudTestHelper:
     gpu_inference_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-inference:gpu-latest"
 
     @staticmethod
-    def get_custom_image_uri(framework_version="source"):
-        training_custom_image_uri = CloudTestHelper.cpu_training_image
-        inference_custom_image_uri = CloudTestHelper.cpu_inference_image
+    def get_custom_image_uri(framework_version="source", type="training", gpu=False):
+        assert type in ["training", "inference"]
+        if type == "training":
+            if gpu:
+                custom_image_uri = CloudTestHelper.gpu_training_image
+            else:
+                custom_image_uri = CloudTestHelper.cpu_training_image
+        elif type == "inference":
+            if gpu:
+                custom_image_uri = CloudTestHelper.gpu_inference_image
+            else:
+                custom_image_uri = CloudTestHelper.cpu_inference_image
         if framework_version != "source":
-            training_custom_image_uri = None
-            inference_custom_image_uri = None
+            custom_image_uri = None
 
-        return training_custom_image_uri, inference_custom_image_uri
+        return custom_image_uri
 
     @staticmethod
     def prepare_data(*args):

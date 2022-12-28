@@ -30,7 +30,8 @@ def test_full_functionality(test_helper, framework_version):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-no-train/{timestamp}",
             local_output_path="test_tabular_cloud_predictor_no_train",
         )
-        training_custom_image_uri, inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version)
+        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
+        inference_custom_image_uri  = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
         test_helper.test_functionality(
             cloud_predictor,
             predictor_init_args,

@@ -18,7 +18,8 @@ def test_multimodal_text_only(test_helper, framework_version):
             cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-text/{timestamp}",
             local_output_path="test_multimodal_text_cloud_predictor",
         )
-        training_custom_image_uri, inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version)
+        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=True)
+        inference_custom_image_uri  = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
         test_helper.test_basic_functionality(
             cloud_predictor,
             predictor_init_args,
