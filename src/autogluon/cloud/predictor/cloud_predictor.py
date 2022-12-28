@@ -470,7 +470,10 @@ class CloudPredictor(ABC):
             autogluon_sagemaker_estimator_kwargs = {}
         autogluon_sagemaker_estimator_kwargs = copy.deepcopy(autogluon_sagemaker_estimator_kwargs)
         autogluon_sagemaker_estimator_kwargs.pop("output_path", None)
-        if autogluon_sagemaker_estimator_kwargs.get("disable_profiler", None) is None and autogluon_sagemaker_estimator_kwargs.get("debugger_hook_config", None) is None:
+        if (
+            autogluon_sagemaker_estimator_kwargs.get("disable_profiler", None) is None
+            and autogluon_sagemaker_estimator_kwargs.get("debugger_hook_config", None) is None
+        ):
             autogluon_sagemaker_estimator_kwargs["disable_profiler"] = True
             autogluon_sagemaker_estimator_kwargs["debugger_hook_config"] = False
         output_path = self.cloud_output_path + "/model"
