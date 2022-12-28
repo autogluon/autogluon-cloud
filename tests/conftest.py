@@ -22,7 +22,7 @@ class CloudTestHelper:
                 custom_image_uri = CloudTestHelper.gpu_training_image
             else:
                 custom_image_uri = CloudTestHelper.cpu_training_image
-        elif type == "inference":
+        else:
             if gpu:
                 custom_image_uri = CloudTestHelper.gpu_inference_image
             else:
