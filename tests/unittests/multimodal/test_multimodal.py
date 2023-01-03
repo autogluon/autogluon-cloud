@@ -1,3 +1,4 @@
+import os
 import tempfile
 
 from autogluon.cloud import MultiModalCloudPredictor
@@ -9,7 +10,8 @@ def test_multimodal_tabular_text_image(test_helper, framework_version):
     images = "tabular_text_image_images.zip"
     image_column = "Images"
     timestamp = test_helper.get_utc_timestamp_now()
-    with tempfile.TemporaryDirectory() as _:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
         test_helper.prepare_data(train_data, test_data, images)
         test_helper.extract_images(images)
         train_data = test_helper.replace_image_abspath(train_data, image_column)
