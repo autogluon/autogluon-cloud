@@ -1,3 +1,4 @@
+import os
 import tempfile
 
 from autogluon.cloud import MultiModalCloudPredictor
@@ -8,7 +9,8 @@ def test_multimodal_text_only(test_helper, framework_version):
     tune_data = "text_tune.csv"
     test_data = "text_test.csv"
     timestamp = test_helper.get_utc_timestamp_now()
-    with tempfile.TemporaryDirectory() as _:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
         test_helper.prepare_data(train_data, tune_data, test_data)
         time_limit = 60
 

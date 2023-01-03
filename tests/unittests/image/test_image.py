@@ -1,3 +1,4 @@
+import os
 import tempfile
 
 from autogluon.cloud import ImageCloudPredictor, MultiModalCloudPredictor
@@ -9,7 +10,8 @@ def test_image(test_helper, framework_version):
     test_data = "test_images/BabyPants_1035.jpg"
     image_column = "image"
     timestamp = test_helper.get_utc_timestamp_now()
-    with tempfile.TemporaryDirectory() as _:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
         test_helper.prepare_data(train_data, train_image, test_data)
         test_helper.extract_images(train_image)
         train_data = test_helper.replace_image_abspath(train_data, image_column)
@@ -46,7 +48,8 @@ def test_multimodal_image_only(test_helper, framework_version="source"):
     test_data = "test_images/BabyPants_1035.jpg"
     image_column = "image"
     timestamp = test_helper.get_utc_timestamp_now()
-    with tempfile.TemporaryDirectory() as _:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
         test_helper.prepare_data(train_data, train_image, test_data)
         test_helper.extract_images(train_image)
         train_data = test_helper.replace_image_abspath(train_data, image_column)
