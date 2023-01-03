@@ -170,7 +170,6 @@ jobs:
   #         submodule-to-test: multimodal
   #         ag_version: '${{ matrix.AG_VERSION }}'
   test_multimodal_cloud:
-    needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
