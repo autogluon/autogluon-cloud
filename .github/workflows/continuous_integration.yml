@@ -18,26 +18,159 @@ defaults:
     shell: bash
 
 jobs:
-  permission_check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check for Actor Permission
-        id: check
-        continue-on-error: true
-        uses: prince-chrismc/check-actor-permissions-action@v2
-        with:
-          github_token: ${{ github.token }}
-          permission: write
-      - name: Check PR Safe to Run
-        if: ${{ github.event_name == 'pull_request_target' && (contains(github.event.pull_request.labels.*.name, 'safe to test') == 'false') && steps.check.outputs.permitted == 'false' }}
-        run: exit 1
-      - name: Remove Safe to Test Label  # One commit is safe doesn't mean the next commit is safe.
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions-ecosystem/action-remove-labels@v1.3.0
-        with:
-          labels: 'safe to test'
-  cloud_lint_check:
-    needs: permission_check
+  # permission_check:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Check for Actor Permission
+  #       id: check
+  #       continue-on-error: true
+  #       uses: prince-chrismc/check-actor-permissions-action@v2
+  #       with:
+  #         github_token: ${{ github.token }}
+  #         permission: write
+  #     - name: Check PR Safe to Run
+  #       if: ${{ github.event_name == 'pull_request_target' && (contains(github.event.pull_request.labels.*.name, 'safe to test') == 'false') && steps.check.outputs.permitted == 'false' }}
+  #       run: exit 1
+  #     - name: Remove Safe to Test Label  # One commit is safe doesn't mean the next commit is safe.
+  #       if: ${{ github.event_name == 'pull_request_target' }}
+  #       uses: actions-ecosystem/action-remove-labels@v1.3.0
+  #       with:
+  #         labels: 'safe to test'
+  # cloud_lint_check:
+  #   needs: permission_check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       if: ${{ github.event_name != 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #     - name: Checkout repository(Pull Request Target)
+  #       if: ${{ github.event_name == 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #       with:
+  #         ref: "refs/pull/${{ github.event.number }}/merge"
+  #     - uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.8'
+  #     - name: Cloud Lint Check
+  #       run: |
+  #         chmod +x ./.github/workflow_scripts/cloud_lint_check.sh && ./.github/workflow_scripts/cloud_lint_check.sh
+  # test_general_cloud:
+  #   strategy:
+  #     matrix:
+  #       AG_VERSION: ["source", "0.6.1"]
+  #   needs: cloud_lint_check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       if: ${{ github.event_name != 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #     - name: Checkout repository(Pull Request Target)
+  #       if: ${{ github.event_name == 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #       with:
+  #         ref: "refs/pull/${{ github.event.number }}/merge"
+  #     - uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.8'
+  #     - name: Test General Cloud
+  #       uses: ./.github/actions/test-cloud
+  #       with:
+  #         submodule-to-test: general
+  #         ag_version: '${{ matrix.AG_VERSION }}'
+  # test_tabular_cloud:
+  #   strategy:
+  #     matrix:
+  #       AG_VERSION: ["source", "0.6.1"]
+  #   needs: cloud_lint_check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       if: ${{ github.event_name != 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #     - name: Checkout repository(Pull Request Target)
+  #       if: ${{ github.event_name == 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #       with:
+  #         ref: "refs/pull/${{ github.event.number }}/merge"
+  #     - uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.8'
+  #     - name: Test Tabular Cloud
+  #       uses: ./.github/actions/test-cloud
+  #       with:
+  #         submodule-to-test: tabular
+  #         ag_version: '${{ matrix.AG_VERSION }}'
+  # test_text_cloud:
+  #   strategy:
+  #     matrix:
+  #       AG_VERSION: ["source", "0.6.1"]
+  #   needs: cloud_lint_check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       if: ${{ github.event_name != 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #     - name: Checkout repository(Pull Request Target)
+  #       if: ${{ github.event_name == 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #       with:
+  #         ref: "refs/pull/${{ github.event.number }}/merge"
+  #     - uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.8'
+  #     - name: Test Tabular Cloud
+  #       uses: ./.github/actions/test-cloud
+  #       with:
+  #         submodule-to-test: text
+  #         ag_version: '${{ matrix.AG_VERSION }}'
+  # test_image_cloud:
+  #   strategy:
+  #     matrix:
+  #       AG_VERSION: ["source", "0.6.1"]
+  #   needs: cloud_lint_check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       if: ${{ github.event_name != 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #     - name: Checkout repository(Pull Request Target)
+  #       if: ${{ github.event_name == 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #       with:
+  #         ref: "refs/pull/${{ github.event.number }}/merge"
+  #     - uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.8'
+  #     - name: Test Image Cloud
+  #       uses: ./.github/actions/test-cloud
+  #       with:
+  #         submodule-to-test: image
+  #         ag_version: '${{ matrix.AG_VERSION }}'
+  # test_multimodal_cloud:
+  #   strategy:
+  #     matrix:
+  #       AG_VERSION: ["source", "0.6.1"]
+  #   needs: cloud_lint_check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       if: ${{ github.event_name != 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #     - name: Checkout repository(Pull Request Target)
+  #       if: ${{ github.event_name == 'pull_request_target' }}
+  #       uses: actions/checkout@v2
+  #       with:
+  #         ref: "refs/pull/${{ github.event.number }}/merge"
+  #     - uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.8'
+  #     - name: Test Multimodal Cloud
+  #       uses: ./.github/actions/test-cloud
+  #       with:
+  #         submodule-to-test: multimodal
+  #         ag_version: '${{ matrix.AG_VERSION }}'
+  build_doc:
+    if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -48,124 +181,35 @@ jobs:
         uses: actions/checkout@v2
         with:
           ref: "refs/pull/${{ github.event.number }}/merge"
+      - name: Setup Env Vars
+        uses: ./.github/actions/setup-env-vars
       - uses: actions/setup-python@v4
         with:
           python-version: '3.8'
-      - name: Cloud Lint Check
+      - uses: r-lib/actions/setup-pandoc@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: arn:aws:iam::369469875935:role/AutoGluonCloudCIDocRole
+          role-duration-seconds: 3600
+          aws-region: us-east-1
+      - name: Build Doc(For push)
+        if: ${{ github.event_name == 'push' }}
         run: |
-          chmod +x ./.github/workflow_scripts/cloud_lint_check.sh && ./.github/workflow_scripts/cloud_lint_check.sh
-  test_general_cloud:
-    strategy:
-      matrix:
-        AG_VERSION: ["source", "0.6.1"]
-    needs: cloud_lint_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
-        uses: actions/checkout@v2
-      - name: Checkout repository(Pull Request Target)
+        chmod +x ./.github/workflow_scripts/build_doc.sh
+        ./.github/workflow_scripts/build_doc.sh '${{ github.ref }}' '${{ github.repository }}' '${{ env.SHORT_SHA }}'
+      - name: Build Doc(For pull request)
         if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v2
-        with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.8'
-      - name: Test General Cloud
-        uses: ./.github/actions/test-cloud
-        with:
-          submodule-to-test: general
-          ag_version: '${{ matrix.AG_VERSION }}'
-  test_tabular_cloud:
-    strategy:
-      matrix:
-        AG_VERSION: ["source", "0.6.1"]
-    needs: cloud_lint_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
-        uses: actions/checkout@v2
-      - name: Checkout repository(Pull Request Target)
+        env:
+          branch: ${{ github.event.pull_request.head.ref }}
+        run: |
+        chmod +x ./.github/workflow_scripts/build_doc.sh
+        ./.github/workflow_scripts/build_doc.sh "$branch" '${{ github.event.pull_request.head.repo.full_name }}' '${{ env.SHORT_SHA }}' PR-'${{ github.event.number }}'
+      - name: Comment on PR
         if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v2
+        uses: peter-evans/create-or-update-comment@v2.0.0
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.8'
-      - name: Test Tabular Cloud
-        uses: ./.github/actions/test-cloud
-        with:
-          submodule-to-test: tabular
-          ag_version: '${{ matrix.AG_VERSION }}'
-  test_text_cloud:
-    strategy:
-      matrix:
-        AG_VERSION: ["source", "0.6.1"]
-    needs: cloud_lint_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
-        uses: actions/checkout@v2
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v2
-        with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.8'
-      - name: Test Tabular Cloud
-        uses: ./.github/actions/test-cloud
-        with:
-          submodule-to-test: text
-          ag_version: '${{ matrix.AG_VERSION }}'
-  test_image_cloud:
-    strategy:
-      matrix:
-        AG_VERSION: ["source", "0.6.1"]
-    needs: cloud_lint_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
-        uses: actions/checkout@v2
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v2
-        with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.8'
-      - name: Test Image Cloud
-        uses: ./.github/actions/test-cloud
-        with:
-          submodule-to-test: image
-          ag_version: '${{ matrix.AG_VERSION }}'
-  test_multimodal_cloud:
-    strategy:
-      matrix:
-        AG_VERSION: ["source", "0.6.1"]
-    needs: cloud_lint_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
-        uses: actions/checkout@v2
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v2
-        with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.8'
-      - name: Test Multimodal Cloud
-        uses: ./.github/actions/test-cloud
-        with:
-          submodule-to-test: multimodal
-          ag_version: '${{ matrix.AG_VERSION }}'
+          issue-number: ${{ github.event.number }}
+          body: |
+            Job PR-${{ github.event.number }}-${{ env.SHORT_SHA }} is done.
+            Docs are uploaded to https://d12sc05jpx1wj5.cloudfront.net/PR-${{ github.event.number }}/${{ env.SHORT_SHA }}/tutorials/autogluon-cloud.html
