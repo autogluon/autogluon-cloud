@@ -55,7 +55,7 @@ then
     # If PR, move the whole doc folder (to keep css styles) to staging bucket for visibility
     DOC_PATH=_build/html/
     S3_PATH=s3://$bucket/$path/$COMMIT_SHA
-    aws s3 cp $DOC_PATH $S3_PATH
+    aws s3 cp $DOC_PATH $S3_PATH --recursive
 else
     # If master/stable, move the individual tutorial html to dev/stable bucket of main AG
     cacheControl='--cache-control max-age=7200'
