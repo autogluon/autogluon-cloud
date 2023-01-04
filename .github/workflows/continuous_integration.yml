@@ -196,15 +196,15 @@ jobs:
       - name: Build Doc(For push)
         if: ${{ github.event_name == 'push' }}
         run: |
-        chmod +x ./.github/workflow_scripts/build_doc.sh
-        ./.github/workflow_scripts/build_doc.sh '${{ github.ref }}' '${{ github.repository }}' '${{ env.SHORT_SHA }}'
+          chmod +x ./.github/workflow_scripts/build_doc.sh
+          ./.github/workflow_scripts/build_doc.sh '${{ github.ref }}' '${{ github.repository }}' '${{ env.SHORT_SHA }}'
       - name: Build Doc(For pull request)
         if: ${{ github.event_name == 'pull_request_target' }}
         env:
           branch: ${{ github.event.pull_request.head.ref }}
         run: |
-        chmod +x ./.github/workflow_scripts/build_doc.sh
-        ./.github/workflow_scripts/build_doc.sh "$branch" '${{ github.event.pull_request.head.repo.full_name }}' '${{ env.SHORT_SHA }}' PR-'${{ github.event.number }}'
+          chmod +x ./.github/workflow_scripts/build_doc.sh
+          ./.github/workflow_scripts/build_doc.sh "$branch" '${{ github.event.pull_request.head.repo.full_name }}' '${{ env.SHORT_SHA }}' PR-'${{ github.event.number }}'
       - name: Comment on PR
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: peter-evans/create-or-update-comment@v2.0.0
