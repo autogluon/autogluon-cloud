@@ -62,3 +62,4 @@ else
     DOC_PATH=_build/html/tutorials/autogluon-cloud.html
     S3_PATH=s3://$BUCKET/$path/tutorials/cloud_fit_deploy/
     aws s3 cp $DOC_PATH $S3_PATH --acl public-read ${cacheControl}
+fi
