@@ -7,7 +7,6 @@ PR_NUMBER=$4
 
 set -ex
 
-source $(dirname "$0")/write_to_s3.sh
 source $(dirname "$0")/env_setup.sh
 
 if [[ (-n $PR_NUMBER) || ($GIT_REPO != "autogluon/autogluon-cloud") ]]
@@ -56,7 +55,7 @@ then
     # If PR, move the whole doc folder (to keep css styles) to staging bucket for visibility
     DOC_PATH=_build/html/
     S3_PATH=s3://$BUCKET/$path/$COMMIT_SHA
-    write_to_s3 $BUCKET $DOC_PATH $S3_PATH
+    aws s3 cp $DOC_PATH $S3_PATH
 else
     # If master/stable, move the individual tutorial html to dev/stable bucket of main AG
     cacheControl='--cache-control max-age=7200'
