@@ -20,6 +20,7 @@ else
     then
         path = "dev"
     elif [[ $BRANCH == "stable" ]]
+    then
         path = "stable"
     else
         exit 0  # For other branch pushed to autogluon-cloud. We do not build docs.
