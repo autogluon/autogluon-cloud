@@ -18,10 +18,10 @@ then
 else
     if [[ $BRANCH == "master" ]]
     then
-        path = "dev"
+        path="dev"
     elif [[ $BRANCH == "stable" ]]
     then
-        path = "stable"
+        path="stable"
     else
         exit 0  # For other branch pushed to autogluon-cloud. We do not build docs.
     fi
