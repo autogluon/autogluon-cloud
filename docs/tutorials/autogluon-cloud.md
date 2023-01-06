@@ -6,7 +6,7 @@ The containers can be used to train models with CPU and GPU instances and deploy
 
 We provide a full end-to-end example in [amazon-sagemaker-examples](https://github.com/aws/amazon-sagemaker-examples/tree/master/advanced_functionality/autogluon-tabular-containers) repository.
 
-In addition, we now offer the [`autogluon.cloud`](https://github.com/autogluon/autogluon-cloud) module to wrap functionality you saw in the example above with simple APIs.
+In addition, we now offer the [autogluon.cloud](https://github.com/autogluon/autogluon-cloud) module to wrap functionality you saw in the example above with simple APIs.
 
 ## Pre-requisites
 `autogluon.cloud` does not come with the default `autogluon` installation. Therefore, please install it via (`pip3 install autogluon.cloud`)
