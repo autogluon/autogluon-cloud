@@ -150,7 +150,7 @@ jobs:
             other_than_docs:
               - '!(docs/**)**'
       - name: Test Tabular Cloud
-      if: steps.changes.outputs.other_than_docs == 'true'
+        if: steps.changes.outputs.other_than_docs == 'true'
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: text
