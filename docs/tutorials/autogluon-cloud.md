@@ -9,9 +9,17 @@ We offer the [autogluon.cloud](https://github.com/autogluon/autogluon-cloud) mod
 **Costs for running cloud compute are managed by AWS SageMaker, and storage costs are managed by AWS S3. AutoGluon-Cloud is a wrapper to these services at no additional charge. While AutoGluon-Cloud makes an effort to simplify the usage of these services, it is ultimately the user's responsibility to monitor compute usage within their account to ensure no unexpected charges.**
 
 ## Installation
-* `pip3 install autogluon.cloud`. To be noticed, `autogluon.cloud` does not come with the default `autogluon` installation.
 
-Also ensure that the latest version of sagemaker python API is installed via (`pip3 install --upgrade sagemaker`). 
+```{.bash}
+pip3 install autogluon.cloud  # To be noticed, `autogluon.cloud` does not come with the default `autogluon` installation.
+```
+
+Also ensure that the latest version of sagemaker python API is installed via:
+
+```{.bash}
+pip3 install --upgrade sagemaker
+```
+
 This is required to ensure the information about newly released containers is available.
 
 ## Prepare an AWS Role with Necessary Permissions
