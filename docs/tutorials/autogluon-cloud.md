@@ -63,6 +63,7 @@ cloud_predictor = TabularCloudPredictor(
     predictor_fit_args,
     instance_type="ml.m5.2xlarge"  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
     wait=True  # Set this to False to make it unblocking call
+)
 ```
 
 ### Reattach to a Previous Training Job
