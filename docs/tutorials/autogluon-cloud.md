@@ -9,9 +9,10 @@ We offer the [autogluon.cloud](https://github.com/autogluon/autogluon-cloud) mod
 **Costs for running cloud compute are managed by AWS SageMaker, and storage costs are managed by AWS S3. AutoGluon-Cloud is a wrapper to these services at no additional charge. While AutoGluon-Cloud makes an effort to simplify the usage of these services, it is ultimately the user's responsibility to monitor compute usage within their account to ensure no unexpected charges.**
 
 ## Installation
+`autogluon.cloud` does not come with the default `autogluon` installation. You can install it via:
 
 ```{.bash}
-pip3 install autogluon.cloud  # To be noticed, `autogluon.cloud` does not come with the default `autogluon` installation.
+pip3 install autogluon.cloud
 ```
 
 Also ensure that the latest version of sagemaker python API is installed via:
@@ -39,7 +40,8 @@ The util function above would give you two json files describing the trust repla
 **Make sure you review those files and make necessary changes according to your use case before applying them.**
 
 We recommend you to create an IAM Role for your IAM User to delegate as IAM Role doesn't have permanent long-term credentials and is used to directly interact with AWS services.
-Refer to this [tutorial](https://aws.amazon.com/premiumsupport/knowledge-center/iam-assume-role-cli/) to 
+Refer to this [tutorial](https://aws.amazon.com/premiumsupport/knowledge-center/iam-assume-role-cli/) to
+
 1. create the IAM Role with the trust relationship and iam policy you generated above
 2. setup the credential
 3. assume the role
@@ -136,7 +138,7 @@ To retrieve general info about a `CloudPredictor`
 cloud_predictor.info()
 ```
 
-It will output a dict looks similar to this:
+It will output a dict looking similar to this:
 
 ```{.python}
 {
