@@ -838,6 +838,8 @@ class CloudPredictor(ABC):
         instance_count=1,
         custom_image_uri=None,
         wait=True,
+        download=True,
+        save_path=None,
         model_kwargs=None,
         transformer_kwargs=None,
         **kwargs,
@@ -875,6 +877,13 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
+        download: bool, default = True
+            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
+            Will be ignored if `wait` is `False`.
+        save_path: str, default = None,
+            Path to save the downloaded result.
+            Will be ignored if `download` is `False`.
+            If None, CloudPredictor will create one.
         model_kwargs: dict, default = dict()
             Any extra arguments needed to initialize Sagemaker Model
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
