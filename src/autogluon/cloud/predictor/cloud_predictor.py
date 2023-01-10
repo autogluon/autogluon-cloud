@@ -48,7 +48,7 @@ from ..utils.sagemaker_utils import (
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
-    rename_file_with_uuid,
+    append_file_with_job_name,
     unzip_file,
     zipfolder,
 )
@@ -964,6 +964,15 @@ class CloudPredictor(ABC):
             split_type = kwargs.pop("split_type")
         if not content_type:
             content_type = "text/csv"
+            
+        if not wait:
+            if download:
+                logger.warning("`download` will be ignored because `wait` is set to `False`")
+                download = False
+        if not download:
+            if save_path:
+                logger.warning("`save_path` will be ignored because `download` is set to `False`")
+                save_path = False
 
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
         batch_transform_job.run(
@@ -1011,6 +1020,7 @@ class CloudPredictor(ABC):
         result_path = job.get_output_path()
         assert result_path is not None, "No predict results found."
         file_name = result_path.split("/")[-1]
+        file_name = append_file_with_job_name(file_name, job_name)
         if not save_path:
             save_path = self.local_output_path
         save_path = os.path.expanduser(save_path)
@@ -1018,10 +1028,6 @@ class CloudPredictor(ABC):
         results_save_path = os.path.join(save_path, "batch_transform", job_name)
         if not os.path.isdir(results_save_path):
             os.makedirs(results_save_path)
-        temp_results_save_path = os.path.join(results_save_path, file_name)
-        if os.path.isfile(temp_results_save_path):
-            logger.warning("File already exists. Will rename the file to avoid overwrite.")
-            file_name = rename_file_with_uuid(file_name)
         results_save_path = os.path.join(results_save_path, file_name)
         results_bucket, results_key_prefix = s3_path_to_bucket_prefix(result_path)
         self.sagemaker_session.download_data(

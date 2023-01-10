@@ -67,7 +67,7 @@ def unzip_file(tarball_path, save_path):
     file.close()
 
 
-def rename_file_with_uuid(file_name):
+def append_file_with_job_name(file_name, job_name):
     tmp = file_name.rsplit(".", 1)
     name = tmp[0]
     if len(tmp) > 1:
@@ -76,5 +76,5 @@ def rename_file_with_uuid(file_name):
     else:
         extension = ""
         joiner = ""
-    new_file_name = name + "_" + str(uuid.uuid4()) + joiner + extension
+    new_file_name = name + "_" + job_name + joiner + extension
     return new_file_name
