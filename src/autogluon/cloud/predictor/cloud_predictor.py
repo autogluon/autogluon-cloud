@@ -45,12 +45,7 @@ from ..utils.sagemaker_utils import (
     retrieve_latest_framework_version,
     retrieve_py_versions,
 )
-from ..utils.utils import (
-    convert_image_path_to_encoded_bytes_in_dataframe,
-    is_image_file,
-    unzip_file,
-    zipfolder,
-)
+from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, is_image_file, unzip_file, zipfolder
 
 logger = logging.getLogger(__name__)
 
@@ -973,7 +968,7 @@ class CloudPredictor(ABC):
             split_type = kwargs.pop("split_type")
         if not content_type:
             content_type = "text/csv"
-            
+
         if not wait:
             if download:
                 logger.warning("`download` will be ignored because `wait` is set to `False`")
@@ -1010,7 +1005,7 @@ class CloudPredictor(ABC):
             **kwargs,
         )
         self._batch_transform_jobs[job_name] = batch_transform_job
-        
+
         results = None
         if download:
             results_path = self.download_predict_results(save_path=save_path)
@@ -1033,7 +1028,7 @@ class CloudPredictor(ABC):
         save_path: str
             Path to save the downloaded results.
             If None, CloudPredictor will create one.
-            
+
         Returns
         -------
         str,
@@ -1060,7 +1055,7 @@ class CloudPredictor(ABC):
         )
         results_save_path = os.path.join(results_save_path, file_name)
         logger.log(20, f"Batch results have been downloaded to {results_save_path}")
-        
+
         return results_save_path
 
     def get_batch_transform_job_status(self, job_name=None):
