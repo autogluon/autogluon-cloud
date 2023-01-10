@@ -118,7 +118,7 @@ class MultiModalCloudPredictor(CloudPredictor):
             kwargs = copy.deepcopy(kwargs)
             transformer_kwargs = kwargs.pop("transformer_kwargs", dict())
             transformer_kwargs["strategy"] = "SingleRecord"
-            super().predict(
+            return super().predict(
                 test_data,
                 test_data_image_column=None,
                 split_type=split_type,
@@ -127,7 +127,7 @@ class MultiModalCloudPredictor(CloudPredictor):
                 **kwargs,
             )
         else:
-            super().predict(
+            return super().predict(
                 test_data,
                 test_data_image_column=test_data_image_column,
                 **kwargs,
