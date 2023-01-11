@@ -979,7 +979,7 @@ class CloudPredictor(ABC):
                 persist = False
             if save_path:
                 logger.warning("`save_path` will be ignored because `download` is set to `False`")
-                save_path = False
+                save_path = None
 
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
         batch_transform_job.run(
