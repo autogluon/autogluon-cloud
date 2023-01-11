@@ -56,7 +56,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
 
-    if model.problem_type not in [REGRESSION, QUANTILE]:
+    if model._problem_type not in [REGRESSION, QUANTILE]:
         pred_proba = model.predict_proba(image_paths, as_pandas=True)
         pred = get_pred_from_proba_df(pred_proba, problem_type=model._problem_type)
         pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
