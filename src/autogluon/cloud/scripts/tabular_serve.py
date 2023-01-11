@@ -7,7 +7,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 from PIL import Image
 
-from autogluon.core.constants import REGRESSION
+from autogluon.core.constants import REGRESSION, QUANTILE
 from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.tabular import TabularPredictor
 
@@ -69,11 +69,11 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         print(f"Detected image column {image_column}")
         data[image_column] = [_save_image_and_update_dataframe_column(bytes) for bytes in data[image_column]]
 
-    if model.problem_type != REGRESSION:
+    if model.problem_type not in [REGRESSION, QUANTILE]:
         pred_proba = model.predict_proba(data, as_pandas=True)
         pred = get_pred_from_proba_df(pred_proba, problem_type=model.problem_type)
         pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
-        pred.name = str(pred.name) + "_pred" if pred.name is not None else "pred"
+        pred.name = model.label
         prediction = pd.concat([pred, pred_proba], axis=1)
     else:
         prediction = model.predict(data, as_pandas=True)

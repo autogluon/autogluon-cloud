@@ -12,4 +12,5 @@ from .utils import (
     read_image_bytes_and_encode,
     unzip_file,
     zipfolder,
+    split_pred_and_pred_proba
 )

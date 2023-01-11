@@ -31,6 +31,18 @@ class ImageCloudPredictor(CloudPredictor):
             image_column=image_column,
             **kwargs,
         )
+        
+    def _load_predict_real_time_test_data(self, test_data):
+        import numpy as np
+
+        if isinstance(test_data, str):
+            test_data = [test_data]
+        if isinstance(test_data, list):
+            test_data = np.array([read_image_bytes_and_encode(image) for image in test_data], dtype="object")
+
+        assert isinstance(test_data, np.ndarray), f"Invalid test data format {type(test_data)}"
+        
+        return test_data
 
     def predict_real_time(self, test_data, accept="application/x-parquet"):
         """
@@ -51,22 +63,34 @@ class ImageCloudPredictor(CloudPredictor):
 
         Returns
         -------
-        Pandas.DataFrame
-        Predict results in DataFrame
+        Pandas.Series
+        Predict results in Series
         """
-        assert self.endpoint, "Please call `deploy()` to deploy an endpoint first."
-        assert accept in VALID_ACCEPT, f"Invalid accept type. Options are {VALID_ACCEPT}."
+        return super().predict_real_time(test_data=test_data, accept=accept)
+    
+    def predict_proba_real_time(self, test_data, accept="application/x-parquet"):
+        """
+        Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        This is intended to provide a low latency inference.
+        If you want to inference on a large dataset, use `predict()` instead.
 
-        import numpy as np
+        Parameters
+        ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced.
+            Can be an numpy.ndarray containing path to test images
+            Or a local path to a single image file.
+            Or a list of local paths to image files.
+        accept: str, default = application/x-parquet
+            Type of accept output content.
+            Valid options are application/x-parquet, text/csv, application/json
 
-        if isinstance(test_data, str):
-            test_data = [test_data]
-        if isinstance(test_data, list):
-            test_data = np.array([read_image_bytes_and_encode(image) for image in test_data], dtype="object")
-
-        assert isinstance(test_data, np.ndarray), f"Invalid test data format {type(test_data)}"
-
-        return self._predict_real_time(test_data=test_data, accept=accept)
+        Returns
+        -------
+        Pandas.DataFrame or Pandas.Series
+            Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+        """
+        return super().predict_proba_real_time(test_data=test_data, accept=accept)
 
     def predict(
         self,
