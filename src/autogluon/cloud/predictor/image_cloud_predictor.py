@@ -31,7 +31,7 @@ class ImageCloudPredictor(CloudPredictor):
             image_column=image_column,
             **kwargs,
         )
-        
+
     def _load_predict_real_time_test_data(self, test_data):
         import numpy as np
 
@@ -41,7 +41,7 @@ class ImageCloudPredictor(CloudPredictor):
             test_data = np.array([read_image_bytes_and_encode(image) for image in test_data], dtype="object")
 
         assert isinstance(test_data, np.ndarray), f"Invalid test data format {type(test_data)}"
-        
+
         return test_data
 
     def predict_real_time(self, test_data, accept="application/x-parquet"):
@@ -67,7 +67,7 @@ class ImageCloudPredictor(CloudPredictor):
         Predict results in Series
         """
         return super().predict_real_time(test_data=test_data, accept=accept)
-    
+
     def predict_proba_real_time(self, test_data, accept="application/x-parquet"):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.

@@ -7,7 +7,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 from PIL import Image
 
-from autogluon.core.constants import REGRESSION, QUANTILE
+from autogluon.core.constants import QUANTILE, REGRESSION
 from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.tabular import TabularPredictor
 

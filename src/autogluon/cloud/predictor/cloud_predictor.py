@@ -48,9 +48,9 @@ from ..utils.sagemaker_utils import (
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
+    split_pred_and_pred_proba,
     unzip_file,
     zipfolder,
-    split_pred_and_pred_proba
 )
 
 logger = logging.getLogger(__name__)
@@ -768,19 +768,19 @@ class CloudPredictor(ABC):
         detached_endpoint = self.endpoint
         self.endpoint = None
         return detached_endpoint
-    
+
     def _validate_predict_real_time_args(self, accept):
         assert self.endpoint, "Please call `deploy()` to deploy an endpoint first."
         assert accept in VALID_ACCEPT, f"Invalid accept type. Options are {VALID_ACCEPT}."
-        
+
     def _load_predict_real_time_test_data(self, test_data):
         if type(test_data) == str:
             test_data = load_pd.load(test_data)
         if not isinstance(test_data, pd.DataFrame):
             raise ValueError("test_data must be either a pandas.DataFrame, a local path or a s3 path")
-        
+
         return test_data
-        
+
     def _predict_real_time(self, test_data, accept, **initial_args):
         try:
             prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
@@ -817,10 +817,10 @@ class CloudPredictor(ABC):
         """
         self._validate_predict_real_time_args(accept)
         test_data = self._load_predict_real_time_test_data(test_data)
-        pred, _  = self._predict_real_time(test_data=test_data, accept=accept)
-        
+        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
+
         return pred
-    
+
     def predict_proba_real_time(self, test_data, accept="application/x-parquet"):
         """
         Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -843,11 +843,11 @@ class CloudPredictor(ABC):
         """
         self._validate_predict_real_time_args(accept)
         test_data = self._load_predict_real_time_test_data(test_data)
-        pred, proba  = self._predict_real_time(test_data=test_data, accept=accept)
+        pred, proba = self._predict_real_time(test_data=test_data, accept=accept)
 
         if proba is None:
             return pred
-        
+
         return proba
 
     def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
