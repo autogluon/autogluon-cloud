@@ -7,7 +7,6 @@ import yaml
 
 from autogluon.common.loaders import load_pd
 
-from ..utils.constants import VALID_ACCEPT
 from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe
 from .cloud_predictor import CloudPredictor
 

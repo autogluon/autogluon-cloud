@@ -7,7 +7,6 @@ import pandas as pd
 from autogluon.common.loaders import load_pd
 
 from ..utils.ag_sagemaker import AutoGluonMultiModalRealtimePredictor
-from ..utils.constants import VALID_ACCEPT
 from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, is_image_file, read_image_bytes_and_encode
 from .cloud_predictor import CloudPredictor
 

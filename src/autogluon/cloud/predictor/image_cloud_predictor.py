@@ -1,7 +1,6 @@
 import copy
 
 from ..utils.ag_sagemaker import AutoGluonImageRealtimePredictor
-from ..utils.constants import VALID_ACCEPT
 from ..utils.utils import read_image_bytes_and_encode
 from .cloud_predictor import CloudPredictor
 
