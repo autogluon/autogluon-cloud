@@ -144,15 +144,22 @@ A general guideline is to use batch inference if you need to get predictions les
 To perform batch inference:
 
 ```{.python}
-cloud_predictor.predict(
+result = cloud_predictor.predict(
     'test.csv',  # can be a DataFrame as well and the results will be stored in s3 bucket
     instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True,  # Set this to False to make it unblocking call
+    download=True  # Batch transform results are stored into S3. Set this to False if you don't want to download the results.
+    persist=True  # Set this to False is you don't want to keep the results file being downloaded
+    save_path=None  # Path to save the downloaded results. If not said, CloudPredictor will create one.
 )
-cloud_predictor.download_predict_results(
-    job_name=None  # download the most recent finished batch inference results to your local machine. Specify the job name to download a specific batch inference job's results.
-    save_path="PATH"  # If not specified, CloudPredictor will create one.
-)
+```
+
+Result would be a pandas DataFrame similar to this:
+
+```{.python}
+   pred   0_proba   1_proba
+0     1  0.317246  0.682754
+1     1  0.195782  0.804218
 ```
 
 ## Retrieve CloudPredictor Info
