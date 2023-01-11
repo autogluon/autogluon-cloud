@@ -207,7 +207,7 @@ If your training and inference tasks involve image modality, your data would con
 
 ### Preparing the Image Column
 Currently, AutoGluon only supports one image per row.
-If your dataset contains one ore more images per row, we first need to preprocess the image column to only contain the first image of each row.
+If your dataset contains one or more images per row, we first need to preprocess the image column to only contain the first image of each row.
 
 For example, if your images are seperated with `;`, you can preprocess it via:
 
