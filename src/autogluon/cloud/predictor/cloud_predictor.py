@@ -777,7 +777,9 @@ class CloudPredictor(ABC):
         if type(test_data) == str:
             test_data = load_pd.load(test_data)
         if not isinstance(test_data, pd.DataFrame):
-            raise ValueError(f"test_data is of type {type(test_data)}. test_data must be either a pandas.DataFrame or a local path to a csv file")
+            raise ValueError(
+                f"test_data is of type {type(test_data)}. test_data must be either a pandas.DataFrame or a local path to a csv file"
+            )
 
         return test_data
 
