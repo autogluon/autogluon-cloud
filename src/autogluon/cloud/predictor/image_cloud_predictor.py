@@ -102,15 +102,31 @@ class ImageCloudPredictor(CloudPredictor):
         kwargs:
             Refer to `CloudPredictor.predict()`
         """
-        split_type = None
-        content_type = "application/x-image"
-        kwargs = copy.deepcopy(kwargs)
-        transformer_kwargs = kwargs.pop("transformer_kwargs", dict())
-        transformer_kwargs["strategy"] = "SingleRecord"
+        processed_args = self._prepare_image_predict_args(**kwargs)
         return super().predict(
             test_data,
-            split_type=split_type,
-            content_type=content_type,
-            transformer_kwargs=transformer_kwargs,
+            split_type=processed_args["split_type"],
+            content_type=processed_args["content_type"],
+            transformer_kwargs=processed_args["transformer_kwargs"],
+            **kwargs,
+        )
+        
+    def predict_proba(
+        self,
+        test_data,
+        **kwargs,
+    ):
+        """
+        test_data: str
+            The test data to be inferenced. Can be a local path to a directory containing the images.
+        kwargs:
+            Refer to `CloudPredictor.predict()`
+        """
+        processed_args = self._prepare_image_predict_args(**kwargs)
+        return super().predict_proba(
+            test_data,
+            split_type=processed_args["split_type"],
+            content_type=processed_args["content_type"],
+            transformer_kwargs=processed_args["transformer_kwargs"],
             **kwargs,
         )
