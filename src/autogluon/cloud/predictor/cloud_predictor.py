@@ -45,13 +45,7 @@ from ..utils.sagemaker_utils import (
     retrieve_latest_framework_version,
     retrieve_py_versions,
 )
-from ..utils.utils import (
-    convert_image_path_to_encoded_bytes_in_dataframe,
-    is_image_file,
-    rename_file_with_uuid,
-    unzip_file,
-    zipfolder,
-)
+from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, is_image_file, unzip_file, zipfolder
 
 logger = logging.getLogger(__name__)
 
@@ -840,6 +834,9 @@ class CloudPredictor(ABC):
         instance_count=1,
         custom_image_uri=None,
         wait=True,
+        download=True,
+        persist=True,
+        save_path=None,
         model_kwargs=None,
         transformer_kwargs=None,
         **kwargs,
@@ -877,6 +874,17 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
+        download: bool, default = True
+            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
+            Will be ignored if `wait` is `False`.
+        persist: bool, default = True
+            Whether to persist the downloaded batch transform results on the disk.
+            Will be ignored if `download` is `False`
+        save_path: str, default = None,
+            Path to save the downloaded result.
+            Will be ignored if `download` is `False`.
+            If None, CloudPredictor will create one.
+            If `persist` is `False`, file would first be downloaded to this path and then removed.
         model_kwargs: dict, default = dict()
             Any extra arguments needed to initialize Sagemaker Model
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
@@ -887,6 +895,12 @@ class CloudPredictor(ABC):
             Any extra arguments needed to pass to transform.
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+
+        Returns
+        -------
+        Optional Pandas.DataFrame
+        Predict results in DataFrame if `download` is True
+        None if `download` is False
         """
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
@@ -958,6 +972,24 @@ class CloudPredictor(ABC):
         if not content_type:
             content_type = "text/csv"
 
+        if not wait:
+            if download:
+                logger.warning(
+                    f"`download={download}` will be ignored because `wait={wait}`. Setting `download` to `False`."
+                )
+                download = False
+        if not download:
+            if persist:
+                logger.warning(
+                    f"`persist={persist}` will be ignored because `download={download}`. Setting `persist` to `False`."
+                )
+                persist = False
+            if save_path:
+                logger.warning(
+                    f"`save_path={save_path}` will be ignored because `download={download}`. Setting `save_path` to `None`."
+                )
+                save_path = None
+
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
         batch_transform_job.run(
             model_data=predictor_path,
@@ -983,6 +1015,16 @@ class CloudPredictor(ABC):
         )
         self._batch_transform_jobs[job_name] = batch_transform_job
 
+        results = None
+        if download:
+            results_path = self.download_predict_results(save_path=save_path)
+            # Batch inference will only return json format
+            results = pd.read_json(results_path)
+        if not persist:
+            os.remove(results_path)
+
+        return results
+
     def download_predict_results(self, job_name=None, save_path=None):
         """
         Download batch transform result
@@ -990,11 +1032,16 @@ class CloudPredictor(ABC):
         Parameters
         ----------
         job_name: str
-            The specific batch transform job result to download.
-            If None, will download the most recent job result.
+            The specific batch transform job results to download.
+            If None, will download the most recent job results.
         save_path: str
-            Path to save the downloaded result.
+            Path to save the downloaded results.
             If None, CloudPredictor will create one.
+
+        Returns
+        -------
+        str,
+            Path to downloaded results.
         """
         if not job_name:
             job_name = self._batch_transform_jobs.last
@@ -1011,15 +1058,14 @@ class CloudPredictor(ABC):
         results_save_path = os.path.join(save_path, "batch_transform", job_name)
         if not os.path.isdir(results_save_path):
             os.makedirs(results_save_path)
-        temp_results_save_path = os.path.join(results_save_path, file_name)
-        if os.path.isfile(temp_results_save_path):
-            logger.warning("File already exists. Will rename the file to avoid overwrite.")
-            file_name = rename_file_with_uuid(file_name)
-        results_save_path = os.path.join(results_save_path, file_name)
         results_bucket, results_key_prefix = s3_path_to_bucket_prefix(result_path)
         self.sagemaker_session.download_data(
             path=results_save_path, bucket=results_bucket, key_prefix=results_key_prefix
         )
+        results_save_path = os.path.join(results_save_path, file_name)
+        logger.log(20, f"Batch results have been downloaded to {results_save_path}")
+
+        return results_save_path
 
     def get_batch_transform_job_status(self, job_name=None):
         """

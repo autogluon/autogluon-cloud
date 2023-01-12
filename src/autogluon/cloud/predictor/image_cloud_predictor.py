@@ -84,7 +84,7 @@ class ImageCloudPredictor(CloudPredictor):
         kwargs = copy.deepcopy(kwargs)
         transformer_kwargs = kwargs.pop("transformer_kwargs", dict())
         transformer_kwargs["strategy"] = "SingleRecord"
-        super().predict(
+        return super().predict(
             test_data,
             split_type=split_type,
             content_type=content_type,

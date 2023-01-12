@@ -62,7 +62,7 @@ cloud_predictor = TabularCloudPredictor(
     predictor_init_args,
     predictor_fit_args,
     instance_type="ml.m5.2xlarge"  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True  # Set this to False to make it an unblocking call and immediately return
 )
 ```
 
@@ -86,7 +86,7 @@ If you want to deploy a predictor as a SageMaker endpoint, which can be used to 
 ```{.python}
 cloud_predictor.deploy(
     instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True  # Set this to False to make it an unblocking call and immediately return
 )
 ```
 
@@ -102,7 +102,7 @@ To perform real-time prediction:
 result = cloud_predictor.predict_real_time(
     'test.csv',  # can be a DataFrame as well
     instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True  # Set this to False to make it an unblocking call and immediately return
 )
 ```
 
@@ -144,15 +144,24 @@ A general guideline is to use batch inference if you need to get predictions les
 To perform batch inference:
 
 ```{.python}
-cloud_predictor.predict(
+result = cloud_predictor.predict(
     'test.csv',  # can be a DataFrame as well and the results will be stored in s3 bucket
     instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True,  # Set this to False to make it an unblocking call and immediately return
+    # If True, returns a Pandas Series object of predictions.
+    # If False, returns nothing. You will have to download results separately via cloud_predictor.download_predict_results
+    download=True,
+    persist=True,  # If True and download=True, the results file will also be saved to local disk.
+    save_path=None  # Path to save the downloaded results. If None, CloudPredictor will create one with the batch inference job name.
 )
-cloud_predictor.download_predict_results(
-    job_name=None  # download the most recent finished batch inference results to your local machine. Specify the job name to download a specific batch inference job's results.
-    save_path="PATH"  # If not specified, CloudPredictor will create one.
-)
+```
+
+Result would be a pandas DataFrame similar to this:
+
+```{.python}
+   pred   0_proba   1_proba
+0     1  0.317246  0.682754
+1     1  0.195782  0.804218
 ```
 
 ## Retrieve CloudPredictor Info

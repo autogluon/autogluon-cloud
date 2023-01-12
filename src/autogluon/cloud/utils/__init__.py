@@ -10,7 +10,6 @@ from .utils import (
     is_compressed_file,
     is_image_file,
     read_image_bytes_and_encode,
-    rename_file_with_uuid,
     unzip_file,
     zipfolder,
 )
