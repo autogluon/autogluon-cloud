@@ -583,15 +583,17 @@ class CloudPredictor(ABC):
     def _get_local_predictor_cls(self):
         raise NotImplementedError
 
-    def to_local_predictor(self, save_path=None):
+    def to_local_predictor(self, save_path=None, **kwargs):
         """
-        Convert the SageMaker trained predictor to a local TabularPredictor or TextPredictor.
+        Convert the SageMaker trained predictor to a local AutoGluon Predictor.
 
         Parameters
         ----------
         save_path: str
             Path to save the model.
             If None, CloudPredictor will create a folder for the model.
+        kwargs:
+            Additional args to be passed to `load` call of the underneath predictor
 
         Returns
         -------
@@ -600,7 +602,7 @@ class CloudPredictor(ABC):
         """
         predictor_cls = self._get_local_predictor_cls()
         local_model_path = self.download_trained_predictor(save_path)
-        return predictor_cls.load(local_model_path)
+        return predictor_cls.load(local_model_path, **kwargs)
 
     def _upload_predictor(self, predictor_path, key_prefix):
         cloud_bucket, _ = s3_path_to_bucket_prefix(self.cloud_output_path)
