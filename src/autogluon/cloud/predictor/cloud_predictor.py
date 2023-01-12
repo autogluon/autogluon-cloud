@@ -771,13 +771,13 @@ class CloudPredictor(ABC):
 
     def _validate_predict_real_time_args(self, accept):
         assert self.endpoint, "Please call `deploy()` to deploy an endpoint first."
-        assert accept in VALID_ACCEPT, f"Invalid accept type. Options are {VALID_ACCEPT}."
+        assert accept in VALID_ACCEPT, f"Invalid accept type: {accept}. Options are {VALID_ACCEPT}."
 
     def _load_predict_real_time_test_data(self, test_data):
         if type(test_data) == str:
             test_data = load_pd.load(test_data)
         if not isinstance(test_data, pd.DataFrame):
-            raise ValueError("test_data must be either a pandas.DataFrame, a local path or a s3 path")
+            raise ValueError(f"test_data is of type {type(test_data)}. test_data must be either a pandas.DataFrame or a local path to a csv file")
 
         return test_data
 
