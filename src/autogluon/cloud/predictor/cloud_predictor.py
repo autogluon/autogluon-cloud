@@ -871,7 +871,7 @@ class CloudPredictor(ABC):
 
         return test_input
     
-    def _prepare_predict_args(self, **predict_kwargs):
+    def _prepare_image_predict_args(self, **predict_kwargs):
         split_type = None
         content_type = "application/x-image"
         predict_kwargs = copy.deepcopy(predict_kwargs)
