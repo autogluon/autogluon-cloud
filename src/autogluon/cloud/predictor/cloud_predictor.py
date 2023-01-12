@@ -972,14 +972,20 @@ class CloudPredictor(ABC):
 
         if not wait:
             if download:
-                logger.warning(f"`download={download}` will be ignored because `wait={wait}`. Setting `download` to `False`.")
+                logger.warning(
+                    f"`download={download}` will be ignored because `wait={wait}`. Setting `download` to `False`."
+                )
                 download = False
         if not download:
             if persist:
-                logger.warning(f"`persist={persist}` will be ignored because `download={download}`. Setting `persist` to `False`.")
+                logger.warning(
+                    f"`persist={persist}` will be ignored because `download={download}`. Setting `persist` to `False`."
+                )
                 persist = False
             if save_path:
-                logger.warning(f"`save_path={save_path}` will be ignored because `download={download}`. Setting `save_path` to `None`.")
+                logger.warning(
+                    f"`save_path={save_path}` will be ignored because `download={download}`. Setting `save_path` to `None`."
+                )
                 save_path = None
 
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
