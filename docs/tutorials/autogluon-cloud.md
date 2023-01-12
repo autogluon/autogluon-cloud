@@ -62,7 +62,7 @@ cloud_predictor = TabularCloudPredictor(
     predictor_init_args,
     predictor_fit_args,
     instance_type="ml.m5.2xlarge"  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True  # Set this to False to make it an unblocking call and immediately return
 )
 ```
 
@@ -86,7 +86,7 @@ If you want to deploy a predictor as a SageMaker endpoint, which can be used to 
 ```{.python}
 cloud_predictor.deploy(
     instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True  # Set this to False to make it an unblocking call and immediately return
 )
 ```
 
@@ -102,7 +102,7 @@ To perform real-time prediction:
 result = cloud_predictor.predict_real_time(
     'test.csv',  # can be a DataFrame as well
     instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
+    wait=True  # Set this to False to make it an unblocking call and immediately return
 )
 ```
 
@@ -147,10 +147,12 @@ To perform batch inference:
 result = cloud_predictor.predict(
     'test.csv',  # can be a DataFrame as well and the results will be stored in s3 bucket
     instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True,  # Set this to False to make it unblocking call
-    download=True  # Batch transform results are stored into S3. Set this to False if you don't want to download the results.
-    persist=True  # Set this to False is you don't want to keep the results file being downloaded
-    save_path=None  # Path to save the downloaded results. If not said, CloudPredictor will create one.
+    wait=True,  # Set this to False to make it an unblocking call and immediately return
+    # If True, returns a Pandas Series object of predictions.
+    # If False, returns nothing. You will have to download results separately via cloud_predictor.download_predict_results
+    download=True,
+    persist=True,  # If True and download=True, the results file will also be saved to local disk.
+    save_path=None  # Path to save the downloaded results. If None, CloudPredictor will create one with the batch inference job name.
 )
 ```
 

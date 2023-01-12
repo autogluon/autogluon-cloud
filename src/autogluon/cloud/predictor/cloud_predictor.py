@@ -893,6 +893,7 @@ class CloudPredictor(ABC):
             Any extra arguments needed to pass to transform.
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+
         Returns
         -------
         Optional Pandas.DataFrame
@@ -971,14 +972,14 @@ class CloudPredictor(ABC):
 
         if not wait:
             if download:
-                logger.warning("`download` will be ignored because `wait` is set to `False`")
+                logger.warning(f"`download={download}` will be ignored because `wait={wait}`. Setting `download` to `False`.")
                 download = False
         if not download:
             if persist:
-                logger.warning("`persist` will be ignored because `download` is set to `False`")
+                logger.warning(f"`persist={persist}` will be ignored because `download={download}`. Setting `persist` to `False`.")
                 persist = False
             if save_path:
-                logger.warning("`save_path` will be ignored because `download` is set to `False`")
+                logger.warning(f"`save_path={save_path}` will be ignored because `download={download}`. Setting `save_path` to `None`.")
                 save_path = None
 
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
