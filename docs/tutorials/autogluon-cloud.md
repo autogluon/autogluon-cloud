@@ -99,11 +99,7 @@ cloud_predictor.attach_endpoint(endpoint="ENDPOINT_NAME")
 To perform real-time prediction:
 
 ```{.python}
-result = cloud_predictor.predict_real_time(
-    'test.csv',  # can be a DataFrame as well
-    instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it an unblocking call and immediately return
-)
+result = cloud_predictor.predict_real_time('test.csv',  # can be a DataFrame as well)
 ```
 
 Result would be a pandas Series similar to this:
@@ -117,11 +113,7 @@ Name: label, dtype: object
 To perform real-time predict probability:
 
 ```{.python}
-result = cloud_predictor.predict_proba_real_time(
-    'test.csv',  # can be a DataFrame as well
-    instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True  # Set this to False to make it unblocking call
-)
+result = cloud_predictor.predict_proba_real_time('test.csv',  # can be a DataFrame as well)
 ```
 
 Result would be a pandas DataFrame similar to this:
