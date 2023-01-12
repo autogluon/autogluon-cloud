@@ -10,6 +10,7 @@ from .utils import (
     is_compressed_file,
     is_image_file,
     read_image_bytes_and_encode,
+    split_pred_and_pred_proba,
     unzip_file,
     zipfolder,
 )

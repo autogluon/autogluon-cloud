@@ -7,7 +7,6 @@ import yaml
 
 from autogluon.common.loaders import load_pd
 
-from ..utils.constants import VALID_ACCEPT
 from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe
 from .cloud_predictor import CloudPredictor
 
@@ -53,6 +52,15 @@ class TabularCloudPredictor(CloudPredictor):
             yaml.dump(config, f)
         return path
 
+    def _load_predict_real_time_test_data(self, test_data, test_data_image_column):
+        if isinstance(test_data, str):
+            test_data = load_pd.load(test_data)
+        if isinstance(test_data, pd.DataFrame):
+            if test_data_image_column is not None:
+                test_data = convert_image_path_to_encoded_bytes_in_dataframe(test_data, test_data_image_column)
+
+        return test_data
+
     def predict_real_time(self, test_data, test_data_image_column=None, accept="application/x-parquet"):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -75,15 +83,49 @@ class TabularCloudPredictor(CloudPredictor):
 
         Returns
         -------
-        Pandas.DataFrame
-        Predict results in DataFrame
+        Pandas.Series
+        Predict results in Series
         """
-        assert self.endpoint, "Please call `deploy()` to deploy an endpoint first."
-        assert accept in VALID_ACCEPT, f"Invalid accept type. Options are {VALID_ACCEPT}."
+        self._validate_predict_real_time_args(accept)
+        test_data = self._load_predict_real_time_test_data(
+            test_data=test_data, test_data_image_column=test_data_image_column
+        )
+        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
 
-        if isinstance(test_data, str):
-            test_data = load_pd.load(test_data)
-        if isinstance(test_data, pd.DataFrame):
-            if test_data_image_column is not None:
-                test_data = convert_image_path_to_encoded_bytes_in_dataframe(test_data, test_data_image_column)
-        return self._predict_real_time(test_data=test_data, accept=accept)
+        return pred
+
+    def predict_proba_real_time(self, test_data, test_data_image_column=None, accept="application/x-parquet"):
+        """
+        Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        This is intended to provide a low latency inference.
+        If you want to inference on a large dataset, use `predict()` instead.
+
+        Parameters
+        ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced.
+            Can be a pandas.DataFrame or a local path to a csv file.
+            When predicting multimodality with image modality:
+                You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
+        test_data_image_column: default = None
+            If test_data involves image modality, you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
+        accept: str, default = application/x-parquet
+            Type of accept output content.
+            Valid options are application/x-parquet, text/csv, application/json
+
+        Returns
+        -------
+        Pandas.DataFrame or Pandas.Series
+            Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+        """
+        self._validate_predict_real_time_args(accept)
+        test_data = self._load_predict_real_time_test_data(
+            test_data=test_data, test_data_image_column=test_data_image_column
+        )
+        pred, proba = self._predict_real_time(test_data=test_data, accept=accept)
+
+        if proba is None:
+            return pred
+
+        return proba
