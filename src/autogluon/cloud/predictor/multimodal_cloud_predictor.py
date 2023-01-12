@@ -141,7 +141,7 @@ class MultiModalCloudPredictor(CloudPredictor):
         if isinstance(test_data, str):
             if os.path.isdir(test_data) or is_image_file(test_data):
                 image_modality_only = True
-        
+
         return image_modality_only
 
     def predict(
@@ -182,7 +182,7 @@ class MultiModalCloudPredictor(CloudPredictor):
                 test_data_image_column=test_data_image_column,
                 **kwargs,
             )
-            
+
     def predict_proba(
         self,
         test_data,

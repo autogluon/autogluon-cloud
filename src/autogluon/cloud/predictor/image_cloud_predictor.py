@@ -110,7 +110,7 @@ class ImageCloudPredictor(CloudPredictor):
             transformer_kwargs=processed_args["transformer_kwargs"],
             **kwargs,
         )
-        
+
     def predict_proba(
         self,
         test_data,

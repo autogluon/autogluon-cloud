@@ -870,15 +870,15 @@ class CloudPredictor(ABC):
         logger.log(20, "Data uploaded successfully")
 
         return test_input
-    
+
     def _prepare_image_predict_args(self, **predict_kwargs):
         split_type = None
         content_type = "application/x-image"
         predict_kwargs = copy.deepcopy(predict_kwargs)
         transformer_kwargs = predict_kwargs.pop("transformer_kwargs", dict())
         transformer_kwargs["strategy"] = "SingleRecord"
-        
-        return {split_type:split_type, content_type:content_type, transformer_kwargs:transformer_kwargs}
+
+        return {split_type: split_type, content_type: content_type, transformer_kwargs: transformer_kwargs}
 
     def _predict(
         self,
@@ -1021,7 +1021,7 @@ class CloudPredictor(ABC):
             os.remove(results_path)
 
         return pred, pred_proba
-    
+
     def predict(
         self,
         test_data,
@@ -1038,7 +1038,7 @@ class CloudPredictor(ABC):
         save_path=None,
         model_kwargs=None,
         transformer_kwargs=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Predict using SageMaker batch transform.
@@ -1116,11 +1116,11 @@ class CloudPredictor(ABC):
             save_path=save_path,
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
-            **kwargs
+            **kwargs,
         )
-        
+
         return pred
-    
+
     def predict_proba(
         self,
         test_data,
@@ -1138,7 +1138,7 @@ class CloudPredictor(ABC):
         save_path=None,
         model_kwargs=None,
         transformer_kwargs=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Predict using SageMaker batch transform.
@@ -1222,14 +1222,14 @@ class CloudPredictor(ABC):
             save_path=save_path,
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
-            **kwargs
+            **kwargs,
         )
-        
+
         if include_predict:
             return pred, pred_proba
-        
+
         return pred_proba
-        
+
     def download_predict_results(self, job_name=None, save_path=None):
         """
         Download batch transform result
