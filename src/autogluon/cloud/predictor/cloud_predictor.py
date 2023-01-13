@@ -878,7 +878,7 @@ class CloudPredictor(ABC):
         transformer_kwargs = predict_kwargs.pop("transformer_kwargs", dict())
         transformer_kwargs["strategy"] = "SingleRecord"
 
-        return {split_type: split_type, content_type: content_type, transformer_kwargs: transformer_kwargs}
+        return {"split_type": split_type, "content_type": content_type, "transformer_kwargs": transformer_kwargs}
 
     def _predict(
         self,
