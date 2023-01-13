@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
-from autogluon.core.constants import REGRESSION
+from autogluon.core.constants import QUANTILE, REGRESSION
 from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.vision import ImagePredictor
 
@@ -56,11 +56,11 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
 
-    if model._problem_type != REGRESSION:
+    if model._problem_type not in [REGRESSION, QUANTILE]:
         pred_proba = model.predict_proba(image_paths, as_pandas=True)
         pred = get_pred_from_proba_df(pred_proba, problem_type=model._problem_type)
         pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
-        pred.name = str(pred.name) + "_pred" if pred.name is not None else "pred"
+        pred.name = "label"  # ImagePredictor doesn't have `label` attribute. Use "label" for now
         prediction = pd.concat([pred, pred_proba], axis=1)
     else:
         prediction = model.predict(image_paths, as_pandas=True)

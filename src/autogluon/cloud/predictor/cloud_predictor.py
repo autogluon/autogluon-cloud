@@ -45,7 +45,13 @@ from ..utils.sagemaker_utils import (
     retrieve_latest_framework_version,
     retrieve_py_versions,
 )
-from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, is_image_file, unzip_file, zipfolder
+from ..utils.utils import (
+    convert_image_path_to_encoded_bytes_in_dataframe,
+    is_image_file,
+    split_pred_and_pred_proba,
+    unzip_file,
+    zipfolder,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -763,9 +769,25 @@ class CloudPredictor(ABC):
         self.endpoint = None
         return detached_endpoint
 
+    def _validate_predict_real_time_args(self, accept):
+        assert self.endpoint, "Please call `deploy()` to deploy an endpoint first."
+        assert accept in VALID_ACCEPT, f"Invalid accept type: {accept}. Options are {VALID_ACCEPT}."
+
+    def _load_predict_real_time_test_data(self, test_data):
+        if type(test_data) == str:
+            test_data = load_pd.load(test_data)
+        if not isinstance(test_data, pd.DataFrame):
+            raise ValueError(
+                f"test_data is of type {type(test_data)}. test_data must be either a pandas.DataFrame or a local path to a csv file"
+            )
+
+        return test_data
+
     def _predict_real_time(self, test_data, accept, **initial_args):
         try:
-            return self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
+            prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
+            pred, pred_proba = split_pred_and_pred_proba(prediction)
+            return pred, pred_proba
         except ClientError as e:
             if e.response["Error"]["Code"] == "413":  # Error code for pay load too large
                 logger.warning(
@@ -792,17 +814,43 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        Pandas.DataFrame
-        Predict results in DataFrame
+        Pandas.Series
+        Predict results in Series
         """
-        assert self.endpoint, "Please call `deploy()` to deploy an endpoint first."
-        assert accept in VALID_ACCEPT, f"Invalid accept type. Options are {VALID_ACCEPT}."
-        if type(test_data) == str:
-            test_data = load_pd.load(test_data)
-        if not isinstance(test_data, pd.DataFrame):
-            raise ValueError("test_data must be either a pandas.DataFrame, a local path or a s3 path")
+        self._validate_predict_real_time_args(accept)
+        test_data = self._load_predict_real_time_test_data(test_data)
+        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
 
-        return self._predict_real_time(test_data=test_data, accept=accept)
+        return pred
+
+    def predict_proba_real_time(self, test_data, accept="application/x-parquet"):
+        """
+        Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        This is intended to provide a low latency inference.
+        If you want to inference on a large dataset, use `predict_proba()` instead.
+        If your problem_type is regression, this functions identically to `predict_real_time`, returning the same output.
+
+        Parameters
+        ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        accept: str, default = application/x-parquet
+            Type of accept output content.
+            Valid options are application/x-parquet, text/csv, application/json
+
+        Returns
+        -------
+        Pandas.DataFrame or Pandas.Series
+            Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+        """
+        self._validate_predict_real_time_args(accept)
+        test_data = self._load_predict_real_time_test_data(test_data)
+        pred, proba = self._predict_real_time(test_data=test_data, accept=accept)
+
+        if proba is None:
+            return pred
+
+        return proba
 
     def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
         # If a directory of images, upload directly

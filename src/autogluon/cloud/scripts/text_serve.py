@@ -61,7 +61,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         pred_proba = model.predict_proba(data, as_pandas=True)
         pred = get_pred_from_proba_df(pred_proba, problem_type=model.problem_type)
         pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
-        pred.name = str(pred.name) + "_pred" if pred.name is not None else "pred"
+        pred.name = model.label
         prediction = pd.concat([pred, pred_proba], axis=1)
     else:
         prediction = model.predict(data, as_pandas=True)
