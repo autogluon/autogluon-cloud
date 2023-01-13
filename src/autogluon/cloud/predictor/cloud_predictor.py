@@ -1098,8 +1098,8 @@ class CloudPredictor(ABC):
         Returns
         -------
         Optional Pandas.Series
-        Predict results in Series if `download` is True
-        None if `download` is False
+            Predict results in Series if `download` is True
+            None if `download` is False
         """
         pred, _ = self._predict(
             test_data=test_data,
@@ -1200,8 +1200,6 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        Predict results in Series if `download` is True
-        None if `download` is False
         Optional(Union(Tuple(Pandas.Series, Union(Pandas.DataFrame, Pandas.Series), Union(Pandas.DataFrame, Pandas.Series)))
             If `download` is False, will return None or (None, None) if `include_predict` is True
             If `download` is True and `include_predict` is True,
