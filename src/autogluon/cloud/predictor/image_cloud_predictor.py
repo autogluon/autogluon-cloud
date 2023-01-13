@@ -1,5 +1,3 @@
-import copy
-
 from ..utils.ag_sagemaker import AutoGluonImageRealtimePredictor
 from ..utils.utils import read_image_bytes_and_encode
 from .cloud_predictor import CloudPredictor

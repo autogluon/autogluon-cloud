@@ -1203,7 +1203,8 @@ class CloudPredictor(ABC):
         Optional(Union(Tuple(Pandas.Series, Union(Pandas.DataFrame, Pandas.Series), Union(Pandas.DataFrame, Pandas.Series)))
             If `download` is False, will return None or (None, None) if `include_predict` is True
             If `download` is True and `include_predict` is True,
-            will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame or a Pandas.Series that's identical to prediction when it's a regression problem.
+            will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
+            or a Pandas.Series that's identical to prediction when it's a regression problem.
         """
         pred, pred_proba = self._predict(
             test_data=test_data,
