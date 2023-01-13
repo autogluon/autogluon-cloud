@@ -63,8 +63,10 @@ class CloudTestHelper:
     @staticmethod
     def test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs):
         try:
-            cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
-            cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
+            pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+            assert isinstance(pred, pd.Series)
+            pred_proba = cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
+            assert isinstance(pred, pd.DataFrame)
         except Exception as e:
             cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
             raise e
