@@ -135,7 +135,7 @@ class MultiModalCloudPredictor(CloudPredictor):
             return pred
 
         return proba
-    
+
     def _check_image_modality_only(self, test_data):
         image_modality_only = False
         if isinstance(test_data, str):
