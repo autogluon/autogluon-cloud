@@ -66,7 +66,7 @@ class CloudTestHelper:
             pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
             assert isinstance(pred, pd.Series)
             pred_proba = cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
-            assert isinstance(pred, pd.DataFrame)
+            assert isinstance(pred_proba, pd.DataFrame)
         except Exception as e:
             cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
             raise e
