@@ -477,6 +477,7 @@ class CloudPredictor(ABC):
             autogluon_sagemaker_estimator_kwargs["disable_profiler"] = True
             autogluon_sagemaker_estimator_kwargs["debugger_hook_config"] = False
         output_path = self.cloud_output_path + "/model"
+        code_location = self.cloud_output_path + "/code"
         cloud_bucket, _ = s3_path_to_bucket_prefix(self.cloud_output_path)
 
         self._train_script_path = ScriptManager.get_train_script(self.predictor_type, framework_version)
@@ -521,6 +522,7 @@ class CloudPredictor(ABC):
             py_version=py_version,
             base_job_name="autogluon-cloudpredictor-train",
             output_path=output_path,
+            code_location=code_location,
             inputs=inputs,
             custom_image_uri=custom_image_uri,
             wait=wait,
