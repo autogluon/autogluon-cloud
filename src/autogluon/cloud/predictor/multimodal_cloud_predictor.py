@@ -1,4 +1,3 @@
-import copy
 import logging
 import os
 
@@ -136,6 +135,14 @@ class MultiModalCloudPredictor(CloudPredictor):
 
         return proba
 
+    def _check_image_modality_only(self, test_data):
+        image_modality_only = False
+        if isinstance(test_data, str):
+            if os.path.isdir(test_data) or is_image_file(test_data):
+                image_modality_only = True
+
+        return image_modality_only
+
     def predict(
         self,
         test_data,
@@ -156,27 +163,59 @@ class MultiModalCloudPredictor(CloudPredictor):
         kwargs:
             Refer to `CloudPredictor.predict()`
         """
-        image_modality_only = False
-        if isinstance(test_data, str):
-            if os.path.isdir(test_data) or is_image_file(test_data):
-                image_modality_only = True
+        image_modality_only = self._check_image_modality_only(test_data)
 
         if image_modality_only:
-            split_type = None
-            content_type = "application/x-image"
-            kwargs = copy.deepcopy(kwargs)
-            transformer_kwargs = kwargs.pop("transformer_kwargs", dict())
-            transformer_kwargs["strategy"] = "SingleRecord"
+            processed_args = self._prepare_image_predict_args(**kwargs)
             return super().predict(
                 test_data,
                 test_data_image_column=None,
-                split_type=split_type,
-                content_type=content_type,
-                transformer_kwargs=transformer_kwargs,
+                split_type=processed_args["split_type"],
+                content_type=processed_args["content_type"],
+                transformer_kwargs=processed_args["transformer_kwargs"],
                 **kwargs,
             )
         else:
             return super().predict(
+                test_data,
+                test_data_image_column=test_data_image_column,
+                **kwargs,
+            )
+
+    def predict_proba(
+        self,
+        test_data,
+        test_data_image_column=None,
+        **kwargs,
+    ):
+        """
+        test_data: str
+            The test data to be inferenced.
+            Can be a pandas.DataFrame or a local path to a csv file.
+            When predicting multimodality with image modality:
+                You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
+            When predicting with only images:
+                Can be a local path to a directory containing the images or a local path to a single image.
+        test_data_image_column: Optional(str)
+            If test_data involves image modality, you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
+        kwargs:
+            Refer to `CloudPredictor.predict()`
+        """
+        image_modality_only = self._check_image_modality_only(test_data)
+
+        if image_modality_only:
+            processed_args = self._prepare_image_predict_args(**kwargs)
+            return super().predict_proba(
+                test_data,
+                test_data_image_column=None,
+                split_type=processed_args["split_type"],
+                content_type=processed_args["content_type"],
+                transformer_kwargs=processed_args["transformer_kwargs"],
+                **kwargs,
+            )
+        else:
+            return super().predict_proba(
                 test_data,
                 test_data_image_column=test_data_image_column,
                 **kwargs,

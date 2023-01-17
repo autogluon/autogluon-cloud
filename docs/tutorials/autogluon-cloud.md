@@ -171,9 +171,49 @@ result = cloud_predictor.predict(
 Result would be a pandas DataFrame similar to this:
 
 ```{.python}
-   pred   0_proba   1_proba
-0     1  0.317246  0.682754
-1     1  0.195782  0.804218
+0      dog
+1      cat
+2      cat
+Name: label, dtype: object
+```
+
+To perform batch inference and getting prediction probability:
+
+```{.python}
+result = cloud_predictor.predict_proba(
+    'test.csv',  # can be a DataFrame as well and the results will be stored in s3 bucket
+    include_predict=True  # Will return a tuple (prediction, prediction probability). Set this to False to get prediction probability only.
+    instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
+    wait=True,  # Set this to False to make it an unblocking call and immediately return
+    # If True, returns a Pandas Series object of predictions.
+    # If False, returns nothing. You will have to download results separately via cloud_predictor.download_predict_results
+    download=True,
+    persist=True,  # If True and download=True, the results file will also be saved to local disk.
+    save_path=None  # Path to save the downloaded results. If None, CloudPredictor will create one with the batch inference job name.
+)
+```
+
+Result would be a tuple containing both the prediction and prediction probability if `include_predict` is True, i.e.
+
+```{.python}
+0      dog
+1      cat
+2      cat
+Name: label, dtype: object
+,
+         dog       cat
+0   0.682754  0.317246
+1   0.195782  0.804218
+2   0.372283  0.627717
+```
+
+Otherwise, prediction probability only, i.e.
+
+```{.python}
+         dog       cat
+0   0.682754  0.317246
+1   0.195782  0.804218
+2   0.372283  0.627717
 ```
 
 ## Retrieve CloudPredictor Info
