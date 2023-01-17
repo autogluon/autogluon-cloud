@@ -217,7 +217,7 @@ class CloudPredictor(ABC):
             os.makedirs(util_path)
         except FileExistsError:
             logger.warning(
-                f'Warning: path already exists! This predictor may overwrite an existing predictor! path="{path}"'
+                f"Warning: path already exists! This predictor may overwrite an existing predictor! path='{path!r}'"
             )
         return os.path.abspath(path)
 
@@ -1353,7 +1353,7 @@ class CloudPredictor(ABC):
         if not silent:
             logger.log(
                 20,
-                f'{type(self).__name__} saved. To load, use: predictor = {type(self).__name__}.load("{self.local_output_path}")',
+                f"{type(self).__name__} saved. To load, use: predictor = {type(self).__name__}.load('{self.local_output_path!r}')",
             )
 
     def _load_jobs(self):
