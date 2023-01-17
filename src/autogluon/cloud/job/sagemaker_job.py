@@ -163,6 +163,7 @@ class SageMakerFitJob(SageMakerJob):
         py_version,
         base_job_name,
         output_path,
+        code_location,
         inputs,
         custom_image_uri,
         wait,
@@ -182,6 +183,7 @@ class SageMakerFitJob(SageMakerJob):
             py_version=py_version,
             base_job_name=base_job_name,
             output_path=output_path,
+            code_location=code_location,
             custom_image_uri=custom_image_uri,
             **autogluon_sagemaker_estimator_kwargs,
         )
