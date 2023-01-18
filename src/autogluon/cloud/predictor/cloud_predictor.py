@@ -600,7 +600,7 @@ class CloudPredictor(ABC):
         Returns
         -------
         AutoGluon Predictor,
-            TabularPredictor or TextPredictor based on `predictor_type`
+            TabularPredictor or MultiModalPredictor based on `predictor_type`
         """
         predictor_cls = self._get_local_predictor_cls()
         local_model_path = self.download_trained_predictor(save_path)
