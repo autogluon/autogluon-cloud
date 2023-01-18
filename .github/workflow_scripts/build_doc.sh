@@ -18,12 +18,13 @@ then
 else
     if [[ $BRANCH == "master" ]]
     then
-        path="dev"
-    elif [[ $BRANCH == "stable" ]]
-    then
-        path="stable"
+        path="cloud/dev"
     else
-        exit 0  # For other branch pushed to autogluon-cloud. We do not build docs.
+        if [[ $BRANCH == "dev" ]]
+        then
+            path="cloud/dev-branch"
+        else
+            path="cloud/$BRANCH"
     fi
     BUCKET='autogluon.mxnet.io'
     site=$BUCKET/$path  # site is the actual bucket location that will serve the doc
