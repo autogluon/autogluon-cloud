@@ -41,7 +41,7 @@ fi
 
 setup_build_contrib_env
 
-sed -i -e "s@###_PLACEHOLDER_WEB_CONTENT_ROOT_###@http://$site@g" docs/config.ini
+sed -i -e "s@###_PLACEHOLDER_WEB_CONTENT_ROOT_###@https://$site@g" docs/config.ini
 sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_LABEL_###@$other_doc_version_text@g" docs/config.ini
 sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_BRANCH_###@$other_doc_version_branch@g" docs/config.ini
 
