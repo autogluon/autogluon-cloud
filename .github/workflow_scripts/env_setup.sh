@@ -12,6 +12,10 @@ function setup_build_contrib_env {
 }
 
 function install_cloud {
+    python3 -m pip install --upgrade -e .
+}
+
+function install_cloud_test {
     python3 -m pip install --upgrade pytest-xdist # Enable running tests in parallel for speedup
     python3 -m pip install --upgrade -e ./[tests]
 }
