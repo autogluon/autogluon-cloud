@@ -14,7 +14,7 @@ then
     # Put in cloud bucket for staging purpose
     BUCKET='autogluon-cloud-doc-staging'
     if [[ -n $PR_NUMBER ]]; then path=$PR_NUMBER; else path=$BRANCH; fi
-    site=$BUCKET.s3-website-us-west-2.amazonaws.com/$path/$COMMIT_SHA  # site is the actual bucket location that will serve the doc
+    site=https://d12sc05jpx1wj5.cloudfront.net/$path/$COMMIT_SHA
 else
     if [[ $BRANCH == "master" ]]
     then
