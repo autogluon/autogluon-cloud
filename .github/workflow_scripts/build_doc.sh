@@ -15,6 +15,8 @@ then
     BUCKET='autogluon-cloud-doc-staging'
     if [[ -n $PR_NUMBER ]]; then path=$PR_NUMBER; else path=$BRANCH; fi
     site=d12sc05jpx1wj5.cloudfront.net/$path/$COMMIT_SHA
+    flags='--delete'
+    cacheControl=''
 else
     if [[ $BRANCH == "master" ]]
     then
@@ -29,6 +31,8 @@ else
     fi
     BUCKET='autogluon.mxnet.io'
     site=$BUCKET/$path  # site is the actual bucket location that will serve the doc
+    if [[ $BRANCH == 'master' ]]; then flags=''; else flags='--delete'; fi
+    cacheControl='--cache-control max-age=7200'
 fi
 
 other_doc_version_text='Stable Version Documentation'
@@ -53,16 +57,6 @@ if [[ $COMMAND_EXIT_CODE -ne 0 ]]; then
     exit COMMAND_EXIT_CODE
 fi
 
-if [[ (-n $PR_NUMBER) || ($GIT_REPO != "autogluon/autogluon-cloud") ]]
-then
-    # If PR, move the whole doc folder (to keep css styles) to staging bucket for visibility
-    DOC_PATH=_build/html/
-    S3_PATH=s3://$BUCKET/$path/$COMMIT_SHA
-    aws s3 cp $DOC_PATH $S3_PATH --recursive
-else
-    # If master/stable, move the individual tutorial html to dev/stable bucket of main AG
-    cacheControl='--cache-control max-age=7200'
-    DOC_PATH=_build/html/tutorials/autogluon-cloud.html
-    S3_PATH=s3://$BUCKET/$path/tutorials/cloud_fit_deploy/
-    aws s3 cp $DOC_PATH $S3_PATH --acl public-read ${cacheControl}
-fi
+DOC_PATH=_build/html/
+
+aws s3 sync ${flags} ${DOC_PATH} s3://${bucket}/${path} --acl public-read ${cacheControl}
