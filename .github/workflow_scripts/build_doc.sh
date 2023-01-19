@@ -25,6 +25,7 @@ else
             path="cloud/dev-branch"
         else
             path="cloud/$BRANCH"
+        fi
     fi
     BUCKET='autogluon.mxnet.io'
     site=$BUCKET/$path  # site is the actual bucket location that will serve the doc
