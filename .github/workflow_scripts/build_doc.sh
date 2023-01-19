@@ -13,8 +13,8 @@ if [[ (-n $PR_NUMBER) || ($GIT_REPO != "autogluon/autogluon-cloud") ]]
 then
     # Put in cloud bucket for staging purpose
     BUCKET='autogluon-cloud-doc-staging'
-    if [[ -n $PR_NUMBER ]]; then path=$PR_NUMBER; else path=$BRANCH; fi
-    site=d12sc05jpx1wj5.cloudfront.net/$path/$COMMIT_SHA
+    if [[ -n $PR_NUMBER ]]; then path=$PR_NUMBER/$COMMIT_SHA; else path=$BRANCH/$COMMIT_SHA; fi
+    site=d12sc05jpx1wj5.cloudfront.net/$path
     flags='--delete'
     cacheControl=''
 else
@@ -59,4 +59,4 @@ fi
 
 DOC_PATH=_build/html/
 
-aws s3 sync ${flags} ${DOC_PATH} s3://${bucket}/${path} --acl public-read ${cacheControl}
+aws s3 sync ${flags} ${DOC_PATH} s3://${BUCKET}/${path} --acl public-read ${cacheControl}
