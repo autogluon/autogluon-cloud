@@ -45,7 +45,8 @@ sed -i -e "s@###_PLACEHOLDER_WEB_CONTENT_ROOT_###@http://$site@g" docs/config.in
 sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_LABEL_###@$other_doc_version_text@g" docs/config.ini
 sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_BRANCH_###@$other_doc_version_branch@g" docs/config.ini
 
-cd docs && d2lbook build html
+install_cloud
+cd docs && d2lbook build rst && d2lbook build html
 
 COMMAND_EXIT_CODE=$?
 if [[ $COMMAND_EXIT_CODE -ne 0 ]]; then
