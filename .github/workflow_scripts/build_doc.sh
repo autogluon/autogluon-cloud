@@ -46,6 +46,7 @@ sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_LABEL_###@$other_doc_version_text@
 sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_BRANCH_###@$other_doc_version_branch@g" docs/config.ini
 
 install_cloud
+pip3 install -U "PyYAML<5.5,>=3.10"  # d2lbook need this...
 cd docs && d2lbook build rst && d2lbook build html
 
 COMMAND_EXIT_CODE=$?
