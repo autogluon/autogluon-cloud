@@ -113,7 +113,7 @@ install_requires = [
     "pandas>=1.2.5,<2.0",
     "sagemaker>=2.126.0",
     "pyarrow>=9.0,<10.0",
-    "PyYAML>=6.0,<7.0",
+    "PyYAML>=5.0,<5.5",
     "Pillow>=9.3.0,<10.0",
 ]
 
