@@ -59,4 +59,9 @@ fi
 
 DOC_PATH=_build/html/
 
-aws s3 sync ${flags} ${DOC_PATH} s3://${BUCKET}/${path} --acl public-read ${cacheControl}
+if [[ (-n $PR_NUMBER) || ($GIT_REPO != "autogluon/autogluon-cloud") ]]
+then
+    aws s3 sync ${flags} ${DOC_PATH} s3://${BUCKET}/${path} ${cacheControl}
+else
+    aws s3 sync ${flags} ${DOC_PATH} s3://${BUCKET}/${path} --acl public-read ${cacheControl}
+fi
