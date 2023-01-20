@@ -58,7 +58,7 @@ class MultiModalCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept: Optional[str] = "application/x-parquet",
+        accept: str = "application/x-parquet",
     ) -> pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -104,7 +104,7 @@ class MultiModalCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept: Optional[str] = "application/x-parquet",
+        accept: str = "application/x-parquet",
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.

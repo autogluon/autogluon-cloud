@@ -7,7 +7,7 @@ import os
 import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict, Any
 
 import boto3
 import pandas as pd
@@ -63,7 +63,7 @@ class CloudPredictor(ABC):
     predictor_file_name = "CloudPredictor.pkl"
 
     def __init__(
-        self, cloud_output_path: str, local_output_path: Optional[str] = None, verbosity: Optional[str] = 2
+        self, cloud_output_path: str, local_output_path: Optional[str] = None, verbosity: int = 2
     ) -> None:
         """
         Parameters
@@ -196,7 +196,7 @@ class CloudPredictor(ABC):
 
         return {"trust_relationship": trust_relationship_file_path, "iam_policy": iam_policy_file_path}
 
-    def info(self) -> dict:
+    def info(self) -> Dict[str, Any]:
         """
         Return general info about CloudPredictor
         """
@@ -400,18 +400,18 @@ class CloudPredictor(ABC):
     def fit(
         self,
         *,
-        predictor_init_args: dict,
-        predictor_fit_args: dict,
+        predictor_init_args: Dict,
+        predictor_fit_args: Dict,
         image_column: Optional[str] = None,
-        leaderboard: Optional[bool] = True,
-        framework_version: Optional[str] = "latest",
+        leaderboard: bool = True,
+        framework_version: str = "latest",
         job_name: Optional[str] = None,
-        instance_type: Optional[str] = "ml.m5.2xlarge",
-        instance_count: Optional[int] = 1,
-        volume_size: Optional[int] = 100,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
+        volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
-        wait: Optional[bool] = True,
-        autogluon_sagemaker_estimator_kwargs: Optional[dict] = None,
+        wait: bool = True,
+        autogluon_sagemaker_estimator_kwargs: Dict = None,
         **kwargs,
     ) -> CloudPredictor:
         """
@@ -629,12 +629,12 @@ class CloudPredictor(ABC):
         self,
         predictor_path: Optional[str] = None,
         endpoint_name: Optional[str] = None,
-        framework_version: Optional[str] = "latest",
-        instance_type: Optional[str] = "ml.m5.2xlarge",
-        initial_instance_count: Optional[int] = 1,
+        framework_version: str = "latest",
+        instance_type: str = "ml.m5.2xlarge",
+        initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
-        wait: Optional[bool] = True,
-        model_kwargs: Optional[dict] = None,
+        wait: bool = True,
+        model_kwargs: Optional[Dict] = None,
         **kwargs,
     ) -> None:
         """
@@ -806,7 +806,7 @@ class CloudPredictor(ABC):
             raise e
 
     def predict_real_time(
-        self, test_data: Union[str, pd.DataFrame], accept: Optional[str] = "application/x-parquet"
+        self, test_data: Union[str, pd.DataFrame], accept: str = "application/x-parquet"
     ) -> pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -833,7 +833,7 @@ class CloudPredictor(ABC):
         return pred
 
     def predict_proba_real_time(
-        self, test_data: Union[str, pd.DataFrame], accept: Optional[str] = "application/x-parquet"
+        self, test_data: Union[str, pd.DataFrame], accept: str = "application/x-parquet"
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -1038,17 +1038,17 @@ class CloudPredictor(ABC):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = "latest",
+        framework_version: str = "latest",
         job_name: Optional[str] = None,
-        instance_type: Optional[str] = "ml.m5.2xlarge",
-        instance_count: Optional[int] = 1,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
-        wait: Optional[bool] = True,
-        download: Optional[bool] = True,
-        persist: Optional[bool] = True,
+        wait: bool = True,
+        download: bool = True,
+        persist: bool = True,
         save_path: Optional[str] = None,
-        model_kwargs: Optional[dict] = None,
-        transformer_kwargs: Optional[dict] = None,
+        model_kwargs: Optional[Dict] = None,
+        transformer_kwargs: Optional[Dict] = None,
         **kwargs,
     ) -> Optional[pd.Series]:
         """
@@ -1136,19 +1136,19 @@ class CloudPredictor(ABC):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        include_predict: Optional[bool] = True,
+        include_predict: bool = True,
         predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = "latest",
+        framework_version: str = "latest",
         job_name: Optional[str] = None,
-        instance_type: Optional[str] = "ml.m5.2xlarge",
-        instance_count: Optional[int] = 1,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
-        wait: Optional[bool] = True,
-        download: Optional[bool] = True,
-        persist: Optional[bool] = True,
+        wait: bool = True,
+        download: bool = True,
+        persist: bool = True,
         save_path: Optional[str] = None,
-        model_kwargs: Optional[dict] = None,
-        transformer_kwargs: Optional[dict] = None,
+        model_kwargs: Optional[Dict] = None,
+        transformer_kwargs: Optional[Dict] = None,
         **kwargs,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
@@ -1339,7 +1339,7 @@ class CloudPredictor(ABC):
         unzip_file(tarball_path, save_path)
         return save_path
 
-    def save(self, silent: Optional[bool] = False) -> None:
+    def save(self, silent: bool = False) -> None:
         """
         Save the CloudPredictor so that user can later reload the predictor to gain access to deployed endpoint.
         """

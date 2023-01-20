@@ -69,7 +69,7 @@ class TabularCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept: Optional[str] = "application/x-parquet",
+        accept: str = "application/x-parquet",
     ):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -107,7 +107,7 @@ class TabularCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept="application/x-parquet",
+        accept: str = "application/x-parquet",
     ):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
