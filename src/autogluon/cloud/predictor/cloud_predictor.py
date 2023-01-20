@@ -7,7 +7,7 @@ import os
 import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Tuple, Union, Dict, Any
+from typing import Any, Dict, Optional, Tuple, Union
 
 import boto3
 import pandas as pd
@@ -62,9 +62,7 @@ class CloudPredictor(ABC):
 
     predictor_file_name = "CloudPredictor.pkl"
 
-    def __init__(
-        self, cloud_output_path: str, local_output_path: Optional[str] = None, verbosity: int = 2
-    ) -> None:
+    def __init__(self, cloud_output_path: str, local_output_path: Optional[str] = None, verbosity: int = 2) -> None:
         """
         Parameters
         ----------
