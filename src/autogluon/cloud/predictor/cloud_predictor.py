@@ -145,7 +145,7 @@ class CloudPredictor(ABC):
     @staticmethod
     def generate_trust_relationship_and_iam_policy_file(
         account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
-    ) -> dict:
+    ) -> Dict[str, str]:
         """
         Generate required trust relationship and IAM policy file in json format for CloudPredictor with SageMaker backend.
         Users can use the generated files to create an IAM role for themselves.
