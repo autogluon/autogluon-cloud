@@ -6,6 +6,7 @@ import pandas as pd
 import yaml
 
 from autogluon.common.loaders import load_pd
+from typing import Optional, Union
 
 from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe
 from .cloud_predictor import CloudPredictor
@@ -19,6 +20,9 @@ class TabularCloudPredictor(CloudPredictor):
 
     @property
     def predictor_type(self):
+        """
+        Type of the underneath AutoGluon Predictor
+        """
         return "tabular"
 
     def _get_local_predictor_cls(self):
@@ -61,7 +65,12 @@ class TabularCloudPredictor(CloudPredictor):
 
         return test_data
 
-    def predict_real_time(self, test_data, test_data_image_column=None, accept="application/x-parquet"):
+    def predict_real_time(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept: Optional[str] ="application/x-parquet"
+    ):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -94,7 +103,12 @@ class TabularCloudPredictor(CloudPredictor):
 
         return pred
 
-    def predict_proba_real_time(self, test_data, test_data_image_column=None, accept="application/x-parquet"):
+    def predict_proba_real_time(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept="application/x-parquet"
+    ):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.

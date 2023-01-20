@@ -5,7 +5,7 @@ import os
 import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union, Tuple
 
 import boto3
 import pandas as pd
@@ -60,7 +60,12 @@ class CloudPredictor(ABC):
 
     predictor_file_name = "CloudPredictor.pkl"
 
-    def __init__(self, cloud_output_path, local_output_path=None, verbosity=2):
+    def __init__(
+        self,
+        cloud_output_path: str,
+        local_output_path: Optional[str] = None,
+        verbosity: Optional[str] = 2
+    )-> None:
         """
         Parameters
         ----------
@@ -114,7 +119,10 @@ class CloudPredictor(ABC):
 
     @property
     @abstractmethod
-    def predictor_type(self):
+    def predictor_type(self) -> str:
+        """
+        Type of the underneath AutoGluon Predictor
+        """
         raise NotImplementedError
 
     @property
@@ -122,11 +130,14 @@ class CloudPredictor(ABC):
         return AutoGluonRealtimePredictor
 
     @property
-    def is_fit(self):
+    def is_fit(self) -> bool:
+        """
+        Whether this is CloudPredictor fitted already
+        """
         return self._fit_job.completed
 
     @property
-    def endpoint_name(self):
+    def endpoint_name(self) -> str:
         """
         Return the CloudPredictor deployed endpoint name
         """
@@ -136,8 +147,10 @@ class CloudPredictor(ABC):
 
     @staticmethod
     def generate_trust_relationship_and_iam_policy_file(
-        account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
-    ):
+        account_id: str,
+        cloud_output_bucket: str,
+        output_path: Optional[str] = None
+    ) -> dict:
         """
         Generate required trust relationship and IAM policy file in json format for CloudPredictor with SageMaker backend.
         Users can use the generated files to create an IAM role for themselves.
@@ -186,7 +199,7 @@ class CloudPredictor(ABC):
 
         return {"trust_relationship": trust_relationship_file_path, "iam_policy": iam_policy_file_path}
 
-    def info(self):
+    def info(self) -> dict:
         """
         Return general info about CloudPredictor
         """
@@ -390,20 +403,20 @@ class CloudPredictor(ABC):
     def fit(
         self,
         *,
-        predictor_init_args,
-        predictor_fit_args,
-        image_column=None,
-        leaderboard=True,
-        framework_version="latest",
-        job_name=None,
-        instance_type="ml.m5.2xlarge",
-        instance_count=1,
-        volume_size=100,
-        custom_image_uri=None,
-        wait=True,
-        autogluon_sagemaker_estimator_kwargs=None,
+        predictor_init_args: dict,
+        predictor_fit_args: dict,
+        image_column: Optional[str] = None,
+        leaderboard: Optional[bool] = True,
+        framework_version: Optional[str] = "latest",
+        job_name: Optional[str] = None,
+        instance_type: Optional[str] = "ml.m5.2xlarge",
+        instance_count: Optional[int] = 1,
+        volume_size: Optional[int] = 100,
+        custom_image_uri: Optional[str] = None,
+        wait: Optional[bool] = True,
+        autogluon_sagemaker_estimator_kwargs: Optional[dict] = None,
         **kwargs,
-    ):
+    ) -> CloudPredictor:
         """
         Fit the predictor with SageMaker.
         This function will first upload necessary config and train data to s3 bucket.
@@ -532,7 +545,7 @@ class CloudPredictor(ABC):
         )
         return self
 
-    def attach_job(self, job_name):
+    def attach_job(self, job_name: str) -> None:
         """
         Attach to a sagemaker training job.
         This is useful when the local process crashed and you want to reattach to the previous job
@@ -541,15 +554,10 @@ class CloudPredictor(ABC):
         ----------
         job_name: str
             The name of the job being attached
-
-        Returns
-        -------
-        `CloudPredictor` object. Returns self.
         """
         self._fit_job = SageMakerFitJob.attach(job_name)
-        return self
 
-    def get_fit_job_status(self):
+    def get_fit_job_status(self) -> str:
         """
         Get the status of the training job.
         This is useful when the user made an asynchronous call to the `fit()` function
@@ -561,7 +569,7 @@ class CloudPredictor(ABC):
         """
         return self._fit_job.get_job_status()
 
-    def download_trained_predictor(self, save_path=None):
+    def download_trained_predictor(self, save_path: Optional[str] = None) -> str:
         """
         Download the trained predictor from the cloud.
 
@@ -585,7 +593,7 @@ class CloudPredictor(ABC):
     def _get_local_predictor_cls(self):
         raise NotImplementedError
 
-    def to_local_predictor(self, save_path=None, **kwargs):
+    def to_local_predictor(self, save_path: Optional[str] = None, **kwargs):
         """
         Convert the SageMaker trained predictor to a local AutoGluon Predictor.
 
@@ -622,16 +630,16 @@ class CloudPredictor(ABC):
 
     def deploy(
         self,
-        predictor_path=None,
-        endpoint_name=None,
-        framework_version="latest",
-        instance_type="ml.m5.2xlarge",
-        initial_instance_count=1,
-        custom_image_uri=None,
-        wait=True,
-        model_kwargs=None,
+        predictor_path: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
+        framework_version: Optional[str] = "latest",
+        instance_type: Optional[str] = "ml.m5.2xlarge",
+        initial_instance_count: Optional[int] = 1,
+        custom_image_uri: Optional[str] = None,
+        wait: Optional[bool] = True,
+        model_kwargs: Optional[dict] = None,
         **kwargs,
-    ):
+    ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
@@ -734,13 +742,13 @@ class CloudPredictor(ABC):
             **kwargs,
         )
 
-    def attach_endpoint(self, endpoint):
+    def attach_endpoint(self, endpoint: Union[str, AutoGluonRealtimePredictor]) -> None:
         """
         Attach the current CloudPredictor to an existing SageMaker endpoint.
 
         Parameters
         ----------
-        endpoint: str or  :class:`AutoGluonRealtimePredictor` or :class:`AutoGluonImageRealtimePredictor`
+        endpoint: str or  :class:`AutoGluonRealtimePredictor`
             If str is passed, it should be the name of the endpoint being attached to.
         """
         assert (
@@ -758,13 +766,13 @@ class CloudPredictor(ABC):
                 f"Please provide either an endpoint name or an endpoint of type `{self._realtime_predictor_cls.__name__}`"
             )
 
-    def detach_endpoint(self):
+    def detach_endpoint(self) -> AutoGluonRealtimePredictor:
         """
         Detach the current endpoint and return it.
 
         Returns
         -------
-        `AutoGluonRealtimePredictor` or `AutoGluonImageRealtimePredictor` object.
+        `AutoGluonRealtimePredictor` object.
         """
         assert self.endpoint is not None, "There is no attached endpoint"
         detached_endpoint = self.endpoint
@@ -800,7 +808,11 @@ class CloudPredictor(ABC):
                 )
             raise e
 
-    def predict_real_time(self, test_data, accept="application/x-parquet"):
+    def predict_real_time(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        accept: Optional[str] = "application/x-parquet"
+    ) -> pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -825,7 +837,11 @@ class CloudPredictor(ABC):
 
         return pred
 
-    def predict_proba_real_time(self, test_data, accept="application/x-parquet"):
+    def predict_proba_real_time(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        accept: Optional[str] = "application/x-parquet"
+    ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -1026,22 +1042,22 @@ class CloudPredictor(ABC):
 
     def predict(
         self,
-        test_data,
-        test_data_image_column=None,
-        predictor_path=None,
-        framework_version="latest",
-        job_name=None,
-        instance_type="ml.m5.2xlarge",
-        instance_count=1,
-        custom_image_uri=None,
-        wait=True,
-        download=True,
-        persist=True,
-        save_path=None,
-        model_kwargs=None,
-        transformer_kwargs=None,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        predictor_path: Optional[str] = None,
+        framework_version: Optional[str] = "latest",
+        job_name: Optional[str] = None,
+        instance_type: Optional[str] = "ml.m5.2xlarge",
+        instance_count: Optional[int] = 1,
+        custom_image_uri: Optional[str] = None,
+        wait: Optional[bool] = True,
+        download: Optional[bool] = True,
+        persist: Optional[bool] = True,
+        save_path: Optional[str] = None,
+        model_kwargs: Optional[dict] = None,
+        transformer_kwargs: Optional[dict] = None,
         **kwargs,
-    ):
+    ) -> Optional[pd.Series]:
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -1125,23 +1141,23 @@ class CloudPredictor(ABC):
 
     def predict_proba(
         self,
-        test_data,
-        test_data_image_column=None,
-        include_predict=True,
-        predictor_path=None,
-        framework_version="latest",
-        job_name=None,
-        instance_type="ml.m5.2xlarge",
-        instance_count=1,
-        custom_image_uri=None,
-        wait=True,
-        download=True,
-        persist=True,
-        save_path=None,
-        model_kwargs=None,
-        transformer_kwargs=None,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        include_predict: Optional[bool] = True,
+        predictor_path: Optional[str] = None,
+        framework_version: Optional[str] = "latest",
+        job_name: Optional[str] = None,
+        instance_type: Optional[str] = "ml.m5.2xlarge",
+        instance_count: Optional[int] = 1,
+        custom_image_uri: Optional[str] = None,
+        wait: Optional[bool] = True,
+        download: Optional[bool] = True,
+        persist: Optional[bool] = True,
+        save_path : Optional[str] = None,
+        model_kwargs: Optional[dict] = None,
+        transformer_kwargs: Optional[dict] = None,
         **kwargs,
-    ):
+    ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -1202,7 +1218,7 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        Optional(Union(Tuple(Pandas.Series, Union(Pandas.DataFrame, Pandas.Series), Union(Pandas.DataFrame, Pandas.Series)))
+        Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
             If `download` is False, will return None or (None, None) if `include_predict` is True
             If `download` is True and `include_predict` is True,
             will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
@@ -1231,7 +1247,11 @@ class CloudPredictor(ABC):
 
         return pred_proba
 
-    def download_predict_results(self, job_name=None, save_path=None):
+    def download_predict_results(
+        self,
+        job_name: Optional[str] = None,
+        save_path: Optional[str] = None
+    ) -> str:
         """
         Download batch transform result
 
@@ -1273,7 +1293,7 @@ class CloudPredictor(ABC):
 
         return results_save_path
 
-    def get_batch_transform_job_status(self, job_name=None):
+    def get_batch_transform_job_status(self, job_name: Optional[str] = None) -> str:
         """
         Get the status of the batch transform job.
         This is useful when the user made an asynchronous call to the `predict()` function
@@ -1296,7 +1316,7 @@ class CloudPredictor(ABC):
             return job.get_job_status()
         return "NotCreated"
 
-    def cleanup_deployment(self):
+    def cleanup_deployment(self) -> None:
         """
         Delete endpoint, endpoint configuration and deployed model
         """
@@ -1330,7 +1350,7 @@ class CloudPredictor(ABC):
         unzip_file(tarball_path, save_path)
         return save_path
 
-    def save(self, silent=False):
+    def save(self, silent: Optional[bool] = False) -> None:
         """
         Save the CloudPredictor so that user can later reload the predictor to gain access to deployed endpoint.
         """
@@ -1364,7 +1384,7 @@ class CloudPredictor(ABC):
             job.session = self.sagemaker_session
 
     @classmethod
-    def load(cls, path, verbosity=None):
+    def load(cls, path: str, verbosity: Optional[int] = None) -> CloudPredictor:
         """
         Load the CloudPredictor
 
