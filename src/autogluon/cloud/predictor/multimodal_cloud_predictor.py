@@ -1,10 +1,10 @@
 import logging
 import os
+from typing import Optional, Tuple, Union
 
 import pandas as pd
 
 from autogluon.common.loaders import load_pd
-from typing import Optional, Union, Tuple
 
 from ..utils.ag_sagemaker import AutoGluonMultiModalRealtimePredictor
 from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, is_image_file, read_image_bytes_and_encode
@@ -58,7 +58,7 @@ class MultiModalCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept: Optional[str] ="application/x-parquet"
+        accept: Optional[str] = "application/x-parquet",
     ) -> pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -104,7 +104,7 @@ class MultiModalCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept: Optional[str] = "application/x-parquet"
+        accept: Optional[str] = "application/x-parquet",
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.

@@ -1,12 +1,12 @@
 import copy
 import logging
 import os
+from typing import Optional, Union
 
 import pandas as pd
 import yaml
 
 from autogluon.common.loaders import load_pd
-from typing import Optional, Union
 
 from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe
 from .cloud_predictor import CloudPredictor
@@ -69,7 +69,7 @@ class TabularCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept: Optional[str] ="application/x-parquet"
+        accept: Optional[str] = "application/x-parquet",
     ):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -107,7 +107,7 @@ class TabularCloudPredictor(CloudPredictor):
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
-        accept="application/x-parquet"
+        accept="application/x-parquet",
     ):
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.

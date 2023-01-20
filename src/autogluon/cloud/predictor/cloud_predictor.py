@@ -5,7 +5,7 @@ import os
 import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Union, Tuple
+from typing import Optional, Tuple, Union
 
 import boto3
 import pandas as pd
@@ -61,11 +61,8 @@ class CloudPredictor(ABC):
     predictor_file_name = "CloudPredictor.pkl"
 
     def __init__(
-        self,
-        cloud_output_path: str,
-        local_output_path: Optional[str] = None,
-        verbosity: Optional[str] = 2
-    )-> None:
+        self, cloud_output_path: str, local_output_path: Optional[str] = None, verbosity: Optional[str] = 2
+    ) -> None:
         """
         Parameters
         ----------
@@ -147,9 +144,7 @@ class CloudPredictor(ABC):
 
     @staticmethod
     def generate_trust_relationship_and_iam_policy_file(
-        account_id: str,
-        cloud_output_bucket: str,
-        output_path: Optional[str] = None
+        account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
     ) -> dict:
         """
         Generate required trust relationship and IAM policy file in json format for CloudPredictor with SageMaker backend.
@@ -809,9 +804,7 @@ class CloudPredictor(ABC):
             raise e
 
     def predict_real_time(
-        self,
-        test_data: Union[str, pd.DataFrame],
-        accept: Optional[str] = "application/x-parquet"
+        self, test_data: Union[str, pd.DataFrame], accept: Optional[str] = "application/x-parquet"
     ) -> pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -838,9 +831,7 @@ class CloudPredictor(ABC):
         return pred
 
     def predict_proba_real_time(
-        self,
-        test_data: Union[str, pd.DataFrame],
-        accept: Optional[str] = "application/x-parquet"
+        self, test_data: Union[str, pd.DataFrame], accept: Optional[str] = "application/x-parquet"
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -1153,7 +1144,7 @@ class CloudPredictor(ABC):
         wait: Optional[bool] = True,
         download: Optional[bool] = True,
         persist: Optional[bool] = True,
-        save_path : Optional[str] = None,
+        save_path: Optional[str] = None,
         model_kwargs: Optional[dict] = None,
         transformer_kwargs: Optional[dict] = None,
         **kwargs,
@@ -1247,11 +1238,7 @@ class CloudPredictor(ABC):
 
         return pred_proba
 
-    def download_predict_results(
-        self,
-        job_name: Optional[str] = None,
-        save_path: Optional[str] = None
-    ) -> str:
+    def download_predict_results(self, job_name: Optional[str] = None, save_path: Optional[str] = None) -> str:
         """
         Download batch transform result
 
