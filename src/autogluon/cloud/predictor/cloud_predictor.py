@@ -129,7 +129,7 @@ class CloudPredictor(ABC):
     @property
     def is_fit(self) -> bool:
         """
-        Whether this is CloudPredictor fitted already
+        Whether this CloudPredictor is fitted already
         """
         return self._fit_job.completed
 
@@ -398,8 +398,8 @@ class CloudPredictor(ABC):
     def fit(
         self,
         *,
-        predictor_init_args: Dict,
-        predictor_fit_args: Dict,
+        predictor_init_args: Dict[str, Any],
+        predictor_fit_args: Dict[str, Any],
         image_column: Optional[str] = None,
         leaderboard: bool = True,
         framework_version: str = "latest",
