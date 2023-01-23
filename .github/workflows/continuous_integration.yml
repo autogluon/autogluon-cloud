@@ -261,4 +261,4 @@ jobs:
           issue-number: ${{ github.event.number }}
           body: |
             Job PR-${{ github.event.number }}-${{ env.SHORT_SHA }} is done.
-            Docs are uploaded to https://d12sc05jpx1wj5.cloudfront.net/PR-${{ github.event.number }}/${{ env.SHORT_SHA }}/tutorials/autogluon-cloud.html
+            Docs are uploaded to https://d12sc05jpx1wj5.cloudfront.net/PR-${{ github.event.number }}/${{ env.SHORT_SHA }}/index.html

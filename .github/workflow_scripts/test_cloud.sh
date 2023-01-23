@@ -15,6 +15,6 @@ then
     install_multimodal $AG_VERSION
 fi
 
-install_cloud
+install_cloud_test
 
 python3 -m pytest -n 2 --junitxml=results.xml tests/unittests/$MODULE/ --framework_version $AG_VERSION

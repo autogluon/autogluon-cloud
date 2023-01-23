@@ -13,20 +13,26 @@ if [[ (-n $PR_NUMBER) || ($GIT_REPO != "autogluon/autogluon-cloud") ]]
 then
     # Put in cloud bucket for staging purpose
     BUCKET='autogluon-cloud-doc-staging'
-    if [[ -n $PR_NUMBER ]]; then path=$PR_NUMBER; else path=$BRANCH; fi
-    site=$BUCKET.s3-website-us-west-2.amazonaws.com/$path/$COMMIT_SHA  # site is the actual bucket location that will serve the doc
+    if [[ -n $PR_NUMBER ]]; then path=$PR_NUMBER/$COMMIT_SHA; else path=$BRANCH/$COMMIT_SHA; fi
+    site=d12sc05jpx1wj5.cloudfront.net/$path
+    flags='--delete'
+    cacheControl=''
 else
     if [[ $BRANCH == "master" ]]
     then
-        path="dev"
-    elif [[ $BRANCH == "stable" ]]
-    then
-        path="stable"
+        path="cloud/dev"
     else
-        exit 0  # For other branch pushed to autogluon-cloud. We do not build docs.
+        if [[ $BRANCH == "dev" ]]
+        then
+            path="cloud/dev-branch"
+        else
+            path="cloud/$BRANCH"
+        fi
     fi
     BUCKET='autogluon.mxnet.io'
     site=$BUCKET/$path  # site is the actual bucket location that will serve the doc
+    if [[ $BRANCH == 'master' ]]; then flags=''; else flags='--delete'; fi
+    cacheControl='--cache-control max-age=7200'
 fi
 
 other_doc_version_text='Stable Version Documentation'
@@ -39,27 +45,23 @@ fi
 
 setup_build_contrib_env
 
-sed -i -e "s@###_PLACEHOLDER_WEB_CONTENT_ROOT_###@http://$site@g" docs/config.ini
+sed -i -e "s@###_PLACEHOLDER_WEB_CONTENT_ROOT_###@https://$site@g" docs/config.ini
 sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_LABEL_###@$other_doc_version_text@g" docs/config.ini
 sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_BRANCH_###@$other_doc_version_branch@g" docs/config.ini
 
-cd docs && d2lbook build html
+install_cloud
+cd docs && d2lbook build rst && d2lbook build html
 
 COMMAND_EXIT_CODE=$?
 if [[ $COMMAND_EXIT_CODE -ne 0 ]]; then
     exit COMMAND_EXIT_CODE
 fi
 
+DOC_PATH=_build/html/
+
 if [[ (-n $PR_NUMBER) || ($GIT_REPO != "autogluon/autogluon-cloud") ]]
 then
-    # If PR, move the whole doc folder (to keep css styles) to staging bucket for visibility
-    DOC_PATH=_build/html/
-    S3_PATH=s3://$BUCKET/$path/$COMMIT_SHA
-    aws s3 cp $DOC_PATH $S3_PATH --recursive
+    aws s3 sync ${flags} ${DOC_PATH} s3://${BUCKET}/${path} ${cacheControl}
 else
-    # If master/stable, move the individual tutorial html to dev/stable bucket of main AG
-    cacheControl='--cache-control max-age=7200'
-    DOC_PATH=_build/html/tutorials/autogluon-cloud.html
-    S3_PATH=s3://$BUCKET/$path/tutorials/cloud_fit_deploy/
-    aws s3 cp $DOC_PATH $S3_PATH --acl public-read ${cacheControl}
+    aws s3 sync ${flags} ${DOC_PATH} s3://${BUCKET}/${path} --acl public-read ${cacheControl}
 fi
