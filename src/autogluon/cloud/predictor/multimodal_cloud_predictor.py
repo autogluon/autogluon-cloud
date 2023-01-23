@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional, Tuple, Union
 
 import pandas as pd
 
@@ -17,7 +18,10 @@ class MultiModalCloudPredictor(CloudPredictor):
     predictor_file_name = "MultiModalCloudPredictor.pkl"
 
     @property
-    def predictor_type(self):
+    def predictor_type(self) -> str:
+        """
+        Type of the underneath AutoGluon Predictor
+        """
         return "multimodal"
 
     @property
@@ -50,7 +54,12 @@ class MultiModalCloudPredictor(CloudPredictor):
 
         return test_data, content_type
 
-    def predict_real_time(self, test_data, test_data_image_column=None, accept="application/x-parquet"):
+    def predict_real_time(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept: str = "application/x-parquet",
+    ) -> pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -91,7 +100,12 @@ class MultiModalCloudPredictor(CloudPredictor):
 
         return pred
 
-    def predict_proba_real_time(self, test_data, test_data_image_column=None, accept="application/x-parquet"):
+    def predict_proba_real_time(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept: str = "application/x-parquet",
+    ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -145,10 +159,10 @@ class MultiModalCloudPredictor(CloudPredictor):
 
     def predict(
         self,
-        test_data,
-        test_data_image_column=None,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
         **kwargs,
-    ):
+    ) -> Optional[pd.Series]:
         """
         test_data: str
             The test data to be inferenced.
@@ -184,10 +198,10 @@ class MultiModalCloudPredictor(CloudPredictor):
 
     def predict_proba(
         self,
-        test_data,
-        test_data_image_column=None,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
         **kwargs,
-    ):
+    ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         test_data: str
             The test data to be inferenced.
