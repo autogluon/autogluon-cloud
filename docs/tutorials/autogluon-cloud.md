@@ -1,4 +1,4 @@
-# Deploying AutoGluon Models with AutoGluon Cloud on AWS SageMaker
+# Train and Deploy AutoGluon Models with AutoGluon Cloud on AWS SageMaker
 :label:`autogluon-cloud`
 
 To help with AutoGluon models training, AWS developed a set of training and inference [deep learning containers](https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-training-containers). 
