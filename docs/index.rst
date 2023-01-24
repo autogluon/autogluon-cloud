@@ -28,7 +28,7 @@ Installation
 
     >>> pip install -U pip
     >>> pip install -U setuptools wheel
-    >>> pip install --pre autogluon.cloud  # You don't need to install autogluon itself locally
+    >>> pip install autogluon.cloud  # You don't need to install autogluon itself locally
 
 .. toctree::
    :maxdepth: 2
