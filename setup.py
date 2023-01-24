@@ -5,7 +5,7 @@ from setuptools import setup
 AUTOGLUON = "autogluon"
 CLOUD = "cloud"
 
-PYTHON_REQUIRES = ">=3.7, <3.10"
+PYTHON_REQUIRES = ">=3.8, <3.11"
 
 
 def create_version_file(*, version):
@@ -108,7 +108,7 @@ version = update_version(version, use_file_if_exists=False, create_file=True)
 install_requires = [
     # common module provides utils with stable api across minor version
     # TODO: update to 0.7 when 0.7 dlc container available in sagemaker
-    "autogluon.common>=0.6,<1.0",
+    "autogluon.common>=0.7,<1.0",
     # <2 because unlikely to introduce breaking changes in minor releases. >=1.10 because 1.10 is 3 years old, no need to support older
     "boto3>=1.10,<2.0",
     "numpy>=1.21,<1.27",
