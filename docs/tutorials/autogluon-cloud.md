@@ -53,14 +53,14 @@ Currently, `autogluon.cloud` supports training/deploying `tabular`, `multimodal`
 
 ```{.python}
 from autogluon.cloud import TabularCloudPredictor
-train_data = 'train.csv'  # can be a DataFrame as well
-predictor_init_args = {label='label'}  # init args you would pass to AG TabularPredictor
-predictor_fit_args = {train_data, time_limit=120}  # fit args you would pass to AG TabularPredictor
+train_data = "train.csv"  # can be a DataFrame as well
+predictor_init_args = {"label": "label"}  # init args you would pass to AG TabularPredictor
+predictor_fit_args = {"train_data": train_data, "time_limit": 120}  # fit args you would pass to AG TabularPredictor
 cloud_predictor = TabularCloudPredictor(
-    cloud_output_path='YOUR_S3_BUCKET_PATH'
+    cloud_output_path="YOUR_S3_BUCKET_PATH"
 ).fit(
-    predictor_init_args,
-    predictor_fit_args,
+    predictor_init_args=predictor_init_args,
+    predictor_fit_args=predictor_init_args,
     instance_type="ml.m5.2xlarge"  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
     wait=True  # Set this to False to make it an unblocking call and immediately return
 )
@@ -99,7 +99,7 @@ cloud_predictor.attach_endpoint(endpoint="ENDPOINT_NAME")
 To perform real-time prediction:
 
 ```{.python}
-result = cloud_predictor.predict_real_time('test.csv') # can be a DataFrame as well
+result = cloud_predictor.predict_real_time("test.csv") # can be a DataFrame as well
 ```
 
 Result would be a pandas Series similar to this:
@@ -114,7 +114,7 @@ Name: label, dtype: object
 To perform real-time predict probability:
 
 ```{.python}
-result = cloud_predictor.predict_proba_real_time('test.csv')  # can be a DataFrame as well
+result = cloud_predictor.predict_proba_real_time("test.csv")  # can be a DataFrame as well
 ```
 
 Result would be a pandas DataFrame similar to this:
