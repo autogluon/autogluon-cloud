@@ -20,20 +20,16 @@ Currently, AutoGluon-Cloud supports [AWS SageMaker](https://aws.amazon.com/sagem
 # pip install autogluon.cloud  # You don't need to install autogluon itself locally
 
 from autogluon.cloud import TabularCloudPredictor
-train_data = 'train.csv'
-test_data = 'test.csv'
-predictor_init_args = {label='label'}  # init args you would pass to AG TabularPredictor
-predictor_fit_args = {train_data, time_limit=120}  # fit args you would pass to AG TabularPredictor
-# Train
-cloud_predictor = TabularCloudPredictor(cloud_output_path='YOUR_S3_BUCKET_PATH').fit(predictor_init_args, predictor_fit_args)
-# Deploy the endpoint
+import pandas as pd
+train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv")
+test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv")
+predictor_init_args = {"label": "class"}  # init args you would pass to AG TabularPredictor
+predictor_fit_args = {"train_data": train_data, "time_limit": 120}  # fit args you would pass to AG TabularPredictor
+cloud_predictor = TabularCloudPredictor(cloud_output_path='YOUR_S3_BUCKET_PATH')
+cloud_predictor.fit(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
 cloud_predictor.deploy()
-# Real-time inference with the endpoint
-result = cloud_predictor.predict_real_time('test.csv')
-print(result)
-# Cleanup the endpoint
+result = cloud_predictor.predict_real_time(test_data)
 cloud_predictor.cleanup_deployment()
 # Batch inference
-cloud_predictor.predict('test.csv')  # results will be stored in s3 bucket
-cloud_predictor.download_predict_results()  # download the results to your local machine
+result = cloud_predictor.predict(test_data)
 ```
