@@ -1,6 +1,19 @@
 AutoGluon-Cloud: Train and Deploy AutoGluon on the Cloud
 ================================================================
 
+.. |ReleaseVersion| image:: https://img.shields.io/badge/doc%20release-v0.1.0-blue
+    :target: https://auto.gluon.ai/cloud/dev/versions.html
+    :scale: 100%
+.. |StableVersion| image:: https://img.shields.io/github/v/release/autogluon/autogluon-cloud?color=blue&label=stable%20release&sort=semver
+    :target: https://auto.gluon.ai/cloud/stable/index.html
+    :scale: 100%
+.. |PythonVersion| image:: https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue
+    :target: https://pypi.org/project/autogluon.cloud/
+.. |License| image:: https://img.shields.io/github/license/autogluon/autogluon-cloud?color=blue
+    :target: https://github.com/autogluon/autogluon-cloud/blob/master/LICENSE
+
+|ReleaseVersion| |StableVersion| |PythonVersion| |License|
+
 AutoGluon-Cloud aims to provide user tools to train, fine-tune and deploy [AutoGluon](https://auto.gluon.ai/stable/index.html) backed models on the cloud. With just a few lines of codes, users could train a model and perform inference on the cloud without worrying about MLOps details such as resource management.
 
 Currently, AutoGluon-Cloud supports [AWS SageMaker](https://aws.amazon.com/sagemaker/) as the cloud backend.
