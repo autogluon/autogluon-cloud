@@ -674,10 +674,10 @@ class CloudPredictor(ABC):
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
             assert predictor_path, "No cloud trained model found."
-        predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
 
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+        predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
         if custom_image_uri:
             framework_version, py_version = None, None
             logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
@@ -1384,13 +1384,25 @@ class CloudPredictor(ABC):
         -------
         `CloudPredictor` object.
         """
+        from botocore.exceptions import ClientError
+
         if verbosity is not None:
             set_logger_verbosity(verbosity, logger=logger)  # Reset logging after load (may be in new Python session)
         if path is None:
             raise ValueError("path cannot be None in load()")
 
         path = setup_outputdir(path, warn_if_exist=False)  # replace ~ with absolute path if it exists
-        predictor: CloudPredictor = load_pkl.load(path=os.path.join(path, cls.predictor_file_name))
+        try:
+            obj_path = os.path.join(path, cls.predictor_file_name)
+            predictor: CloudPredictor = load_pkl.load(path=obj_path)
+        except ClientError:
+            logger.log(20, f"{obj_path} object not found. Creating CloudPredictor object from scratch.")
+            predictor = cls(cloud_output_path=path)
+            predictor._fit_job = SageMakerFitJob()
+            predictor._fit_job._local_mode = True
+            predictor._fit_job._output_path = path
+        except Exception as err:
+            raise
         predictor.sagemaker_session = setup_sagemaker_session()
         predictor._region = predictor.sagemaker_session.boto_region_name
         predictor._load_jobs()

@@ -149,7 +149,7 @@ class SageMakerFitJob(SageMakerJob):
         if not self._local_mode:
             return self.session.describe_training_job(self.job_name)["ModelArtifacts"]["S3ModelArtifacts"]
         assert self._output_path is not None
-        return self._output_path + "/" + self._output_filename
+        return self._output_path + self._output_filename
 
     def run(
         self,
