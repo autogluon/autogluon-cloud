@@ -1401,7 +1401,7 @@ class CloudPredictor(ABC):
             predictor._fit_job = SageMakerFitJob()
             predictor._fit_job._local_mode = True
             predictor._fit_job._output_path = path
-        except Exception as err:
+        except Exception:
             raise
         predictor.sagemaker_session = setup_sagemaker_session()
         predictor._region = predictor.sagemaker_session.boto_region_name
