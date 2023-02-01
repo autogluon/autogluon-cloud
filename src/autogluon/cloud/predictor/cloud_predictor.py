@@ -59,7 +59,6 @@ logger = logging.getLogger(__name__)
 
 
 class CloudPredictor(ABC):
-
     predictor_file_name = "CloudPredictor.pkl"
 
     def __init__(self, cloud_output_path: str, local_output_path: Optional[str] = None, verbosity: int = 2) -> None:

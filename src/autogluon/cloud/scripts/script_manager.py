@@ -3,7 +3,6 @@ from pathlib import Path
 
 
 class ScriptManager:
-
     CLOUD_PATH = Path(__file__).parent.parent.absolute()
     SCRIPTS_PATH = os.path.join(CLOUD_PATH, "scripts")
     TRAIN_SCRIPT_PATH = os.path.join(SCRIPTS_PATH, "train.py")

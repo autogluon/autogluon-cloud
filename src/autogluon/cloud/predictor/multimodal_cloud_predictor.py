@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class MultiModalCloudPredictor(CloudPredictor):
-
     predictor_file_name = "MultiModalCloudPredictor.pkl"
 
     @property
