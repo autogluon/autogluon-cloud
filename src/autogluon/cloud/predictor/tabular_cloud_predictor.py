@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class TabularCloudPredictor(CloudPredictor):
-
     predictor_file_name = "TabularCloudPredictor.pkl"
 
     @property

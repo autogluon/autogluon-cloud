@@ -117,7 +117,6 @@ class ParquetConverter(FormatConverter):
 
 
 class FormatConverterFactory:
-
     __supported_converters = [CSVConverter, ParquetConverter]
     __ext_to_converter = {cls().ext: cls for cls in __supported_converters}
 

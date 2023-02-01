@@ -53,7 +53,6 @@ class JsonPandasDeserializeStrategy(PandasDeserializeStrategy):
 
 
 class PandasDeserializeStrategyFactory:
-
     __supported_strategy = [
         ParquetPandasDeserializeStrategy,
         CSVPandasDeserializeStrategy,
