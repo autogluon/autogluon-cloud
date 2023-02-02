@@ -28,18 +28,32 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predictor_cls = TimeSeriesPredictor
         return predictor_cls
     
-    def _preprocess_data(self, data, id_column, timestamp_column):
+    def _preprocess_data(
+        self,
+        data,
+        id_column,
+        timestamp_column,
+        target,
+        static_features=None,
+    ):
         if isinstance(data, str):
             data = load_pd.load(data)
         else:
             data = copy.copy(data)
         cols = data.columns.to_list()
-        # Make sure id and timestamp columns are the first two columns
+        # Make sure id and timestamp columns are the first two columns, and target column is in the end
+        # This is to ensure in the container we know how to find id and timestamp columns, and whether there are static features being merged
         timestamp_index = cols.index(timestamp_column)
         cols.insert(0, cols.pop(timestamp_index))
         id_index = cols.index(id_column)
         cols.insert(0, cols.pop(id_index))
+        target_index = cols.index(target)
+        cols.append(cols.pop(target_index))
         data = data[cols]
+        
+        if static_features is not None:
+            # Merge static features so only one dataframe needs to be sent to remote container
+            data = pd.merge(data, static_features, how="left", on=id_column)
         
         return data
     
@@ -50,6 +64,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predictor_fit_args: Dict[str, Any],
         id_column: str,
         timestamp_column: str,
+        static_features: Optional[pd.DataFrame] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -107,12 +122,24 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
         tuning_data = predictor_fit_args.pop("tuning_data", None)
-        train_data = self._preprocess_data(data=train_data, id_column=id_column, timestamp_column=timestamp_column)
+        target = predictor_init_args.get("target")
+        train_data = self._preprocess_data(
+            data=train_data,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            target=target,
+            static_features=static_features
+        )
         if tuning_data is not None:
-            tuning_data = self._preprocess_data(data=tuning_data, id_column=id_column, timestamp_column=timestamp_column)
+            tuning_data = self._preprocess_data(
+                data=tuning_data,
+                id_column=id_column,
+                timestamp_column=timestamp_column,
+                target=target,
+                static_features=static_features
+            )
         predictor_fit_args["train_data"] = train_data
         predictor_fit_args["tuning_data"] = tuning_data
-        print(train_data.dtypes)
         print(train_data)
         return super().fit(
             predictor_init_args=predictor_init_args,

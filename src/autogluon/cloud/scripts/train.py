@@ -30,23 +30,35 @@ def get_env_if_present(name):
     return result
 
 
-def prepare_timeseries_dataframe(df):
+def prepare_timeseries_dataframe(df, predictor_init_args):
+    target = predictor_init_args['target']
     cols = df.columns.to_list()
     id_column = cols[0]
     timestamp_column = cols[1]
     df[timestamp_column] = pd.to_datetime(df[timestamp_column])
+    static_features = None
+    if target != cols[-1]:
+        # target is not the last column, then there are static features being merged in
+        target_index = cols.index(target)
+        static_columns = cols[target_index+1:]
+        static_features = df[[id_column]+static_columns].groupby([id_column], sort=False).head(1)
+        static_features.set_index(id_column, inplace=True)
+        df.drop(columns=static_columns, inplace=True)
     df = TimeSeriesDataFrame.from_data_frame(
         df,
         id_column=id_column,
         timestamp_column=timestamp_column
     )
+    if static_features is not None:
+        print(static_features)
+        df.static_features = static_features
     return df
 
 
-def prepare_data(data_file, predictor_type):
+def prepare_data(data_file, predictor_type, predictor_init_args):
     if predictor_type == "timeseries":
         data = load_pd.load(data_file)
-        data = prepare_timeseries_dataframe(data)
+        data = prepare_timeseries_dataframe(data, predictor_init_args)
     else:
         data = TabularDataset(data_file)
     return data
@@ -114,7 +126,7 @@ if __name__ == "__main__":
         predictor_cls = TimeSeriesPredictor
 
     train_file = get_input_path(args.train_dir)
-    training_data = prepare_data(train_file, predictor_type)
+    training_data = prepare_data(train_file, predictor_type, predictor_init_args)
 
     if predictor_type == "tabular" and "image_column" in config:
         feature_metadata = predictor_fit_args.get("feature_metadata", None)
