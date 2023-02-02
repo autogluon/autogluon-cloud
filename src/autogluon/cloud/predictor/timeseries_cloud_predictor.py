@@ -1,7 +1,7 @@
 from __future__ import annotations
 import copy
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Union, Dict, Any
 
 import pandas as pd
 
@@ -155,3 +155,67 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             **kwargs,
         )
         
+    def predict_real_time(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        id_column: str,
+        timestamp_column: str,
+        static_features: Optional[pd.DataFrame] = None,
+        accept: str = "application/x-parquet",
+    ) -> pd.DataFrame:
+        self._validate_predict_real_time_args(accept)
+        test_data = self._preprocess_data(
+            data=test_data,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            static_features=static_features
+        )
+        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
+        return pred
+    
+    def predict_proba_real_time(
+        self,
+        **kwargs
+    ) -> pd.DataFrame:
+        raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
+    
+    def predict(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        id_column: str,
+        timestamp_column: str,
+        target: str,
+        static_features: Optional[pd.DataFrame] = None,
+        **kwargs,
+    ) -> Optional[pd.DataFrame]:
+        """
+        test_data: str
+            The test data to be inferenced.
+            Can be a pandas.DataFrame or a local path to a csv file.
+            When predicting multimodality with image modality:
+                You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
+            When predicting with only images:
+                Can be a local path to a directory containing the images or a local path to a single image.
+        test_data_image_column: Optional(str)
+            If test_data involves image modality, you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
+        kwargs:
+            Refer to `CloudPredictor.predict()`
+        """
+        test_data = self._preprocess_data(
+            data=test_data,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            target=target,
+            static_features=static_features
+        )
+        return super().predict(
+            test_data,
+            **kwargs,
+        )
+        
+    def predict_proba(
+        self,
+        **kwargs,
+    ) -> Optional[pd.DataFrame]:
+        raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
