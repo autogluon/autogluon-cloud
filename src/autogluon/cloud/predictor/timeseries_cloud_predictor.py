@@ -53,6 +53,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         
         if static_features is not None:
             # Merge static features so only one dataframe needs to be sent to remote container
+            if isinstance(static_features, str):
+                static_features = load_pd.load(static_features)
             data = pd.merge(data, static_features, how="left", on=id_column)
         
         return data
@@ -64,7 +66,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predictor_fit_args: Dict[str, Any],
         id_column: str,
         timestamp_column: str,
-        static_features: Optional[pd.DataFrame] = None,
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -86,9 +88,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Init args for the predictor
         predictor_fit_args: dict
             Fit args for the predictor
-        image_column: str, default = None
-            The column name in the training/tuning data that contains the image paths.
-            The image paths MUST be absolute paths to you local system.
+        id_column: str
+            Name of the 'item_id' column
+        timestamp_column: str
+            Name of the 'timestamp' column
+        static_features: Optional[pd.DataFrame]
+             An optional data frame describing the metadata attributes of individual items in the item index.
+             For more detail, please refer to `TimeSeriesDataFrame` documentation:
+             https://auto.gluon.ai/stable/api/autogluon.predictor.html#timeseriesdataframe
         framework_version: str, default = `latest`
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
@@ -160,14 +167,45 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         test_data: Union[str, pd.DataFrame],
         id_column: str,
         timestamp_column: str,
-        static_features: Optional[pd.DataFrame] = None,
+        target: str,
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
     ) -> pd.DataFrame:
+        """
+        Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        This is intended to provide a low latency inference.
+        If you want to inference on a large dataset, use `predict()` instead.
+
+        Parameters
+        ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced.
+            Can be a pandas.DataFrame or a local path to a csv file.
+        id_column: str
+            Name of the 'item_id' column
+        timestamp_column: str
+            Name of the 'timestamp' column
+        static_features: Optional[pd.DataFrame]
+             An optional data frame describing the metadata attributes of individual items in the item index.
+             For more detail, please refer to `TimeSeriesDataFrame` documentation:
+             https://auto.gluon.ai/stable/api/autogluon.predictor.html#timeseriesdataframe
+        target: str
+            Name of column that contains the target values to forecast
+        accept: str, default = application/x-parquet
+            Type of accept output content.
+            Valid options are application/x-parquet, text/csv, application/json
+
+        Returns
+        -------
+        Pandas.DataFrame
+        Predict results in DataFrame
+        """
         self._validate_predict_real_time_args(accept)
         test_data = self._preprocess_data(
             data=test_data,
             id_column=id_column,
             timestamp_column=timestamp_column,
+            target=target,
             static_features=static_features
         )
         pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
@@ -185,20 +223,31 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         id_column: str,
         timestamp_column: str,
         target: str,
-        static_features: Optional[pd.DataFrame] = None,
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         """
+        Predict using SageMaker batch transform.
+        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
+        If you want to minimize latency, use `predict_real_time()` instead.
+        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
+        then create a transformer with it, and call transform in the end.
+
+        Parameters
+        ----------
         test_data: str
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
-            When predicting multimodality with image modality:
-                You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
-            When predicting with only images:
-                Can be a local path to a directory containing the images or a local path to a single image.
-        test_data_image_column: Optional(str)
-            If test_data involves image modality, you must specify the column name corresponding to image paths.
-            The path MUST be an abspath
+        id_column: str
+            Name of the 'item_id' column
+        timestamp_column: str
+            Name of the 'timestamp' column
+        static_features: Optional[Union[str, pd.DataFrame]]
+             An optional data frame describing the metadata attributes of individual items in the item index.
+             For more detail, please refer to `TimeSeriesDataFrame` documentation:
+             https://auto.gluon.ai/stable/api/autogluon.predictor.html#timeseriesdataframe
+        target: str
+            Name of column that contains the target values to forecast
         kwargs:
             Refer to `CloudPredictor.predict()`
         """

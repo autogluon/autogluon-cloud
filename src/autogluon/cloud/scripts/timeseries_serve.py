@@ -1,11 +1,7 @@
 # flake8: noqa
-import base64
-import hashlib
-import os
 from io import BytesIO, StringIO
 
 import pandas as pd
-from PIL import Image
 
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 
