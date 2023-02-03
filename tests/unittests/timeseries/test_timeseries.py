@@ -1,6 +1,2 @@
-import os
-import tempfile
-
-
-def test_timeseries(test_helper, framework_version):
+def test_timeseries():
     pass
