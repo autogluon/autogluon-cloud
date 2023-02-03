@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 import copy
 import logging
-from typing import Optional, Union, Dict, Any
+from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
@@ -27,7 +28,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         predictor_cls = TimeSeriesPredictor
         return predictor_cls
-    
+
     def _preprocess_data(
         self,
         data,
@@ -50,15 +51,15 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         target_index = cols.index(target)
         cols.append(cols.pop(target_index))
         data = data[cols]
-        
+
         if static_features is not None:
             # Merge static features so only one dataframe needs to be sent to remote container
             if isinstance(static_features, str):
                 static_features = load_pd.load(static_features)
             data = pd.merge(data, static_features, how="left", on=id_column)
-        
+
         return data
-    
+
     def fit(
         self,
         *,
@@ -135,7 +136,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             id_column=id_column,
             timestamp_column=timestamp_column,
             target=target,
-            static_features=static_features
+            static_features=static_features,
         )
         if tuning_data is not None:
             tuning_data = self._preprocess_data(
@@ -143,7 +144,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
                 id_column=id_column,
                 timestamp_column=timestamp_column,
                 target=target,
-                static_features=static_features
+                static_features=static_features,
             )
         predictor_fit_args["train_data"] = train_data
         predictor_fit_args["tuning_data"] = tuning_data
@@ -161,7 +162,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             **kwargs,
         )
-        
+
     def predict_real_time(
         self,
         test_data: Union[str, pd.DataFrame],
@@ -206,17 +207,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             id_column=id_column,
             timestamp_column=timestamp_column,
             target=target,
-            static_features=static_features
+            static_features=static_features,
         )
         pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
         return pred
-    
-    def predict_proba_real_time(
-        self,
-        **kwargs
-    ) -> pd.DataFrame:
+
+    def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
-    
+
     def predict(
         self,
         test_data: Union[str, pd.DataFrame],
@@ -256,13 +254,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             id_column=id_column,
             timestamp_column=timestamp_column,
             target=target,
-            static_features=static_features
+            static_features=static_features,
         )
         return super().predict(
             test_data,
             **kwargs,
         )
-        
+
     def predict_proba(
         self,
         **kwargs,

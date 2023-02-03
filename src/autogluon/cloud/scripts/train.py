@@ -31,7 +31,7 @@ def get_env_if_present(name):
 
 
 def prepare_timeseries_dataframe(df, predictor_init_args):
-    target = predictor_init_args['target']
+    target = predictor_init_args["target"]
     cols = df.columns.to_list()
     id_column = cols[0]
     timestamp_column = cols[1]
@@ -40,15 +40,11 @@ def prepare_timeseries_dataframe(df, predictor_init_args):
     if target != cols[-1]:
         # target is not the last column, then there are static features being merged in
         target_index = cols.index(target)
-        static_columns = cols[target_index+1:]
-        static_features = df[[id_column]+static_columns].groupby([id_column], sort=False).head(1)
+        static_columns = cols[target_index + 1 :]
+        static_features = df[[id_column] + static_columns].groupby([id_column], sort=False).head(1)
         static_features.set_index(id_column, inplace=True)
         df.drop(columns=static_columns, inplace=True)
-    df = TimeSeriesDataFrame.from_data_frame(
-        df,
-        id_column=id_column,
-        timestamp_column=timestamp_column
-    )
+    df = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
     if static_features is not None:
         print(static_features)
         df.static_features = static_features
@@ -120,9 +116,11 @@ if __name__ == "__main__":
             predictor_fit_args["feature_meatadata"] = FeatureMetadata(**predictor_fit_args["feature_meatadata"])
     elif predictor_type == "multimodal":
         from autogluon.multimodal import MultiModalPredictor
+
         predictor_cls = MultiModalPredictor
     elif predictor_type == "timeseries":
         from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+
         predictor_cls = TimeSeriesPredictor
 
     train_file = get_input_path(args.train_dir)

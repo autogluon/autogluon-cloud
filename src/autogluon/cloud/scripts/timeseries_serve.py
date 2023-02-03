@@ -6,7 +6,6 @@ import pandas as pd
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 
 
-
 def model_fn(model_dir):
     """loads model from previously saved artifact"""
     model = TimeSeriesPredictor.load(model_dir)
@@ -23,15 +22,11 @@ def prepare_timeseries_dataframe(df, predictor):
     if target != cols[-1]:
         # target is not the last column, then there are static features being merged in
         target_index = cols.index(target)
-        static_columns = cols[target_index+1:]
-        static_features = df[[id_column]+static_columns].groupby([id_column], sort=False).head(1)
+        static_columns = cols[target_index + 1 :]
+        static_features = df[[id_column] + static_columns].groupby([id_column], sort=False).head(1)
         static_features.set_index(id_column, inplace=True)
         df.drop(columns=static_columns, inplace=True)
-    df = TimeSeriesDataFrame.from_data_frame(
-        df,
-        id_column=id_column,
-        timestamp_column=timestamp_column
-    )
+    df = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
     if static_features is not None:
         print(static_features)
         df.static_features = static_features

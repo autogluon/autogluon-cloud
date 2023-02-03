@@ -7,18 +7,16 @@ from autogluon.cloud import TimeSeriesCloudPredictor
 def test_timeseries(test_helper, framework_version):
     train_data = "timeseries_train.csv"
     static_features = "timeseries_static_features.csv"
-    id_column="item_id"
-    timestamp_column="timestamp"
-    target="target"
+    id_column = "item_id"
+    timestamp_column = "timestamp"
+    target = "target"
     timestamp = test_helper.get_utc_timestamp_now()
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         test_helper.prepare_data(train_data, static_features)
         time_limit = 60
 
-        predictor_init_args = dict(
-            target=target
-        )
+        predictor_init_args = dict(target=target)
 
         predictor_fit_args = dict(
             train_data=train_data,
@@ -50,7 +48,7 @@ def test_timeseries(test_helper, framework_version):
                 target=target,
                 static_features=static_features,
                 framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri
+                custom_image_uri=inference_custom_image_uri,
             ),
             predict_real_time_kwargs=dict(
                 id_column=id_column,

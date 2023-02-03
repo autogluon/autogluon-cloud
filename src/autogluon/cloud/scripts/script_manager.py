@@ -12,7 +12,7 @@ class ScriptManager:
     _SERVE_SCRIPT_MAP = dict(
         tabular=TABULAR_SERVE_SCRIPT_PATH,
         multimodal=MULTIMODAL_SERVE_SCRIPT_PATH,
-        timeseries=TIMESERIES_SERVE_SCRIPT_PATH
+        timeseries=TIMESERIES_SERVE_SCRIPT_PATH,
     )
 
     @classmethod
