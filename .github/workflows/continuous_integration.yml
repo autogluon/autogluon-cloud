@@ -217,9 +217,40 @@ jobs:
         with:
           submodule-to-test: multimodal
           ag_version: '${{ matrix.AG_VERSION }}'
+  test_timeseries_cloud:
+    strategy:
+      matrix:
+        AG_VERSION: ["source", "0.6.1"]
+    needs: cloud_lint_check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        if: ${{ github.event_name != 'pull_request_target' }}
+        uses: actions/checkout@v2
+      - name: Checkout repository(Pull Request Target)
+        if: ${{ github.event_name == 'pull_request_target' }}
+        uses: actions/checkout@v2
+        with:
+          ref: "refs/pull/${{ github.event.number }}/merge"
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+      - name: Check if changes beside docs
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            other_than_docs:
+              - '!(docs/**)**'
+      - name: Test Timeseries Cloud
+        if: steps.changes.outputs.other_than_docs == 'true'
+        uses: ./.github/actions/test-cloud
+        with:
+          submodule-to-test: timeseries
+          ag_version: '${{ matrix.AG_VERSION }}'
   build_doc:
     if: ${{ github.event_name != 'schedule' }}
-    needs: [test_general_cloud, test_tabular_cloud, test_text_cloud, test_image_cloud, test_multimodal_cloud]
+    needs: [test_general_cloud, test_tabular_cloud, test_text_cloud, test_image_cloud, test_multimodal_cloud, test_timeseries_cloud]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
