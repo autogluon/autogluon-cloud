@@ -51,8 +51,9 @@ def prepare_timeseries_dataframe(df, predictor_init_args):
     return df
 
 
-def prepare_data(data_file, predictor_type, predictor_init_args):
+def prepare_data(data_file, predictor_type, predictor_init_args=None):
     if predictor_type == "timeseries":
+        assert predictor_init_args is not None
         data = load_pd.load(data_file)
         data = prepare_timeseries_dataframe(data, predictor_init_args)
     else:
