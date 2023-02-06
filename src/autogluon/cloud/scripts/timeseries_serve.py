@@ -1,9 +1,9 @@
 # flake8: noqa
+import os
+import shutil
 from io import BytesIO, StringIO
 
-import os
 import pandas as pd
-import shutil
 
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 
