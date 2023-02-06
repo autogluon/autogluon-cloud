@@ -2,11 +2,11 @@ import os
 import zipfile
 from datetime import datetime, timezone
 
-from autogluon.cloud import TimeSeriesCloudPredictor
-
 import boto3
 import pandas as pd
 import pytest
+
+from autogluon.cloud import TimeSeriesCloudPredictor
 
 
 class CloudTestHelper:
