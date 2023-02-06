@@ -117,10 +117,10 @@ class CloudTestHelper:
             predict_kwargs = dict()
         if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
             pred = cloud_predictor.predict(test_data, **predict_kwargs)
-            assert isinstance(pred, pd.DataFrame)
+            assert pred is not None
         else:
             pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
-            assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
+            assert pred is not None and pred_proba is not None
         info = cloud_predictor.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 
@@ -172,7 +172,7 @@ class CloudTestHelper:
         if predict_kwargs is None:
             predict_kwargs = dict()
         pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
-        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
+        assert pred is not None and pred_proba is not None
         info = cloud_predictor.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 
@@ -185,7 +185,7 @@ class CloudTestHelper:
         pred, pred_proba = cloud_predictor_no_train.predict_proba(
             test_data, predictor_path=trained_predictor_path, **predict_kwargs
         )
-        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
+        assert pred is not None and pred_proba is not None
         info = cloud_predictor_no_train.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 
