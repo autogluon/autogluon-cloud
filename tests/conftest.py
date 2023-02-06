@@ -65,10 +65,8 @@ class CloudTestHelper:
     def test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs):
         try:
             pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
-            if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
-                assert isinstance(pred, pd.DataFrame)
-            else:
-                assert isinstance(pred, pd.Series)
+            assert pred is not None
+            if not isinstance(cloud_predictor, TimeSeriesCloudPredictor):
                 pred_proba = cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
                 assert isinstance(pred_proba, pd.DataFrame)
         except Exception as e:
@@ -120,7 +118,7 @@ class CloudTestHelper:
             assert pred is not None
         else:
             pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
-            assert pred is not None and pred_proba is not None
+            assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 
@@ -172,7 +170,7 @@ class CloudTestHelper:
         if predict_kwargs is None:
             predict_kwargs = dict()
         pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
-        assert pred is not None and pred_proba is not None
+        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 
@@ -185,7 +183,7 @@ class CloudTestHelper:
         pred, pred_proba = cloud_predictor_no_train.predict_proba(
             test_data, predictor_path=trained_predictor_path, **predict_kwargs
         )
-        assert pred is not None and pred_proba is not None
+        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor_no_train.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 
