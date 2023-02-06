@@ -23,7 +23,7 @@ def test_multimodal_tabular_text_image(test_helper, framework_version):
         )
         predictor_fit_args = dict(train_data=train_data, time_limit=time_limit)
         cloud_predictor = MultiModalCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-tabular-text-image/{timestamp}",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-tabular-text-image/{framework_version}/{timestamp}",
             local_output_path="test_multimodal_tabular_text_image_cloud_predictor",
         )
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=True)

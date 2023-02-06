@@ -24,7 +24,7 @@ def test_timeseries(test_helper, framework_version):
             time_limit=time_limit,
         )
         cloud_predictor = TimeSeriesCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries/{timestamp}",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries/{framework_version}/{timestamp}",
             local_output_path="test_timeseries_cloud_predictor",
         )
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)

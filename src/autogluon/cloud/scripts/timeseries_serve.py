@@ -1,14 +1,25 @@
 # flake8: noqa
 from io import BytesIO, StringIO
 
+import os
 import pandas as pd
+import shutil
 
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 
 
 def model_fn(model_dir):
     """loads model from previously saved artifact"""
-    model = TimeSeriesPredictor.load(model_dir)
+    # TSPredictor will write to the model file during inference while the default model_dir is read only
+    # Copy the model file to a writable location as a temporary workaround
+    tmp_model_dir = os.path.join("/tmp", "model")
+    try:
+        shutil.copytree(model_dir, tmp_model_dir, dirs_exist_ok=True)
+    except:
+        # model already copied
+        pass
+    model = TimeSeriesPredictor.load(tmp_model_dir)
+    print("MODEL LOADED")
     return model
 
 
