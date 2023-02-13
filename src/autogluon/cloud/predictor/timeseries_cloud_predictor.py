@@ -209,7 +209,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             target=target,
             static_features=static_features,
         )
-        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
+        pred, _ = self._predict_real_time(test_data=test_data, accept=accept, split_pred_proba=False)
         return pred
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:

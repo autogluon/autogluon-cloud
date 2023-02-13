@@ -64,9 +64,12 @@ class CloudTestHelper:
     @staticmethod
     def test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs):
         try:
-            pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
-            assert pred is not None
-            if not isinstance(cloud_predictor, TimeSeriesCloudPredictor):
+            if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
+                pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+                assert isinstance(pred, pd.DataFrame)
+            else:
+                pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+                assert isinstance(pred, pd.Series)
                 pred_proba = cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
                 assert isinstance(pred_proba, pd.DataFrame)
         except Exception as e:
@@ -115,7 +118,7 @@ class CloudTestHelper:
             predict_kwargs = dict()
         if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
             pred = cloud_predictor.predict(test_data, **predict_kwargs)
-            assert pred is not None
+            assert isinstance(pred, pd.DataFrame)
         else:
             pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
             assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)

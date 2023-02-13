@@ -14,12 +14,11 @@ def model_fn(model_dir):
     # Copy the model file to a writable location as a temporary workaround
     tmp_model_dir = os.path.join("/tmp", "model")
     try:
-        shutil.copytree(model_dir, tmp_model_dir, dirs_exist_ok=True)
+        shutil.copytree(model_dir, tmp_model_dir, dirs_exist_ok=False)
     except:
         # model already copied
         pass
-    # model = TimeSeriesPredictor.load(tmp_model_dir)
-    model = TimeSeriesPredictor.load(model_dir)
+    model = TimeSeriesPredictor.load(tmp_model_dir)
     print("MODEL LOADED")
     return model
 

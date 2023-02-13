@@ -787,10 +787,13 @@ class CloudPredictor(ABC):
 
         return test_data
 
-    def _predict_real_time(self, test_data, accept, **initial_args):
+    def _predict_real_time(self, test_data, accept, split_pred_proba=True, **initial_args):
         try:
             prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
-            pred, pred_proba = split_pred_and_pred_proba(prediction)
+            pred, pred_proba = None, None
+            pred = prediction
+            if split_pred_proba:
+                pred, pred_proba = split_pred_and_pred_proba(prediction)
             return pred, pred_proba
         except ClientError as e:
             if e.response["Error"]["Code"] == "413":  # Error code for pay load too large
