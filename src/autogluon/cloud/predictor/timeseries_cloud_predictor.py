@@ -31,12 +31,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def _preprocess_data(
         self,
-        data,
-        id_column,
-        timestamp_column,
-        target,
-        static_features=None,
-    ):
+        data: Union[pd.DataFrame, str],
+        id_column: str,
+        timestamp_column: str,
+        target: str,
+        static_features: Optional[Union[pd.DataFrame, str]] = None,
+    ) -> pd.DataFrame:
         if isinstance(data, str):
             data = load_pd.load(data)
         else:
@@ -228,6 +228,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 

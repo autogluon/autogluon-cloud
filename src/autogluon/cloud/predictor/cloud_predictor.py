@@ -1052,6 +1052,7 @@ class CloudPredictor(ABC):
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 
@@ -1152,6 +1153,7 @@ class CloudPredictor(ABC):
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 

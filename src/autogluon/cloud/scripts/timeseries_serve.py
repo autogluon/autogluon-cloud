@@ -18,7 +18,8 @@ def model_fn(model_dir):
     except:
         # model already copied
         pass
-    model = TimeSeriesPredictor.load(tmp_model_dir)
+    # model = TimeSeriesPredictor.load(tmp_model_dir)
+    model = TimeSeriesPredictor.load(model_dir)
     print("MODEL LOADED")
     return model
 
@@ -39,7 +40,6 @@ def prepare_timeseries_dataframe(df, predictor):
         df.drop(columns=static_columns, inplace=True)
     df = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
     if static_features is not None:
-        print(static_features)
         df.static_features = static_features
     return df
 
