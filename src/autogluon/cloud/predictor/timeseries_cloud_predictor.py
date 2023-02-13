@@ -257,10 +257,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             target=target,
             static_features=static_features,
         )
-        return super().predict(
-            test_data,
+        pred, _ = super()._predict(
+            test_data=test_data,
+            split_pred_proba=False,
             **kwargs,
         )
+        return pred
 
     def predict_proba(
         self,

@@ -904,6 +904,7 @@ class CloudPredictor(ABC):
         save_path=None,
         model_kwargs=None,
         transformer_kwargs=None,
+        split_pred_proba=True,
         **kwargs,
     ):
         if not predictor_path:
@@ -1024,7 +1025,9 @@ class CloudPredictor(ABC):
             results_path = self.download_predict_results(save_path=save_path)
             # Batch inference will only return json format
             results = pd.read_json(results_path)
-            pred, pred_proba = split_pred_and_pred_proba(results)
+            pred = results
+            if split_pred_proba:
+                pred, pred_proba = split_pred_and_pred_proba(results)
         if not persist:
             os.remove(results_path)
 
