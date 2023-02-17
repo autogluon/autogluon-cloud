@@ -4,6 +4,7 @@ from typing import Optional
 
 import sagemaker
 
+from .remote_job import RemoteJob
 from ..utils.ag_sagemaker import (
     AutoGluonNonRepackInferenceModel,
     AutoGluonRepackInferenceModel,
@@ -14,7 +15,7 @@ from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, MODEL_ARTIFACT_NAME
 logger = logging.getLogger(__name__)
 
 
-class SageMakerJob(ABC):
+class SageMakerJob(RemoteJob):
     def __init__(self, session=None):
         self.session = session or sagemaker.session.Session()
         self._job_name = None
