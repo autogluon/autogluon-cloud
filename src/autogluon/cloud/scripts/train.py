@@ -4,11 +4,13 @@
 # https://github.com/autogluon/autogluon/issues/2042
 import argparse
 import os
+import pandas as pd
 import shutil
 from pprint import pprint
 
 import yaml
 
+from autogluon.common.loaders import load_pd
 from autogluon.tabular import TabularPredictor, TabularDataset, FeatureMetadata
 
 
@@ -26,6 +28,37 @@ def get_env_if_present(name):
     if name in os.environ:
         result = os.environ[name]
     return result
+
+
+def prepare_timeseries_dataframe(df, predictor_init_args):
+    target = predictor_init_args["target"]
+    cols = df.columns.to_list()
+    id_column = cols[0]
+    timestamp_column = cols[1]
+    df[timestamp_column] = pd.to_datetime(df[timestamp_column])
+    static_features = None
+    if target != cols[-1]:
+        # target is not the last column, then there are static features being merged in
+        target_index = cols.index(target)
+        static_columns = cols[target_index + 1 :]
+        static_features = df[[id_column] + static_columns].groupby([id_column], sort=False).head(1)
+        static_features.set_index(id_column, inplace=True)
+        df.drop(columns=static_columns, inplace=True)
+    df = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
+    if static_features is not None:
+        print(static_features)
+        df.static_features = static_features
+    return df
+
+
+def prepare_data(data_file, predictor_type, predictor_init_args=None):
+    if predictor_type == "timeseries":
+        assert predictor_init_args is not None
+        data = load_pd.load(data_file)
+        data = prepare_timeseries_dataframe(data, predictor_init_args)
+    else:
+        data = TabularDataset(data_file)
+    return data
 
 
 if __name__ == "__main__":
@@ -74,7 +107,7 @@ if __name__ == "__main__":
     predictor_init_args = config["predictor_init_args"]
     predictor_init_args["path"] = save_path
     predictor_fit_args = config["predictor_fit_args"]
-    valid_predictor_types = ["tabular", "multimodal"]
+    valid_predictor_types = ["tabular", "multimodal", "timeseries"]
     assert (
         predictor_type in valid_predictor_types
     ), f"predictor_type {predictor_type} not supported. Valid options are {valid_predictor_types}"
@@ -86,9 +119,14 @@ if __name__ == "__main__":
         from autogluon.multimodal import MultiModalPredictor
 
         predictor_cls = MultiModalPredictor
+    elif predictor_type == "timeseries":
+        from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+
+        predictor_cls = TimeSeriesPredictor
 
     train_file = get_input_path(args.train_dir)
-    training_data = TabularDataset(train_file)
+    training_data = prepare_data(train_file, predictor_type, predictor_init_args)
+
     if predictor_type == "tabular" and "image_column" in config:
         feature_metadata = predictor_fit_args.get("feature_metadata", None)
         if feature_metadata is None:
@@ -99,7 +137,7 @@ if __name__ == "__main__":
     tuning_data = None
     if args.tune_dir:
         tune_file = get_input_path(args.tune_dir)
-        tuning_data = TabularDataset(tune_file)
+        tuning_data = prepare_data(tune_file, predictor_type)
 
     if args.train_images:
         train_image_compressed_file = get_input_path(args.train_images)

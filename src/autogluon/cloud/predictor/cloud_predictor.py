@@ -787,10 +787,13 @@ class CloudPredictor(ABC):
 
         return test_data
 
-    def _predict_real_time(self, test_data, accept, **initial_args):
+    def _predict_real_time(self, test_data, accept, split_pred_proba=True, **initial_args):
         try:
             prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
-            pred, pred_proba = split_pred_and_pred_proba(prediction)
+            pred, pred_proba = None, None
+            pred = prediction
+            if split_pred_proba:
+                pred, pred_proba = split_pred_and_pred_proba(prediction)
             return pred, pred_proba
         except ClientError as e:
             if e.response["Error"]["Code"] == "413":  # Error code for pay load too large
@@ -904,6 +907,7 @@ class CloudPredictor(ABC):
         save_path=None,
         model_kwargs=None,
         transformer_kwargs=None,
+        split_pred_proba=True,
         **kwargs,
     ):
         if not predictor_path:
@@ -1024,7 +1028,9 @@ class CloudPredictor(ABC):
             results_path = self.download_predict_results(save_path=save_path)
             # Batch inference will only return json format
             results = pd.read_json(results_path)
-            pred, pred_proba = split_pred_and_pred_proba(results)
+            pred = results
+            if split_pred_proba:
+                pred, pred_proba = split_pred_and_pred_proba(results)
         if not persist:
             os.remove(results_path)
 
@@ -1052,6 +1058,7 @@ class CloudPredictor(ABC):
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 
@@ -1152,6 +1159,7 @@ class CloudPredictor(ABC):
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 

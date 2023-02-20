@@ -163,6 +163,15 @@ class MultiModalCloudPredictor(CloudPredictor):
         **kwargs,
     ) -> Optional[pd.Series]:
         """
+        Predict using SageMaker batch transform.
+        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
+        If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
+        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
+        then create a transformer with it, and call transform in the end.
+
+        Parameters
+        ----------
         test_data: str
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
@@ -202,6 +211,13 @@ class MultiModalCloudPredictor(CloudPredictor):
         **kwargs,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
+        Predict using SageMaker batch transform.
+        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
+        If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
+        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
+        then create a transformer with it, and call transform in the end.
+
         test_data: str
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.

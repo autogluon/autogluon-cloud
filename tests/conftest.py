@@ -6,6 +6,8 @@ import boto3
 import pandas as pd
 import pytest
 
+from autogluon.cloud import TimeSeriesCloudPredictor
+
 
 class CloudTestHelper:
     cpu_training_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-training:cpu-latest"
@@ -62,10 +64,14 @@ class CloudTestHelper:
     @staticmethod
     def test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs):
         try:
-            pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
-            assert isinstance(pred, pd.Series)
-            pred_proba = cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
-            assert isinstance(pred_proba, pd.DataFrame)
+            if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
+                pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+                assert isinstance(pred, pd.DataFrame)
+            else:
+                pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+                assert isinstance(pred, pd.Series)
+                pred_proba = cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
+                assert isinstance(pred_proba, pd.DataFrame)
         except Exception as e:
             cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
             raise e
@@ -110,8 +116,12 @@ class CloudTestHelper:
 
         if predict_kwargs is None:
             predict_kwargs = dict()
-        pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
-        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
+        if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
+            pred = cloud_predictor.predict(test_data, **predict_kwargs)
+            assert isinstance(pred, pd.DataFrame)
+        else:
+            pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
+            assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor.info()
         assert info["recent_transform_job"]["status"] == "Completed"
 

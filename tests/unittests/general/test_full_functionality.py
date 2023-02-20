@@ -25,11 +25,11 @@ def test_full_functionality(test_helper, framework_version):
             time_limit=time_limit,
         )
         cloud_predictor = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular/{timestamp}",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular/{framework_version}/{timestamp}",
             local_output_path="test_tabular_cloud_predictor",
         )
         cloud_predictor_no_train = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-no-train/{timestamp}",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-no-train/{framework_version}/{timestamp}",
             local_output_path="test_tabular_cloud_predictor_no_train",
         )
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
