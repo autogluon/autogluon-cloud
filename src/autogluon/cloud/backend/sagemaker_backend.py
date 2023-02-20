@@ -6,11 +6,14 @@ from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 import sagemaker
+import yaml
 from botocore.exceptions import ClientError
 
+from autogluon.common.loaders import load_pd, load_pkl
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
 from ..backend.backend import Backend
+from ..data import FormatConverterFactory
 from ..endpoint.endpoint import Endpoint
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
@@ -24,15 +27,28 @@ from ..utils.iam import (
     replace_iam_policy_place_holder,
     replace_trust_relationship_place_holder,
 )
+from ..utils.sagemaker_utils import parse_framework_version
+from ..utils.utils import (
+    convert_image_path_to_encoded_bytes_in_dataframe,
+    is_image_file,
+    split_pred_and_pred_proba,
+    unzip_file,
+    zipfolder,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class SagemakerBackend(Backend):
-    def __init__(self, **kwargs) -> None:
-        self.initialize(**kwargs)
+    def __init__(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
+        self.initialize(
+            local_output_path=local_output_path,
+            cloud_output_path=cloud_output_path,
+            predictor_type=predictor_type,
+            **kwargs
+        )
 
-    def initialize(self, **kwargs) -> None:
+    def initialize(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
         """Initialize the backend."""
         try:
             self.role_arn = sagemaker.get_execution_role()
@@ -47,6 +63,9 @@ class SagemakerBackend(Backend):
                 "IMPORTANT: Please review the generated trust relationship and IAM policy before you create an IAM role with them",
             )
             raise e
+        self.local_output_path = local_output_path
+        self.cloud_output_path = cloud_output_path
+        self.predictor_type = predictor_type
         self.sagemaker_session = setup_sagemaker_session()
         self.endpoint = None
         self._region = self.sagemaker_session.boto_region_name
@@ -177,7 +196,9 @@ class SagemakerBackend(Backend):
             framework_version, py_version = None, None
             logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
         else:
-            framework_version, py_version = self._parse_framework_version(framework_version, "training")
+            framework_version, py_version = parse_framework_version(
+                framework_version, "training", minimum_version="0.6.0"
+            )
             logger.log(20, f"Training with framework_version=={framework_version}")
 
         if not job_name:
@@ -195,7 +216,6 @@ class SagemakerBackend(Backend):
             autogluon_sagemaker_estimator_kwargs["debugger_hook_config"] = False
         output_path = self.cloud_output_path + "/model"
         code_location = self.cloud_output_path + "/code"
-        cloud_bucket, _ = s3_path_to_bucket_prefix(self.cloud_output_path)
 
         self._train_script_path = ScriptManager.get_train_script(self.predictor_type, framework_version)
         entry_point = self._train_script_path
@@ -209,7 +229,6 @@ class SagemakerBackend(Backend):
             # Avoid user passing in source_dir without specifying entry point
             autogluon_sagemaker_estimator_kwargs.pop("source_dir", None)
 
-        self._setup_bucket(cloud_bucket)
         config_args = dict(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -249,17 +268,129 @@ class SagemakerBackend(Backend):
         )
         return self
 
-    @abstractmethod
     def deploy(self, **kwargs) -> Endpoint:
         """Deploy and endpoint"""
         raise NotImplementedError
 
-    @abstractmethod
     def predict_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Realtime prediction with the endpoint"""
         raise NotImplementedError
 
-    @abstractmethod
     def predict(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Batch inference"""
         raise NotImplementedError
+
+    def _construct_config(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
+        assert self.predictor_type is not None
+        config = dict(
+            predictor_type=self.predictor_type,
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            leaderboard=leaderboard,
+            **kwargs,
+        )
+        path = os.path.join(self.local_output_path, "utils", "config.yaml")
+        with open(path, "w") as f:
+            yaml.dump(config, f)
+        return path
+
+    def _prepare_data(self, data, filename, output_type="csv"):
+        path = os.path.join(self.local_output_path, "utils")
+        converter = FormatConverterFactory.get_converter(output_type)
+        return converter.convert(data, path, filename)
+
+    def _find_common_path_and_replace_image_column(self, data, image_column):
+        common_path = os.path.commonpath(data[image_column].tolist())
+        common_path_head = os.path.split(common_path)[0]  # we keep the base dir to match zipping behavior
+        data[image_column] = data[image_column].apply(lambda path: os.path.relpath(path, common_path_head))
+
+        return data, common_path
+
+    def _upload_fit_artifact(
+        self,
+        train_data,
+        tune_data,
+        config,
+        serving_script,
+        image_column=None,
+    ):
+        cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
+        util_key_prefix = cloud_key_prefix + "/utils"
+
+        common_train_data_path = None
+        common_tune_data_path = None
+        if image_column is not None:
+            # Find common path to zip and replace image column with relative path to be used in remote environment
+            if isinstance(train_data, str):
+                train_data = load_pd.load(train_data)
+            else:
+                train_data = copy.deepcopy(train_data)
+            if tune_data is not None:
+                if isinstance(tune_data, str):
+                    tune_data = load_pd.load(tune_data)
+                else:
+                    tune_data = copy.deepcopy(tune_data)
+            train_data, common_train_data_path = self._find_common_path_and_replace_image_column(
+                data=train_data, image_column=image_column
+            )
+            if tune_data is not None:
+                tune_data, common_tune_data_path = self._find_common_path_and_replace_image_column(
+                    data=tune_data, image_column=image_column
+                )
+
+        train_input = train_data
+        train_data = self._prepare_data(train_data, "train")
+        logger.log(20, "Uploading train data...")
+        train_input = self.sagemaker_session.upload_data(
+            path=train_data, bucket=cloud_bucket, key_prefix=util_key_prefix
+        )
+        logger.log(20, "Train data uploaded successfully")
+
+        tune_input = tune_data
+        if tune_data is not None:
+            tune_data = self._prepare_data(tune_data, "tune")
+            logger.log(20, "Uploading tune data...")
+            tune_input = self.sagemaker_session.upload_data(
+                path=tune_data, bucket=cloud_bucket, key_prefix=util_key_prefix
+            )
+            logger.log(20, "Tune data uploaded successfully")
+
+        config_input = self.sagemaker_session.upload_data(path=config, bucket=cloud_bucket, key_prefix=util_key_prefix)
+
+        serving_input = self.sagemaker_session.upload_data(
+            path=serving_script, bucket=cloud_bucket, key_prefix=util_key_prefix
+        )
+
+        train_images_input = self._upload_fit_image_artifact(
+            image_dir_path=common_train_data_path, bucket=cloud_bucket, key_prefix=util_key_prefix
+        )
+        tune_images_input = self._upload_fit_image_artifact(
+            image_dir_path=common_tune_data_path, bucket=cloud_bucket, key_prefix=util_key_prefix
+        )
+        inputs = dict(train=train_input, config=config_input, serving=serving_input)
+        if tune_input is not None:
+            inputs["tune"] = tune_input
+        if train_images_input is not None:
+            inputs["train_images"] = train_images_input
+        if tune_images_input is not None:
+            inputs["tune_images"] = tune_images_input
+
+        return inputs
+
+    def _upload_fit_image_artifact(self, image_dir_path, bucket, key_prefix):
+        upload_image_path = None
+        if image_dir_path is not None:
+            image_zip_filename = image_dir_path
+            assert os.path.isdir(image_dir_path), "Please provide a folder containing the images"
+            image_zip_filename = os.path.basename(os.path.normpath(image_dir_path))
+            logger.log(20, "Zipping images ...")
+            zipfolder(image_zip_filename, image_dir_path)
+            image_zip_filename += ".zip"
+            logger.log(20, "Uploading images ...")
+            upload_image_path = self.sagemaker_session.upload_data(
+                path=image_zip_filename,
+                bucket=bucket,
+                key_prefix=key_prefix,
+            )
+            logger.log(20, "Images uploaded successfully")
+        return upload_image_path
