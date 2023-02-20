@@ -1,0 +1,2 @@
+SAGEMAKER = "sagemaker"
+RAY = "ray"

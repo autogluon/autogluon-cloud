@@ -4,13 +4,13 @@ from typing import Optional
 
 import sagemaker
 
-from .remote_job import RemoteJob
 from ..utils.ag_sagemaker import (
     AutoGluonNonRepackInferenceModel,
     AutoGluonRepackInferenceModel,
     AutoGluonSagemakerEstimator,
 )
 from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, MODEL_ARTIFACT_NAME
+from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
 

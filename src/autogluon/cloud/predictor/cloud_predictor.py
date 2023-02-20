@@ -22,6 +22,7 @@ from autogluon.common.utils.log_utils import set_logger_verbosity
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 from autogluon.common.utils.utils import setup_outputdir
 
+from ..backend.constant import RAY, SAGEMAKER
 from ..data import FormatConverterFactory
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
@@ -61,7 +62,9 @@ logger = logging.getLogger(__name__)
 class CloudPredictor(ABC):
     predictor_file_name = "CloudPredictor.pkl"
 
-    def __init__(self, cloud_output_path: str, local_output_path: Optional[str] = None, verbosity: int = 2) -> None:
+    def __init__(
+        self, cloud_output_path: str, local_output_path: Optional[str] = None, backend=SAGEMAKER, verbosity: int = 2
+    ) -> None:
         """
         Parameters
         ----------
