@@ -89,13 +89,13 @@ class SageMakerJob(RemoteJob):
         logger.warning("Job status not available in local mode. Please check the local log.")
         return None
 
-    def get_output_path(self):
+    def get_output_path(self) -> Optional[str]:
         """
         Get the output path of the job generated artifacts if any.
 
         Returns:
         --------
-        str:
+        Optional[str]:
             Output path of the job generated artifacts if any.
             If no artifact, return None
         """

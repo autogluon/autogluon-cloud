@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict
 
+
 class RemoteJob(ABC):
-    
     def __init__(self) -> None:
         pass
-    
+
     @classmethod
     @abstractmethod
     def attach(cls, job_name):
@@ -35,7 +35,7 @@ class RemoteJob(ABC):
     def run(self, **kwargs):
         """Execute the job"""
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_job_status(self) -> Optional[str]:
         """
@@ -44,7 +44,7 @@ class RemoteJob(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_output_path(self):
+    def get_output_path(self) -> Optional[str]:
         """
         Get the output path of the job generated artifacts if any.
         """
