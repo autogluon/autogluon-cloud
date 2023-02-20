@@ -2,7 +2,7 @@ import copy
 import json
 import logging
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 import sagemaker
@@ -12,7 +12,6 @@ from botocore.exceptions import ClientError
 from autogluon.common.loaders import load_pd, load_pkl
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
-from ..backend.backend import Backend
 from ..data import FormatConverterFactory
 from ..endpoint.endpoint import Endpoint
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
@@ -35,6 +34,8 @@ from ..utils.utils import (
     unzip_file,
     zipfolder,
 )
+from .backend import Backend
+from .constant import SAGEMAKER
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,13 @@ class SagemakerBackend(Backend):
             local_output_path=local_output_path,
             cloud_output_path=cloud_output_path,
             predictor_type=predictor_type,
-            **kwargs
+            **kwargs,
         )
+
+    @property
+    def name(self) -> str:
+        """Name of this backend"""
+        return SAGEMAKER
 
     def initialize(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
         """Initialize the backend."""
@@ -69,7 +75,7 @@ class SagemakerBackend(Backend):
         self.sagemaker_session = setup_sagemaker_session()
         self.endpoint = None
         self._region = self.sagemaker_session.boto_region_name
-        self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
+        self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
 
     def generate_default_permission(
         self, account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
@@ -121,6 +127,13 @@ class SagemakerBackend(Backend):
         )
 
         return {"trust_relationship": trust_relationship_file_path, "iam_policy": iam_policy_file_path}
+
+    def parse_backend_fit_kwargs(self, kwargs: Dict) -> List[Dict]:
+        """Parse backend specific kwargs and get them ready to be sent to fit call"""
+        autogluon_sagemaker_estimator_kwargs = kwargs.get("autogluon_sagemaker_estimator_kwargs", None)
+        fit_kwargs = kwargs.get("fit_kwargs", None)
+
+        return [autogluon_sagemaker_estimator_kwargs, fit_kwargs]
 
     def fit(
         self,
@@ -185,10 +198,6 @@ class SagemakerBackend(Backend):
         -------
         `CloudPredictor` object. Returns self.
         """
-        # TODO: move this assert to predictor
-        assert (
-            not self._fit_job.completed
-        ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
         tune_data = predictor_fit_args.pop("tuning_data", None)
@@ -266,7 +275,6 @@ class SagemakerBackend(Backend):
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             **kwargs,
         )
-        return self
 
     def deploy(self, **kwargs) -> Endpoint:
         """Deploy and endpoint"""
