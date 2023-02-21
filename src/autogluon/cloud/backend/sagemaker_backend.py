@@ -9,6 +9,7 @@ import pandas as pd
 import sagemaker
 import yaml
 from botocore.exceptions import ClientError
+from sagemaker import Predictor
 
 from autogluon.common.loaders import load_pd, load_pkl
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
@@ -18,7 +19,6 @@ from ..endpoint.sagemaker_endpoint import SagemakerEndpoint
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
-    AutoGluonBatchPredictor,
     AutoGluonNonRepackInferenceModel,
     AutoGluonRealtimePredictor,
     AutoGluonRepackInferenceModel,
@@ -61,6 +61,11 @@ class SagemakerBackend(Backend):
         """Name of this backend"""
         return SAGEMAKER
 
+    @property
+    def _realtime_predictor_cls(self) -> Predictor:
+        """Class used for realtime endpoint"""
+        return AutoGluonRealtimePredictor
+
     def initialize(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
         """Initialize the backend."""
         try:
@@ -83,7 +88,6 @@ class SagemakerBackend(Backend):
         self.endpoint = None
         self._region = self.sagemaker_session.boto_region_name
         self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
-        self._realtime_predictor_cls = AutoGluonRealtimePredictor
 
     def generate_default_permission(
         self, account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
@@ -311,10 +315,6 @@ class SagemakerBackend(Backend):
 
         return [model_kwargs, deploy_kwargs]
 
-    def prepare_deploy(self, realtime_predictor_cls, **kwargs) -> None:
-        """Things to be configured before deploy goes here"""
-        self._realtime_predictor_cls = realtime_predictor_cls
-
     def deploy(
         self,
         predictor_path: Optional[str] = None,
@@ -463,12 +463,84 @@ class SagemakerBackend(Backend):
         self.endpoint = None
         return detached_endpoint
 
-    def predict_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
-        """Realtime prediction with the endpoint"""
-        raise NotImplementedError
+    def predict_realtime(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept: str = "application/x-parquet",
+        **kwargs,
+    ) -> Union[pd.DataFrame, pd.Series]:
+        """
+        Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        This is intended to provide a low latency inference.
+        If you want to inference on a large dataset, use `predict()` instead.
+
+        Parameters
+        ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data_image_column: default = None
+            If test_data involves image modality, you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
+        accept: str, default = application/x-parquet
+            Type of accept output content.
+            Valid options are application/x-parquet, text/csv, application/json
+
+        Returns
+        -------
+        Pandas.Series
+        Predict results in Series
+        """
+        self._validate_predict_real_time_args(accept)
+        test_data = self._load_predict_real_time_test_data(test_data, test_data_image_column=test_data_image_column)
+        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
+
+        return pred
+
+    def predict_proba_realtime(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept: str = "application/x-parquet",
+        **kwargs,
+    ) -> Union[pd.DataFrame, pd.Series]:
+        """
+        Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        This is intended to provide a low latency inference.
+        If you want to inference on a large dataset, use `predict_proba()` instead.
+        If your problem_type is regression, this functions identically to `predict_real_time`, returning the same output.
+
+        Parameters
+        ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data_image_column: default = None
+            If test_data involves image modality, you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
+        accept: str, default = application/x-parquet
+            Type of accept output content.
+            Valid options are application/x-parquet, text/csv, application/json
+
+        Returns
+        -------
+        Pandas.DataFrame or Pandas.Series
+            Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+        """
+        self._validate_predict_real_time_args(accept)
+        test_data = self._load_predict_real_time_test_data(test_data, test_data_image_column=test_data_image_column)
+        pred, proba = self._predict_real_time(test_data=test_data, accept=accept)
+
+        if proba is None:
+            return pred
+
+        return proba
 
     def predict(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Batch inference"""
+        raise NotImplementedError
+
+    def predict_proba(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+        """Batch inference probability"""
         raise NotImplementedError
 
     def _construct_config(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
@@ -599,3 +671,34 @@ class SagemakerBackend(Backend):
             else:
                 raise ValueError("Please provide a valid path to the model tarball.")
         return predictor_path
+
+    def _validate_predict_real_time_args(self, accept):
+        assert self.endpoint is not None, "Please call `deploy()` to deploy an endpoint first."
+        assert accept in VALID_ACCEPT, f"Invalid accept type: {accept}. Options are {VALID_ACCEPT}."
+
+    def _load_predict_real_time_test_data(self, test_data, test_data_image_column):
+        if isinstance(test_data, str):
+            test_data = load_pd.load(test_data)
+        if isinstance(test_data, pd.DataFrame):
+            if test_data_image_column is not None:
+                test_data = convert_image_path_to_encoded_bytes_in_dataframe(test_data, test_data_image_column)
+
+        return test_data
+
+    def _predict_real_time(self, test_data, accept, split_pred_proba=True, **initial_args):
+        try:
+            prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
+            pred, pred_proba = None, None
+            pred = prediction
+            if split_pred_proba:
+                pred, pred_proba = split_pred_and_pred_proba(prediction)
+            return pred, pred_proba
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "413":  # Error code for pay load too large
+                logger.warning(
+                    "The invocation of endpoint failed with Error Code 413. This is likely due to pay load size being too large."
+                )
+                logger.warning(
+                    "SageMaker endpoint could only take maximum 5MB. Please consider reduce test data size or use `predict()` instead."
+                )
+            raise e

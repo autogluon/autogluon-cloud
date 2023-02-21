@@ -116,10 +116,6 @@ class CloudPredictor(ABC):
         raise NotImplementedError
 
     @property
-    def _realtime_predictor_cls(self):
-        return AutoGluonRealtimePredictor
-
-    @property
     def is_fit(self) -> bool:
         """
         Whether this CloudPredictor is fitted already
@@ -449,43 +445,14 @@ class CloudPredictor(ABC):
         self.endpoint = None
         return detached_endpoint
 
-    def _validate_predict_real_time_args(self, accept):
-        assert self.endpoint, "Please call `deploy()` to deploy an endpoint first."
-        assert accept in VALID_ACCEPT, f"Invalid accept type: {accept}. Options are {VALID_ACCEPT}."
-
-    def _load_predict_real_time_test_data(self, test_data):
-        if type(test_data) == str:
-            test_data = load_pd.load(test_data)
-        if not isinstance(test_data, pd.DataFrame):
-            raise ValueError(
-                f"test_data is of type {type(test_data)}. test_data must be either a pandas.DataFrame or a local path to a csv file"
-            )
-
-        return test_data
-
-    def _predict_real_time(self, test_data, accept, split_pred_proba=True, **initial_args):
-        try:
-            prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
-            pred, pred_proba = None, None
-            pred = prediction
-            if split_pred_proba:
-                pred, pred_proba = split_pred_and_pred_proba(prediction)
-            return pred, pred_proba
-        except ClientError as e:
-            if e.response["Error"]["Code"] == "413":  # Error code for pay load too large
-                logger.warning(
-                    "The invocation of endpoint failed with Error Code 413. This is likely due to pay load size being too large."
-                )
-                logger.warning(
-                    "SageMaker endpoint could only take maximum 5MB. Please consider reduce test data size or use `predict()` instead."
-                )
-            raise e
-
     def predict_real_time(
-        self, test_data: Union[str, pd.DataFrame], accept: str = "application/x-parquet"
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept: str = "application/x-parquet",
     ) -> pd.Series:
         """
-        Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        Predict with the deployed endpoint. A deployed endpoint is required.
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
 
@@ -493,6 +460,10 @@ class CloudPredictor(ABC):
         ----------
         test_data: Union(str, pandas.DataFrame)
             The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data_image_column: default = None
+            If provided a csv file or pandas.DataFrame as the test_data and test_data involves image modality,
+            you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
@@ -502,17 +473,18 @@ class CloudPredictor(ABC):
         Pandas.Series
         Predict results in Series
         """
-        self._validate_predict_real_time_args(accept)
-        test_data = self._load_predict_real_time_test_data(test_data)
-        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
-
-        return pred
+        return self.backend.predict_realtime(
+            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
+        )
 
     def predict_proba_real_time(
-        self, test_data: Union[str, pd.DataFrame], accept: str = "application/x-parquet"
+        self,
+        test_data: Union[str, pd.DataFrame],
+        test_data_image_column: Optional[str] = None,
+        accept: str = "application/x-parquet",
     ) -> Union[pd.DataFrame, pd.Series]:
         """
-        Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        Predict probability with the deployed endpoint. A deployed endpoint is required.
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict_proba()` instead.
         If your problem_type is regression, this functions identically to `predict_real_time`, returning the same output.
@@ -521,6 +493,10 @@ class CloudPredictor(ABC):
         ----------
         test_data: Union(str, pandas.DataFrame)
             The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data_image_column: default = None
+            If provided a csv file or pandas.DataFrame as the test_data and test_data involves image modality,
+            you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
@@ -530,14 +506,9 @@ class CloudPredictor(ABC):
         Pandas.DataFrame or Pandas.Series
             Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
         """
-        self._validate_predict_real_time_args(accept)
-        test_data = self._load_predict_real_time_test_data(test_data)
-        pred, proba = self._predict_real_time(test_data=test_data, accept=accept)
-
-        if proba is None:
-            return pred
-
-        return proba
+        return self.backend.predict_proba_realtime(
+            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
+        )
 
     def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
         # If a directory of images, upload directly

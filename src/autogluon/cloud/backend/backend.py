@@ -68,11 +68,6 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def prepare_deploy(self, **kwargs) -> None:
-        """Things to be configured before deploy goes here"""
-        raise NotImplementedError
-
-    @abstractmethod
     def deploy(self, **kwargs) -> None:
         """Deploy and endpoint"""
         raise NotImplementedError
@@ -93,6 +88,16 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def predict_proba_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+        """Realtime prediction probability with the endpoint"""
+        raise NotImplementedError
+
+    @abstractmethod
     def predict(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Batch inference"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def predict_proba(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+        """Batch inference probability"""
         raise NotImplementedError
