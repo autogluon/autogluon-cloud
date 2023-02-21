@@ -96,7 +96,7 @@ class CloudPredictor(ABC):
         set_logger_verbosity(self.verbosity, logger=logger)
         self.local_output_path = self._setup_local_output_path(local_output_path)
         self.cloud_output_path = self._setup_cloud_output_path(cloud_output_path)
-        self.backend: Backend = BackendFactory.get_backend(backend)
+        self.backend: Backend = BackendFactory.get_backend(self.backend_map[backend])
         self._batch_transform_jobs = MostRecentInsertedOrderedDict()
 
     @property
@@ -104,6 +104,14 @@ class CloudPredictor(ABC):
     def predictor_type(self) -> str:
         """
         Type of the underneath AutoGluon Predictor
+        """
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def backend_map(self) -> Dict:
+        """
+        Map between general backend to module specific backend
         """
         raise NotImplementedError
 

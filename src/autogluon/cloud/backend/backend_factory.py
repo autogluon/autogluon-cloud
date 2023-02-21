@@ -1,13 +1,14 @@
 from .backend import Backend
 from .sagemaker_backend import SagemakerBackend
+from .timeseries_sagemaker_backend import TimeSeriesSagemakerBackend
 
 
 class BackendFactory:
-    __supported_backend = [SagemakerBackend]
-    __backend_name_to_backend = {cls().name: cls for cls in __supported_backend}
+    __supported_backend = [SagemakerBackend, TimeSeriesSagemakerBackend]
+    __name_to_backend = {cls().ext: cls for cls in __supported_backend}
 
     @staticmethod
-    def get_backend(backend_name: str) -> Backend:
+    def get_backend(backend: str) -> Backend:
         """Return the corresponding converter"""
-        assert backend_name in BackendFactory.__backend_name_to_backend, f"{backend_name} not supported"
-        return BackendFactory.__backend_name_to_backend[backend_name]()
+        assert backend in BackendFactory.__name_to_backend, f"{backend} not supported"
+        return BackendFactory.__name_to_backend[backend]()

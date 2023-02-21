@@ -81,7 +81,7 @@ class Backend(ABC):
     def attach_endpoint(self, endpoint: Endpoint) -> None:
         """Attach the backend to an existing endpoint"""
         raise NotImplementedError
-        
+
     @abstractmethod
     def detach_endpoint(self) -> Endpoint:
         """Detach the current endpoint and return it"""

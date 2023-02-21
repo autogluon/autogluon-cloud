@@ -225,10 +225,6 @@ class SagemakerBackend(Backend):
         **kwargs:
             Any extra arguments needed to pass to fit.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
-
-        Returns
-        -------
-        `CloudPredictor` object. Returns self.
         """
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
@@ -459,7 +455,7 @@ class SagemakerBackend(Backend):
             self.endpoint = endpoint
         else:
             raise ValueError(f"Please provide either an endpoint name or an endpoint of type `{SagemakerEndpoint}`")
-        
+
     def detach_endpoint(self) -> SagemakerEndpoint:
         """Detach the current endpoint and return it"""
         assert self.endpoint is not None, "There is no attached endpoint"
