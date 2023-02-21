@@ -13,6 +13,11 @@ class SagemakerEndpoint(Endpoint):
     def __init__(self, endpoint: Predictor) -> None:
         self._endpoint: Predictor = endpoint
 
+    @property
+    def endpoint_name(self) -> str:
+        """Name of the endpoint"""
+        return self._endpoint.endpoint_name
+
     def predict(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the endpoint

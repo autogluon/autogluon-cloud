@@ -61,8 +61,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        autogluon_sagemaker_estimator_kwargs: Dict = None,
-        **kwargs,
+        autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
+        fit_kwargs: Optional[Dict] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -102,7 +102,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         autogluon_sagemaker_estimator_kwargs: dict, default = dict()
             Any extra arguments needed to initialize AutoGluonSagemakerEstimator
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework for all options
-        **kwargs:
+        fit_kwargs:
             Any extra arguments needed to pass to fit.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
         """
@@ -138,5 +138,5 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             custom_image_uri=custom_image_uri,
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
-            **kwargs,
+            fit_kwargs=fit_kwargs,
         )

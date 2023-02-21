@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import logging
 import os
-import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, Union
@@ -11,7 +10,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import pandas as pd
 import sagemaker
 
-from autogluon.common.loaders import load_pd, load_pkl
+from autogluon.common.loaders import load_pkl
 from autogluon.common.savers import save_pkl
 from autogluon.common.utils.log_utils import set_logger_verbosity
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
@@ -21,18 +20,10 @@ from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
-from ..job import SageMakerBatchTransformationJob
-from ..scripts import ScriptManager
-from ..utils.ag_sagemaker import AutoGluonBatchPredictor, AutoGluonRealtimePredictor
+from ..utils.ag_sagemaker import AutoGluonRealtimePredictor
 from ..utils.aws_utils import setup_sagemaker_session
-from ..utils.constants import SAGEMAKER_RESOURCE_PREFIX
 from ..utils.misc import MostRecentInsertedOrderedDict
-from ..utils.utils import (
-    convert_image_path_to_encoded_bytes_in_dataframe,
-    is_image_file,
-    split_pred_and_pred_proba,
-    unzip_file,
-)
+from ..utils.utils import unzip_file
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +86,10 @@ class CloudPredictor(ABC):
         """
         Whether this CloudPredictor is fitted already
         """
-        return self._fit_job.completed
+        return self.backend._fit_job.completed
 
     @property
-    def endpoint_name(self) -> str:
+    def endpoint_name(self) -> Optional[str]:
         """
         Return the CloudPredictor deployed endpoint name
         """
@@ -131,8 +122,8 @@ class CloudPredictor(ABC):
         info = dict(
             local_output_path=self.local_output_path,
             cloud_output_path=self.cloud_output_path,
-            fit_job=self._fit_job.info(),
-            recent_transform_job=self._batch_transform_jobs.last_value.info()
+            fit_job=self.backend._fit_job.info(),
+            recent_transform_job=self.backend._batch_transform_jobs.last_value.info()
             if len(self._batch_transform_jobs) > 0
             else None,
             transform_jobs=[job_name for job_name in self._batch_transform_jobs.keys()],
@@ -237,6 +228,8 @@ class CloudPredictor(ABC):
         assert (
             not self.backend._fit_job.completed
         ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        if backend_kwargs is None:
+            backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
@@ -324,20 +317,6 @@ class CloudPredictor(ABC):
         local_model_path = self.download_trained_predictor(save_path)
         return predictor_cls.load(local_model_path, **kwargs)
 
-    def _upload_predictor(self, predictor_path, key_prefix):
-        cloud_bucket, _ = s3_path_to_bucket_prefix(self.cloud_output_path)
-        if not is_s3_url(predictor_path):
-            if os.path.isfile(predictor_path):
-                if tarfile.is_tarfile(predictor_path):
-                    predictor_path = self.sagemaker_session.upload_data(
-                        path=predictor_path, bucket=cloud_bucket, key_prefix=key_prefix
-                    )
-                else:
-                    raise ValueError("Please provide a tarball containing the model")
-            else:
-                raise ValueError("Please provide a valid path to the model tarball.")
-        return predictor_path
-
     def deploy(
         self,
         predictor_path: Optional[str] = None,
@@ -383,8 +362,9 @@ class CloudPredictor(ABC):
                     Any extra arguments needed to pass to deploy.
                     Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
         """
+        if backend_kwargs is None:
+            backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_deploy_kwargs(backend_kwargs)
-        self.backend.prepare_deploy(realtime_predictor_cls=self._realtime_predictor_cls)
         self.backend.deploy(
             predictor_path=predictor_path,
             endpoint_name=endpoint_name,
@@ -485,25 +465,6 @@ class CloudPredictor(ABC):
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
         )
 
-    def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
-        # If a directory of images, upload directly
-        if isinstance(test_data, str) and not os.path.isdir(test_data):
-            # either a file to a dataframe, or a file to an image
-            if is_image_file(test_data):
-                logger.warning(
-                    "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
-                )
-            else:
-                test_data = load_pd.load(test_data)
-
-        if isinstance(test_data, pd.DataFrame):
-            test_data = self._prepare_data(test_data, "test", output_type="csv")
-        logger.log(20, "Uploading data...")
-        test_input = self.sagemaker_session.upload_data(path=test_data, bucket=bucket, key_prefix=key_prefix + "/data")
-        logger.log(20, "Data uploaded successfully")
-
-        return test_input
-
     def _prepare_image_predict_args(self, **predict_kwargs):
         split_type = None
         content_type = "application/x-image"
@@ -512,151 +473,6 @@ class CloudPredictor(ABC):
         transformer_kwargs["strategy"] = "SingleRecord"
 
         return {"split_type": split_type, "content_type": content_type, "transformer_kwargs": transformer_kwargs}
-
-    def _predict(
-        self,
-        test_data,
-        test_data_image_column=None,
-        predictor_path=None,
-        framework_version="latest",
-        job_name=None,
-        instance_type="ml.m5.2xlarge",
-        instance_count=1,
-        custom_image_uri=None,
-        wait=True,
-        download=True,
-        persist=True,
-        save_path=None,
-        model_kwargs=None,
-        transformer_kwargs=None,
-        split_pred_proba=True,
-        **kwargs,
-    ):
-        if not predictor_path:
-            predictor_path = self._fit_job.get_output_path()
-            assert predictor_path, "No cloud trained model found."
-
-        if custom_image_uri:
-            framework_version, py_version = None, None
-            logger.log(20, f"Predicting with custom_image_uri=={custom_image_uri}")
-        else:
-            framework_version, py_version = self._parse_framework_version(framework_version, "inference")
-            logger.log(20, f"Predicting with framework_version=={framework_version}")
-
-        output_path = kwargs.get("output_path", None)
-        if not output_path:
-            output_path = self.cloud_output_path
-        assert is_s3_url(output_path)
-        output_path = output_path + "/batch_transform" + f"/{sagemaker.utils.sagemaker_timestamp()}"
-
-        cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(output_path)
-        logger.log(20, "Preparing autogluon predictor...")
-        predictor_path = self._upload_predictor(predictor_path, cloud_key_prefix + "/predictor")
-
-        if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
-
-        if test_data_image_column is not None:
-            logger.warning("Batch inference with image modality could be slow because of some technical details.")
-            logger.warning(
-                "You can always retrieve the model trained with CloudPredictor and do batch inference using your custom solution."
-            )
-            if isinstance(test_data, str):
-                test_data = load_pd.load(test_data)
-            test_data = convert_image_path_to_encoded_bytes_in_dataframe(
-                dataframe=test_data, image_column=test_data_image_column
-            )
-        test_input = self._upload_batch_predict_data(test_data, cloud_bucket, cloud_key_prefix)
-
-        self._serve_script_path = ScriptManager.get_serve_script(self.predictor_type, framework_version)
-        entry_point = self._serve_script_path
-        if model_kwargs is None:
-            model_kwargs = {}
-        model_kwargs = copy.deepcopy(model_kwargs)
-        if transformer_kwargs is None:
-            transformer_kwargs = {}
-        transformer_kwargs = copy.deepcopy(transformer_kwargs)
-        user_entry_point = model_kwargs.pop("entry_point", None)
-        repack_model = False
-        if predictor_path != self._fit_job.get_output_path() or user_entry_point is not None:
-            # Not inference on cloud trained model or not using inference on cloud trained model
-            # Need to repack the code into model. This will slow down batch inference and deployment
-            repack_model = True
-        if user_entry_point:
-            entry_point = user_entry_point
-
-        predictor_cls = AutoGluonBatchPredictor
-        user_predictor_cls = model_kwargs.pop("predictor_cls", None)
-        if user_predictor_cls:
-            logger.warning(
-                "Providing a custom predictor_cls could break the deployment. Please refer to `AutoGluonBatchPredictor` for how to provide a custom predictor"
-            )
-            predictor_cls = user_predictor_cls
-
-        kwargs = copy.deepcopy(kwargs)
-        content_type = kwargs.pop("content_type", None)
-        if "split_type" not in kwargs:
-            split_type = "Line"
-        else:
-            split_type = kwargs.pop("split_type")
-        if not content_type:
-            content_type = "text/csv"
-
-        if not wait:
-            if download:
-                logger.warning(
-                    f"`download={download}` will be ignored because `wait={wait}`. Setting `download` to `False`."
-                )
-                download = False
-        if not download:
-            if persist:
-                logger.warning(
-                    f"`persist={persist}` will be ignored because `download={download}`. Setting `persist` to `False`."
-                )
-                persist = False
-            if save_path:
-                logger.warning(
-                    f"`save_path={save_path}` will be ignored because `download={download}`. Setting `save_path` to `None`."
-                )
-                save_path = None
-
-        batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
-        batch_transform_job.run(
-            model_data=predictor_path,
-            role=self.role_arn,
-            region=self._region,
-            framework_version=framework_version,
-            py_version=py_version,
-            instance_count=instance_count,
-            instance_type=instance_type,
-            entry_point=entry_point,
-            predictor_cls=predictor_cls,
-            output_path=output_path + "/results",
-            test_input=test_input,
-            job_name=job_name,
-            split_type=split_type,
-            content_type=content_type,
-            custom_image_uri=custom_image_uri,
-            wait=wait,
-            transformer_kwargs=transformer_kwargs,
-            model_kwargs=model_kwargs,
-            repack_model=repack_model,
-            **kwargs,
-        )
-        self._batch_transform_jobs[job_name] = batch_transform_job
-
-        pred, pred_proba = None, None
-        if download:
-            results_path = self.download_predict_results(save_path=save_path)
-            # Batch inference will only return json format
-            results = pd.read_json(results_path)
-            pred = results
-            if split_pred_proba:
-                pred, pred_proba = split_pred_and_pred_proba(results)
-        if not persist:
-            os.remove(results_path)
-
-        return pred, pred_proba
 
     def predict(
         self,
@@ -669,20 +485,12 @@ class CloudPredictor(ABC):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        download: bool = True,
-        persist: bool = True,
-        save_path: Optional[str] = None,
-        model_kwargs: Optional[Dict] = None,
-        transformer_kwargs: Optional[Dict] = None,
-        **kwargs,
+        backend_kwargs: Optional[Dict] = None,
     ) -> Optional[pd.Series]:
         """
-        Predict using SageMaker batch transform.
+        Batch inference.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
-        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        then create a transformer with it, and call transform in the end.
 
         Parameters
         ----------
@@ -710,27 +518,30 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        download: bool, default = True
-            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-            Will be ignored if `wait` is `False`.
-        persist: bool, default = True
-            Whether to persist the downloaded batch transform results on the disk.
-            Will be ignored if `download` is `False`
-        save_path: str, default = None,
-            Path to save the downloaded result.
-            Will be ignored if `download` is `False`.
-            If None, CloudPredictor will create one.
-            If `persist` is `False`, file would first be downloaded to this path and then removed.
-        model_kwargs: dict, default = dict()
-            Any extra arguments needed to initialize Sagemaker Model
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
-        transformer_kwargs: dict
-            Any extra arguments needed to pass to transformer.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
-        **kwargs:
-            Any extra arguments needed to pass to transform.
-            Please refer to
-            https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+        backend_kwargs: dict, default = None
+            Any extra arguments needed to pass to the underneath backend.
+            For SageMaker backend, valid keys are:
+                1. download: bool, default = True
+                    Whether to download the batch transform results to the disk and load it after the batch transform finishes.
+                    Will be ignored if `wait` is `False`.
+                2. persist: bool, default = True
+                    Whether to persist the downloaded batch transform results on the disk.
+                    Will be ignored if `download` is `False`
+                3. save_path: str, default = None,
+                    Path to save the downloaded result.
+                    Will be ignored if `download` is `False`.
+                    If None, CloudPredictor will create one.
+                    If `persist` is `False`, file would first be downloaded to this path and then removed.
+                4. model_kwargs: dict, default = dict()
+                    Any extra arguments needed to initialize Sagemaker Model
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                5. transformer_kwargs: dict
+                    Any extra arguments needed to pass to transformer.
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+                6. transform_kwargs:
+                    Any extra arguments needed to pass to transform.
+                    Please refer to
+                    https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
 
         Returns
         -------
@@ -738,7 +549,10 @@ class CloudPredictor(ABC):
             Predict results in Series if `download` is True
             None if `download` is False
         """
-        pred, _ = self._predict(
+        if backend_kwargs is None:
+            backend_kwargs = {}
+        backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
+        return self.backend.predict(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
             predictor_path=predictor_path,
@@ -748,15 +562,8 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            download=download,
-            persist=persist,
-            save_path=save_path,
-            model_kwargs=model_kwargs,
-            transformer_kwargs=transformer_kwargs,
-            **kwargs,
+            backend_kwargs=backend_kwargs,
         )
-
-        return pred
 
     def predict_proba(
         self,
@@ -770,20 +577,12 @@ class CloudPredictor(ABC):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        download: bool = True,
-        persist: bool = True,
-        save_path: Optional[str] = None,
-        model_kwargs: Optional[Dict] = None,
-        transformer_kwargs: Optional[Dict] = None,
-        **kwargs,
+        backend_kwargs: Optional[Dict] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
-        Predict using SageMaker batch transform.
+        Batch inference
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
-        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        then create a transformer with it, and call transform in the end.
 
         Parameters
         ----------
@@ -814,27 +613,30 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        download: bool, default = True
-            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-            Will be ignored if `wait` is `False`.
-        persist: bool, default = True
-            Whether to persist the downloaded batch transform results on the disk.
-            Will be ignored if `download` is `False`
-        save_path: str, default = None,
-            Path to save the downloaded result.
-            Will be ignored if `download` is `False`.
-            If None, CloudPredictor will create one.
-            If `persist` is `False`, file would first be downloaded to this path and then removed.
-        model_kwargs: dict, default = dict()
-            Any extra arguments needed to initialize Sagemaker Model
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
-        transformer_kwargs: dict
-            Any extra arguments needed to pass to transformer.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
-        **kwargs:
-            Any extra arguments needed to pass to transform.
-            Please refer to
-            https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+        backend_kwargs: dict, default = None
+            Any extra arguments needed to pass to the underneath backend.
+            For SageMaker backend, valid keys are:
+                1. download: bool, default = True
+                    Whether to download the batch transform results to the disk and load it after the batch transform finishes.
+                    Will be ignored if `wait` is `False`.
+                2. persist: bool, default = True
+                    Whether to persist the downloaded batch transform results on the disk.
+                    Will be ignored if `download` is `False`
+                3. save_path: str, default = None,
+                    Path to save the downloaded result.
+                    Will be ignored if `download` is `False`.
+                    If None, CloudPredictor will create one.
+                    If `persist` is `False`, file would first be downloaded to this path and then removed.
+                4. model_kwargs: dict, default = dict()
+                    Any extra arguments needed to initialize Sagemaker Model
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                5. transformer_kwargs: dict
+                    Any extra arguments needed to pass to transformer.
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+                6. transform_kwargs:
+                    Any extra arguments needed to pass to transform.
+                    Please refer to
+                    https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
 
         Returns
         -------
@@ -844,7 +646,10 @@ class CloudPredictor(ABC):
             will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
             or a Pandas.Series that's identical to prediction when it's a regression problem.
         """
-        pred, pred_proba = self._predict(
+        if backend_kwargs is None:
+            backend_kwargs = {}
+        backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
+        return self.backend.predict_proba(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
             predictor_path=predictor_path,
@@ -854,18 +659,8 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            download=download,
-            persist=persist,
-            save_path=save_path,
-            model_kwargs=model_kwargs,
-            transformer_kwargs=transformer_kwargs,
-            **kwargs,
+            backend_kwargs=backend_kwargs,
         )
-
-        if include_predict:
-            return pred, pred_proba
-
-        return pred_proba
 
     def download_predict_results(self, job_name: Optional[str] = None, save_path: Optional[str] = None) -> str:
         """

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union
+from typing import Any, Dict, Union
 
 import pandas as pd
 
@@ -27,7 +27,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def parse_backend_fit_kwargs(self, kwargs: Dict) -> List[Dict]:
+    def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to fit call"""
         raise NotImplementedError
 
@@ -63,7 +63,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def parse_backend_deploy_kwargs(self, kwargs: Dict) -> List[Dict]:
+    def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
         raise NotImplementedError
 
@@ -90,6 +90,11 @@ class Backend(ABC):
     @abstractmethod
     def predict_proba_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Realtime prediction probability with the endpoint"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def parse_backend_predict_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
+        """Parse backend specific kwargs and get them ready to be sent to predict call"""
         raise NotImplementedError
 
     @abstractmethod
