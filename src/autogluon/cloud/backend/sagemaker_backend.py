@@ -439,6 +439,13 @@ class SagemakerBackend(Backend):
             )
         )
 
+    def cleanup_deployment(self) -> None:
+        """
+        Delete endpoint, endpoint configuration and deployed model
+        """
+        assert self.endpoint is not None, "No deployed endpoint detected"
+        self.endpoint.delete_endpoint()
+
     def attach_endpoint(self, endpoint: Union[str, SagemakerEndpoint]) -> None:
         """
         Attach the current backend to an existing SageMaker endpoint.

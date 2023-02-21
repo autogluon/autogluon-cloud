@@ -73,6 +73,11 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def cleanup_deployment(self, **kwargs) -> None:
+        """Delete endpoint, and cleanup other artifacts"""
+        raise NotImplementedError
+
+    @abstractmethod
     def attach_endpoint(self, endpoint: Endpoint) -> None:
         """Attach the backend to an existing endpoint"""
         raise NotImplementedError

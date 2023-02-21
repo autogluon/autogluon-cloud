@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, Union
 
+import boto3
 import pandas as pd
 import sagemaker
 
@@ -287,7 +288,7 @@ class CloudPredictor(ABC):
         save_path: str
             Path to the saved model.
         """
-        path = self._fit_job.get_output_path()
+        path = self.backend._fit_job.get_output_path()
         if not save_path:
             save_path = self.local_output_path
         save_path = self._download_predictor(path, save_path)
@@ -298,7 +299,7 @@ class CloudPredictor(ABC):
 
     def to_local_predictor(self, save_path: Optional[str] = None, **kwargs):
         """
-        Convert the SageMaker trained predictor to a local AutoGluon Predictor.
+        Convert the Cloud trained predictor to a local AutoGluon Predictor.
 
         Parameters
         ----------
@@ -662,48 +663,6 @@ class CloudPredictor(ABC):
             backend_kwargs=backend_kwargs,
         )
 
-    def download_predict_results(self, job_name: Optional[str] = None, save_path: Optional[str] = None) -> str:
-        """
-        Download batch transform result
-
-        Parameters
-        ----------
-        job_name: str
-            The specific batch transform job results to download.
-            If None, will download the most recent job results.
-        save_path: str
-            Path to save the downloaded results.
-            If None, CloudPredictor will create one.
-
-        Returns
-        -------
-        str,
-            Path to downloaded results.
-        """
-        if not job_name:
-            job_name = self._batch_transform_jobs.last
-        assert job_name is not None, "There is no batch transform job."
-        job = self._batch_transform_jobs.get(job_name, None)
-        assert job is not None, f"Could not find the batch transform job that matches name {job_name}"
-        result_path = job.get_output_path()
-        assert result_path is not None, "No predict results found."
-        file_name = result_path.split("/")[-1]
-        if not save_path:
-            save_path = self.local_output_path
-        save_path = os.path.expanduser(save_path)
-        save_path = os.path.abspath(save_path)
-        results_save_path = os.path.join(save_path, "batch_transform", job_name)
-        if not os.path.isdir(results_save_path):
-            os.makedirs(results_save_path)
-        results_bucket, results_key_prefix = s3_path_to_bucket_prefix(result_path)
-        self.sagemaker_session.download_data(
-            path=results_save_path, bucket=results_bucket, key_prefix=results_key_prefix
-        )
-        results_save_path = os.path.join(results_save_path, file_name)
-        logger.log(20, f"Batch results have been downloaded to {results_save_path}")
-
-        return results_save_path
-
     def get_batch_transform_job_status(self, job_name: Optional[str] = None) -> str:
         """
         Get the status of the batch transform job.
@@ -729,34 +688,17 @@ class CloudPredictor(ABC):
 
     def cleanup_deployment(self) -> None:
         """
-        Delete endpoint, endpoint configuration and deployed model
+        Delete the deployed endpoint and other artifacts
         """
-        self._delete_endpoint_model()
-        self._delete_endpoint()
-
-    def _delete_endpoint(self, delete_endpoint_config=True):
-        assert self.endpoint, "There is no endpoint deployed yet"
-        logger.log(20, "Deleteing endpoint")
-        self.endpoint.delete_endpoint(delete_endpoint_config=delete_endpoint_config)
-        logger.log(20, "Endpoint deleted")
-        self.endpoint = None
-
-    def _delete_endpoint_model(self):
-        assert self.endpoint, "There is no endpoint deployed yet"
-        logger.log(20, "Deleting endpoint model")
-        self.endpoint.delete_model()
-        logger.log(20, "Endpoint model deleted")
+        self.backend.cleanup_deployment()
 
     def _download_predictor(self, path, save_path):
         logger.log(20, "Downloading trained models to local directory")
         predictor_bucket, predictor_key_prefix = s3_path_to_bucket_prefix(path)
-        self.sagemaker_session.download_data(
-            path=save_path,
-            bucket=predictor_bucket,
-            key_prefix=predictor_key_prefix,
-        )
-        logger.log(20, "Extracting the trained model tarball")
         tarball_path = os.path.join(save_path, "model.tar.gz")
+        s3 = boto3.client("s3")
+        s3.download_file(predictor_bucket, predictor_key_prefix, tarball_path)
+        logger.log(20, "Extracting the trained model tarball")
         save_path = os.path.join(save_path, "AutoGluonModels")
         unzip_file(tarball_path, save_path)
         return save_path
