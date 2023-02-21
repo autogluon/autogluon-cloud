@@ -11,12 +11,12 @@ import yaml
 from botocore.exceptions import ClientError
 from sagemaker import Predictor
 
-from autogluon.common.loaders import load_pd, load_pkl
+from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
 from ..data import FormatConverterFactory
 from ..endpoint.sagemaker_endpoint import SagemakerEndpoint
-from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
+from ..job import SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
     AutoGluonNonRepackInferenceModel,
@@ -34,13 +34,7 @@ from ..utils.iam import (
     replace_trust_relationship_place_holder,
 )
 from ..utils.sagemaker_utils import parse_framework_version
-from ..utils.utils import (
-    convert_image_path_to_encoded_bytes_in_dataframe,
-    is_image_file,
-    split_pred_and_pred_proba,
-    unzip_file,
-    zipfolder,
-)
+from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, split_pred_and_pred_proba, zipfolder
 from .backend import Backend
 from .constant import SAGEMAKER
 

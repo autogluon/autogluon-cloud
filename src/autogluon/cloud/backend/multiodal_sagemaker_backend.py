@@ -1,5 +1,4 @@
-import copy
-from typing import Any, Dict, Optional, Union
+from typing import Optional, Union
 
 import pandas as pd
 from sagemaker import Predictor

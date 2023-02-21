@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import json
 import logging
 import os
 import tarfile
@@ -9,12 +8,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, Union
 
-import boto3
 import pandas as pd
 import sagemaker
-import yaml
-from botocore.exceptions import ClientError
-from packaging import version
 
 from autogluon.common.loaders import load_pd, load_pkl
 from autogluon.common.savers import save_pkl
@@ -24,39 +19,19 @@ from autogluon.common.utils.utils import setup_outputdir
 
 from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
-from ..backend.constant import RAY, SAGEMAKER
-from ..data import FormatConverterFactory
+from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
-from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
+from ..job import SageMakerBatchTransformationJob
 from ..scripts import ScriptManager
-from ..utils.ag_sagemaker import (
-    AutoGluonBatchPredictor,
-    AutoGluonNonRepackInferenceModel,
-    AutoGluonRealtimePredictor,
-    AutoGluonRepackInferenceModel,
-)
+from ..utils.ag_sagemaker import AutoGluonBatchPredictor, AutoGluonRealtimePredictor
 from ..utils.aws_utils import setup_sagemaker_session
-from ..utils.constants import SAGEMAKER_RESOURCE_PREFIX, VALID_ACCEPT
-from ..utils.iam import (
-    IAM_POLICY_FILE_NAME,
-    SAGEMAKER_CLOUD_POLICY,
-    SAGEMAKER_TRUST_RELATIONSHIP,
-    TRUST_RELATIONSHIP_FILE_NAME,
-    replace_iam_policy_place_holder,
-    replace_trust_relationship_place_holder,
-)
+from ..utils.constants import SAGEMAKER_RESOURCE_PREFIX
 from ..utils.misc import MostRecentInsertedOrderedDict
-from ..utils.sagemaker_utils import (
-    retrieve_available_framework_versions,
-    retrieve_latest_framework_version,
-    retrieve_py_versions,
-)
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
     split_pred_and_pred_proba,
     unzip_file,
-    zipfolder,
 )
 
 logger = logging.getLogger(__name__)
