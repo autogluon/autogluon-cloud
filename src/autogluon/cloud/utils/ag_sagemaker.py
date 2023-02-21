@@ -225,11 +225,6 @@ class AutoGluonRealtimePredictor(Predictor):
         super().__init__(*args, serializer=ParquetSerializer(), deserializer=PandasDeserializer(), **kwargs)
 
 
-class AutoGluonImageRealtimePredictor(Predictor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, serializer=NumpySerializer(), deserializer=PandasDeserializer(), **kwargs)
-
-
 class AutoGluonMultiModalRealtimePredictor(Predictor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, serializer=MultiModalSerializer(), deserializer=PandasDeserializer(), **kwargs)

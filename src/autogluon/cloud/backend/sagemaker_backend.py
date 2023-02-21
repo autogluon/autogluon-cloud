@@ -2,6 +2,7 @@ import copy
 import json
 import logging
 import os
+import tarfile
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
@@ -13,9 +14,15 @@ from autogluon.common.loaders import load_pd, load_pkl
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
 from ..data import FormatConverterFactory
-from ..endpoint.endpoint import Endpoint
+from ..endpoint.sagemaker_endpoint import SagemakerEndpoint
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
+from ..utils.ag_sagemaker import (
+    AutoGluonBatchPredictor,
+    AutoGluonNonRepackInferenceModel,
+    AutoGluonRealtimePredictor,
+    AutoGluonRepackInferenceModel,
+)
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import SAGEMAKER_RESOURCE_PREFIX, VALID_ACCEPT
 from ..utils.iam import (
@@ -76,6 +83,7 @@ class SagemakerBackend(Backend):
         self.endpoint = None
         self._region = self.sagemaker_session.boto_region_name
         self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
+        self._realtime_predictor_cls = AutoGluonRealtimePredictor
 
     def generate_default_permission(
         self, account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
@@ -134,6 +142,30 @@ class SagemakerBackend(Backend):
         fit_kwargs = kwargs.get("fit_kwargs", None)
 
         return [autogluon_sagemaker_estimator_kwargs, fit_kwargs]
+
+    def attach_job(self, job_name: str) -> None:
+        """
+        Attach to a existing training job.
+        This is useful when the local process crashed and you want to reattach to the previous job
+
+        Parameters
+        ----------
+        job_name: str
+            The name of the job being attached
+        """
+        self._fit_job = SageMakerFitJob.attach(job_name)
+
+    def get_fit_job_status(self) -> str:
+        """
+        Get the status of the training job.
+        This is useful when the user made an asynchronous call to the `fit()` function
+
+        Returns
+        -------
+        str,
+            Status of the job
+        """
+        return self._fit_job.get_job_status()
 
     def fit(
         self,
@@ -276,9 +308,157 @@ class SagemakerBackend(Backend):
             **kwargs,
         )
 
-    def deploy(self, **kwargs) -> Endpoint:
-        """Deploy and endpoint"""
-        raise NotImplementedError
+    def parse_backend_deploy_kwargs(self, kwargs: Dict) -> List[Dict]:
+        """Parse backend specific kwargs and get them ready to be sent to deploy call"""
+        model_kwargs = kwargs.get("model_kwargs", None)
+        deploy_kwargs = kwargs.get("deploy_kwargs", None)
+
+        return [model_kwargs, deploy_kwargs]
+
+    def prepare_deploy(self, realtime_predictor_cls, **kwargs) -> None:
+        """Things to be configured before deploy goes here"""
+        self._realtime_predictor_cls = realtime_predictor_cls
+
+    def deploy(
+        self,
+        predictor_path: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
+        framework_version: str = "latest",
+        instance_type: str = "ml.m5.2xlarge",
+        initial_instance_count: int = 1,
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        model_kwargs: Optional[Dict] = None,
+        **kwargs,
+    ) -> None:
+        """
+        Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
+        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
+        and then deploy it to the endpoint.
+
+        Parameters
+        ----------
+        predictor_path: str
+            Path to the predictor tarball you want to deploy.
+            Path can be both a local path or a S3 location.
+            If None, will deploy the most recent trained predictor trained with `fit()`.
+        endpoint_name: str
+            The endpoint name to use for the deployment.
+            If None, CloudPredictor will create one with prefix `ag-cloudpredictor`
+        framework_version: str, default = `latest`
+            Inference container version of autogluon.
+            If `latest`, will use the latest available container version.
+            If provided a specific version, will use this version.
+            If `custom_image_uri` is set, this argument will be ignored.
+        instance_type: str, default = 'ml.m5.2xlarge'
+            Instance to be deployed for the endpoint
+        initial_instance_count: int, default = 1,
+            Initial number of instances to be deployed for the endpoint
+        wait: Bool, default = True,
+            Whether to wait for the endpoint to be deployed.
+            To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
+        model_kwargs: dict, default = dict()
+            Any extra arguments needed to initialize Sagemaker Model
+            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+        **kwargs:
+            Any extra arguments needed to pass to deploy.
+            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
+        """
+        assert (
+            self.endpoint is None
+        ), "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
+        if not predictor_path:
+            predictor_path = self._fit_job.get_output_path()
+            assert predictor_path, "No cloud trained model found."
+        predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
+
+        if not endpoint_name:
+            endpoint_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+        if custom_image_uri:
+            framework_version, py_version = None, None
+            logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
+        else:
+            framework_version, py_version = parse_framework_version(
+                framework_version, "inference", minimum_version="0.6.0"
+            )
+            logger.log(20, f"Deploying with framework_version=={framework_version}")
+
+        self._serve_script_path = ScriptManager.get_serve_script(self.predictor_type, framework_version)
+        entry_point = self._serve_script_path
+        if model_kwargs is None:
+            model_kwargs = {}
+        model_kwargs = copy.deepcopy(model_kwargs)
+        user_entry_point = model_kwargs.pop("entry_point", None)
+        if user_entry_point:
+            logger.warning(
+                f"Providing a custom entry point could break the deployment. Please refer to `{entry_point}` for our implementation"
+            )
+            entry_point = user_entry_point
+
+        repack_model = False
+        if predictor_path != self._fit_job.get_output_path() or user_entry_point is not None:
+            # Not inference on cloud trained model or not using inference on cloud trained model
+            # Need to repack the code into model. This will slow down batch inference and deployment
+            repack_model = True
+        predictor_cls = self._realtime_predictor_cls
+        user_predictor_cls = model_kwargs.pop("predictor_cls", None)
+        if user_predictor_cls:
+            logger.warning(
+                "Providing a custom predictor_cls could break the deployment.",
+                "Please refer to `AutoGluonRealtimePredictor` for how to provide a custom predictor",
+            )
+            predictor_cls = user_predictor_cls
+
+        if repack_model:
+            model_cls = AutoGluonRepackInferenceModel
+        else:
+            model_cls = AutoGluonNonRepackInferenceModel
+        model = model_cls(
+            model_data=predictor_path,
+            role=self.role_arn,
+            region=self._region,
+            framework_version=framework_version,
+            py_version=py_version,
+            instance_type=instance_type,
+            custom_image_uri=custom_image_uri,
+            entry_point=entry_point,
+            predictor_cls=predictor_cls,
+            **model_kwargs,
+        )
+
+        logger.log(20, "Deploying model to the endpoint")
+        self.endpoint = SagemakerEndpoint(
+            model.deploy(
+                endpoint_name=endpoint_name,
+                instance_type=instance_type,
+                initial_instance_count=initial_instance_count,
+                wait=wait,
+                **kwargs,
+            )
+        )
+
+    def attach_endpoint(self, endpoint: Union[str, SagemakerEndpoint]) -> None:
+        """
+        Attach the current backend to an existing SageMaker endpoint.
+
+        Parameters
+        ----------
+        endpoint: str or  :class:`SagemakerEndpoint`
+            If str is passed, it should be the name of the endpoint being attached to.
+        """
+        assert (
+            self.endpoint is None
+        ), "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
+        if type(endpoint) == str:
+            endpoint = self._realtime_predictor_cls(
+                endpoint_name=endpoint,
+                sagemaker_session=self.sagemaker_session,
+            )
+            self.endpoint = SagemakerEndpoint(endpoint)
+        elif isinstance(endpoint, SagemakerEndpoint):
+            self.endpoint = endpoint
+        else:
+            raise ValueError(f"Please provide either an endpoint name or an endpoint of type `{SagemakerEndpoint}`")
 
     def predict_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Realtime prediction with the endpoint"""
@@ -402,3 +582,17 @@ class SagemakerBackend(Backend):
             )
             logger.log(20, "Images uploaded successfully")
         return upload_image_path
+
+    def _upload_predictor(self, predictor_path, key_prefix):
+        cloud_bucket, _ = s3_path_to_bucket_prefix(self.cloud_output_path)
+        if not is_s3_url(predictor_path):
+            if os.path.isfile(predictor_path):
+                if tarfile.is_tarfile(predictor_path):
+                    predictor_path = self.sagemaker_session.upload_data(
+                        path=predictor_path, bucket=cloud_bucket, key_prefix=key_prefix
+                    )
+                else:
+                    raise ValueError("Please provide a tarball containing the model")
+            else:
+                raise ValueError("Please provide a valid path to the model tarball.")
+        return predictor_path

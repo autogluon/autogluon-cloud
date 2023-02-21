@@ -26,6 +26,7 @@ from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import RAY, SAGEMAKER
 from ..data import FormatConverterFactory
+from ..endpoint.endpoint import Endpoint
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
@@ -205,12 +206,10 @@ class CloudPredictor(ABC):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_kwargs: Dict = None,
+        backend_kwargs: Optional[Dict] = None,
     ) -> CloudPredictor:
         """
-        Fit the predictor with SageMaker.
-        This function will first upload necessary config and train data to s3 bucket.
-        Then launch a SageMaker training job with the AutoGluon training container.
+        Fit the predictor with the backend.
 
         Parameters
         ----------
@@ -287,7 +286,7 @@ class CloudPredictor(ABC):
         job_name: str
             The name of the job being attached
         """
-        self._fit_job = SageMakerFitJob.attach(job_name)
+        self.backend.attach_job(job_name)
 
     def get_fit_job_status(self) -> str:
         """
@@ -299,7 +298,7 @@ class CloudPredictor(ABC):
         str,
         Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
         """
-        return self._fit_job.get_job_status()
+        return self.backend.get_fit_job_status()
 
     def download_trained_predictor(self, save_path: Optional[str] = None) -> str:
         """
@@ -369,13 +368,10 @@ class CloudPredictor(ABC):
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        model_kwargs: Optional[Dict] = None,
-        **kwargs,
+        backend_kwargs: Optional[Dict] = None,
     ) -> None:
         """
-        Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        and then deploy it to the endpoint.
+        Deploy a predictor to an endpoint, which can be used to do real-time inference later.
 
         Parameters
         ----------
@@ -398,105 +394,39 @@ class CloudPredictor(ABC):
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
-        model_kwargs: dict, default = dict()
-            Any extra arguments needed to initialize Sagemaker Model
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
-        **kwargs:
-            Any extra arguments needed to pass to deploy.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
+        backend_kwargs: dict, default = None
+            Any extra arguments needed to pass to the underneath backend.
+            For SageMaker backend, valid keys are:
+                1. model_kwargs: dict, default = dict()
+                    Any extra arguments needed to initialize Sagemaker Model
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                2. deploy_kwargs
+                    Any extra arguments needed to pass to deploy.
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
         """
-        assert (
-            self.endpoint is None
-        ), "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
-        if not predictor_path:
-            predictor_path = self._fit_job.get_output_path()
-            assert predictor_path, "No cloud trained model found."
-        predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
-
-        if not endpoint_name:
-            endpoint_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
-        if custom_image_uri:
-            framework_version, py_version = None, None
-            logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
-        else:
-            framework_version, py_version = self._parse_framework_version(framework_version, "inference")
-            logger.log(20, f"Deploying with framework_version=={framework_version}")
-
-        self._serve_script_path = ScriptManager.get_serve_script(self.predictor_type, framework_version)
-        entry_point = self._serve_script_path
-        if model_kwargs is None:
-            model_kwargs = {}
-        model_kwargs = copy.deepcopy(model_kwargs)
-        user_entry_point = model_kwargs.pop("entry_point", None)
-        if user_entry_point:
-            logger.warning(
-                f"Providing a custom entry point could break the deployment. Please refer to `{entry_point}` for our implementation"
-            )
-            entry_point = user_entry_point
-
-        repack_model = False
-        if predictor_path != self._fit_job.get_output_path() or user_entry_point is not None:
-            # Not inference on cloud trained model or not using inference on cloud trained model
-            # Need to repack the code into model. This will slow down batch inference and deployment
-            repack_model = True
-        predictor_cls = self._realtime_predictor_cls
-        user_predictor_cls = model_kwargs.pop("predictor_cls", None)
-        if user_predictor_cls:
-            logger.warning(
-                "Providing a custom predictor_cls could break the deployment.",
-                "Please refer to `AutoGluonRealtimePredictor` for how to provide a custom predictor",
-            )
-            predictor_cls = user_predictor_cls
-
-        if repack_model:
-            model_cls = AutoGluonRepackInferenceModel
-        else:
-            model_cls = AutoGluonNonRepackInferenceModel
-        model = model_cls(
-            model_data=predictor_path,
-            role=self.role_arn,
-            region=self._region,
-            framework_version=framework_version,
-            py_version=py_version,
-            instance_type=instance_type,
-            custom_image_uri=custom_image_uri,
-            entry_point=entry_point,
-            predictor_cls=predictor_cls,
-            **model_kwargs,
-        )
-
-        logger.log(20, "Deploying model to the endpoint")
-        self.endpoint = model.deploy(
+        backend_kwargs = self.backend.parse_backend_deploy_kwargs(backend_kwargs)
+        self.backend.prepare_deploy(realtime_predictor_cls=self._realtime_predictor_cls)
+        self.backend.deploy(
+            predictor_path=predictor_path,
             endpoint_name=endpoint_name,
+            framework_version=framework_version,
             instance_type=instance_type,
             initial_instance_count=initial_instance_count,
+            custom_image_uri=custom_image_uri,
             wait=wait,
-            **kwargs,
+            *backend_kwargs,
         )
 
-    def attach_endpoint(self, endpoint: Union[str, AutoGluonRealtimePredictor]) -> None:
+    def attach_endpoint(self, endpoint: Union[str, Endpoint]) -> None:
         """
-        Attach the current CloudPredictor to an existing SageMaker endpoint.
+        Attach the current CloudPredictor to an existing endpoint.
 
         Parameters
         ----------
-        endpoint: str or  :class:`AutoGluonRealtimePredictor`
+        endpoint: str or  :class:`Endpoint`
             If str is passed, it should be the name of the endpoint being attached to.
         """
-        assert (
-            self.endpoint is None
-        ), "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
-        if type(endpoint) == str:
-            self.endpoint = self._realtime_predictor_cls(
-                endpoint_name=endpoint,
-                sagemaker_session=self.sagemaker_session,
-            )
-        elif isinstance(endpoint, self._realtime_predictor_cls):
-            self.endpoint = endpoint
-        else:
-            raise ValueError(
-                f"Please provide either an endpoint name or an endpoint of type `{self._realtime_predictor_cls.__name__}`"
-            )
+        self.backend.attach_endpoint(endpoint)
 
     def detach_endpoint(self) -> AutoGluonRealtimePredictor:
         """
