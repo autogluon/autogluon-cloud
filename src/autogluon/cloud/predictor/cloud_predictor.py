@@ -23,7 +23,6 @@ from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
 from ..utils.ag_sagemaker import AutoGluonRealtimePredictor
 from ..utils.aws_utils import setup_sagemaker_session
-from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.utils import unzip_file
 
 logger = logging.getLogger(__name__)
@@ -659,7 +658,7 @@ class CloudPredictor(ABC):
             wait=wait,
             backend_kwargs=backend_kwargs,
         )
-        
+
     def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get general info of the batch inference job.

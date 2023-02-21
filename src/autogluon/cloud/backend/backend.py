@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Union, Optional, List
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -51,7 +51,7 @@ class Backend(ABC):
         This is useful when the user made an asynchronous call to the `fit()` function
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_fit_job_info(self) -> Dict[str, Any]:
         """
@@ -103,7 +103,7 @@ class Backend(ABC):
     def parse_backend_predict_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to predict call"""
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -111,7 +111,7 @@ class Backend(ABC):
         If job_name not specified, return the info of the most recent batch inference job
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
         """
@@ -119,7 +119,7 @@ class Backend(ABC):
         If job_name not specified, return the info of the most recent batch inference job
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_batch_inference_jobs(self) -> List[str]:
         """Get a list of names of all batch inference jobs"""
