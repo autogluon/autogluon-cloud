@@ -64,7 +64,6 @@ class CloudPredictor(ABC):
         self.local_output_path = self._setup_local_output_path(local_output_path)
         self.cloud_output_path = self._setup_cloud_output_path(cloud_output_path)
         self.backend: Backend = BackendFactory.get_backend(self.backend_map[backend])
-        self._batch_transform_jobs = MostRecentInsertedOrderedDict()
 
     @property
     @abstractmethod
@@ -123,11 +122,9 @@ class CloudPredictor(ABC):
         info = dict(
             local_output_path=self.local_output_path,
             cloud_output_path=self.cloud_output_path,
-            fit_job=self.backend._fit_job.info(),
-            recent_transform_job=self.backend._batch_transform_jobs.last_value.info()
-            if len(self._batch_transform_jobs) > 0
-            else None,
-            transform_jobs=[job_name for job_name in self._batch_transform_jobs.keys()],
+            fit_job=self.backend.get_fit_job_info(),
+            recent_batch_inference_job=self.backend.get_batch_inference_job_info(),
+            batch_inference_jobs=self.backend.get_batch_inference_jobs(),
             endpoint=self.endpoint_name,
         )
         return info
@@ -662,10 +659,17 @@ class CloudPredictor(ABC):
             wait=wait,
             backend_kwargs=backend_kwargs,
         )
-
-    def get_batch_transform_job_status(self, job_name: Optional[str] = None) -> str:
+        
+    def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get the status of the batch transform job.
+        Get general info of the batch inference job.
+        If job_name not specified, return the info of the most recent batch inference job
+        """
+        return self.backend.get_batch_inference_job_info(job_name)
+
+    def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
+        """
+        Get the status of the batch inference job.
         This is useful when the user made an asynchronous call to the `predict()` function
 
         Parameters
@@ -679,12 +683,7 @@ class CloudPredictor(ABC):
         str,
         Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
         """
-        if not job_name:
-            job_name = self._batch_transform_jobs.last
-        job = self._batch_transform_jobs.get(job_name, None)
-        if job:
-            return job.get_job_status()
-        return "NotCreated"
+        return self.backend.get_batch_inference_job_status(job_name)
 
     def cleanup_deployment(self) -> None:
         """

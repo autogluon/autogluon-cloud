@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, Optional, List
 
 import pandas as pd
 
@@ -49,11 +49,13 @@ class Backend(ABC):
         """
         Get the status of the training job.
         This is useful when the user made an asynchronous call to the `fit()` function
-
-        Returns
-        -------
-        str,
-            Status of the job
+        """
+        raise NotImplementedError
+    
+    @abstractmethod
+    def get_fit_job_info(self) -> Dict[str, Any]:
+        """
+        Get general info of the training job.
         """
         raise NotImplementedError
 
@@ -100,6 +102,27 @@ class Backend(ABC):
     @abstractmethod
     def parse_backend_predict_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to predict call"""
+        raise NotImplementedError
+    
+    @abstractmethod
+    def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get general info of the batch inference job.
+        If job_name not specified, return the info of the most recent batch inference job
+        """
+        raise NotImplementedError
+    
+    @abstractmethod
+    def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
+        """
+        Get general status of the batch inference job.
+        If job_name not specified, return the info of the most recent batch inference job
+        """
+        raise NotImplementedError
+    
+    @abstractmethod
+    def get_batch_inference_jobs(self) -> List[str]:
+        """Get a list of names of all batch inference jobs"""
         raise NotImplementedError
 
     @abstractmethod

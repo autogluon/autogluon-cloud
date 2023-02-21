@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import tarfile
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union, List
 
 import pandas as pd
 import sagemaker
@@ -172,6 +172,17 @@ class SagemakerBackend(Backend):
             Status of the job
         """
         return self._fit_job.get_job_status()
+    
+    def get_fit_job_info(self) -> Dict[str, Any]:
+        """
+        Get general info of the training job.
+        
+        Returns
+        -------
+        Dict,
+            General info of the job
+        """
+        raise self._fit_job.info()
 
     def fit(
         self,
@@ -565,6 +576,51 @@ class SagemakerBackend(Backend):
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
         )
+        
+    def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get general info of the batch inference job.
+        If job_name not specified, return the info of the most recent batch inference job
+        
+        Returns
+        -------
+        Optional[Dict[str, Any]],
+            A dictinary containing general info of the job.
+        """
+        if not job_name:
+            job_name = self._batch_transform_jobs.last
+        job: SageMakerBatchTransformationJob = self._batch_transform_jobs.get(job_name, None)
+        if job:
+            return job.info()
+        return None
+    
+    def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
+        """
+        Get general status of the batch inference job.
+        If job_name not specified, return the info of the most recent batch inference job
+        
+        Returns
+        -------
+        str,
+        Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+        """
+        if not job_name:
+            job_name = self._batch_transform_jobs.last
+        job: SageMakerBatchTransformationJob = self._batch_transform_jobs.get(job_name, None)
+        if job:
+            return job.get_job_status()
+        return "NotCreated"
+    
+    def get_batch_inference_jobs(self) -> List[str]:
+        """
+        Get a list of names of all batch inference jobs
+        
+        Returns
+        -------
+        List[str],
+            a list of names of all batch inference jobs
+        """
+        return [job_name for job_name in self._batch_transform_jobs.keys()]
 
     def predict(
         self,
