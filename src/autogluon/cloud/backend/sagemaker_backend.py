@@ -459,6 +459,13 @@ class SagemakerBackend(Backend):
             self.endpoint = endpoint
         else:
             raise ValueError(f"Please provide either an endpoint name or an endpoint of type `{SagemakerEndpoint}`")
+        
+    def detach_endpoint(self) -> SagemakerEndpoint:
+        """Detach the current endpoint and return it"""
+        assert self.endpoint is not None, "There is no attached endpoint"
+        detached_endpoint = self.endpoint
+        self.endpoint = None
+        return detached_endpoint
 
     def predict_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Realtime prediction with the endpoint"""

@@ -80,6 +80,12 @@ class Backend(ABC):
     @abstractmethod
     def attach_endpoint(self, endpoint: Endpoint) -> None:
         """Attach the backend to an existing endpoint"""
+        raise NotImplementedError
+        
+    @abstractmethod
+    def detach_endpoint(self) -> Endpoint:
+        """Detach the current endpoint and return it"""
+        raise NotImplementedError
 
     @abstractmethod
     def predict_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
