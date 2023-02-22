@@ -10,10 +10,8 @@ class ClusterManager(ABC):
 
     @abstractmethod
     @staticmethod
-    def generate_trust_relationship_and_iam_policy_file() -> Dict[str, str]:
-        """
-        Generate trust relationship and iam policy required to manage cluster
-        """
+    def generate_default_permission(self, **kwargs) -> Dict[str, str]:
+        """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
         raise NotImplementedError
 
     @abstractmethod

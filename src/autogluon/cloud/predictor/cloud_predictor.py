@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -21,8 +20,6 @@ from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
-from ..utils.ag_sagemaker import AutoGluonRealtimePredictor
-from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.utils import unzip_file
 
 logger = logging.getLogger(__name__)
