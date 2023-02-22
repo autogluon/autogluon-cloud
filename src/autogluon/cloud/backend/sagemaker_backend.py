@@ -76,7 +76,7 @@ class SagemakerBackend(Backend):
                 "Failed to get IAM role. Did you configure and authenticate the IAM role?",
                 "For more information, https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html",
                 f"If you do not have a role created yet, \
-                You can use {self.__class__.__name__}.generate_trust_relationship_and_iam_policy_file() to get the required trust relationship and iam policy",
+                You can use {self.__class__.__name__}.generate_default_permission() to get the required trust relationship and iam policy",
                 "You can then use the generated trust relationship and IAM policy to create an IAM role",
                 "For more information, https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html",
                 "IMPORTANT: Please review the generated trust relationship and IAM policy before you create an IAM role with them",
@@ -161,6 +161,11 @@ class SagemakerBackend(Backend):
         """
         self._fit_job = SageMakerFitJob.attach(job_name)
 
+    @property
+    def is_fit(self) -> bool:
+        """Whether the backend is fitted"""
+        return self._fit_job.completed
+
     def get_fit_job_status(self) -> str:
         """
         Get the status of the training job.
@@ -172,6 +177,17 @@ class SagemakerBackend(Backend):
             Status of the job
         """
         return self._fit_job.get_job_status()
+
+    def get_fit_job_output_path(self) -> str:
+        """
+        Get the output path in the cloud of the trained artifact
+
+        Returns
+        -------
+        str,
+            Output path of the job
+        """
+        return self._fit_job.get_output_path()
 
     def get_fit_job_info(self) -> Dict[str, Any]:
         """

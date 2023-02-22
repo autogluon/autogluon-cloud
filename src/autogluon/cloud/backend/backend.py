@@ -47,11 +47,22 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    @property
+    def is_fit(self) -> bool:
+        """Whether the backend is fitted"""
+        raise NotImplementedError
+
+    @abstractmethod
     def get_fit_job_status(self) -> str:
         """
         Get the status of the training job.
         This is useful when the user made an asynchronous call to the `fit()` function
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_fit_job_output_path(self) -> str:
+        """Get the output path in the cloud of the trained artifact"""
         raise NotImplementedError
 
     @abstractmethod

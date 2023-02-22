@@ -85,15 +85,15 @@ class CloudPredictor(ABC):
         """
         Whether this CloudPredictor is fitted already
         """
-        return self.backend._fit_job.completed
+        return self.backend.is_fit
 
     @property
     def endpoint_name(self) -> Optional[str]:
         """
         Return the CloudPredictor deployed endpoint name
         """
-        if self.endpoint:
-            return self.endpoint.endpoint_name
+        if self.backend.endpoint:
+            return self.backend.endpoint.endpoint_name
         return None
 
     @staticmethod
@@ -223,7 +223,7 @@ class CloudPredictor(ABC):
         `CloudPredictor` object. Returns self.
         """
         assert (
-            not self.backend._fit_job.completed
+            not self.backend.is_fit
         ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         if backend_kwargs is None:
             backend_kwargs = {}
@@ -284,7 +284,7 @@ class CloudPredictor(ABC):
         save_path: str
             Path to the saved model.
         """
-        path = self.backend._fit_job.get_output_path()
+        path = self.backend.get_fit_job_output_path()
         if not save_path:
             save_path = self.local_output_path
         save_path = self._download_predictor(path, save_path)
@@ -384,18 +384,15 @@ class CloudPredictor(ABC):
         """
         self.backend.attach_endpoint(endpoint)
 
-    def detach_endpoint(self) -> AutoGluonRealtimePredictor:
+    def detach_endpoint(self) -> Endpoint:
         """
         Detach the current endpoint and return it.
 
         Returns
         -------
-        `AutoGluonRealtimePredictor` object.
+        `Endpoint` object.
         """
-        assert self.endpoint is not None, "There is no attached endpoint"
-        detached_endpoint = self.endpoint
-        self.endpoint = None
-        return detached_endpoint
+        return self.backend.detach_endpoint()
 
     def predict_real_time(
         self,
@@ -461,15 +458,6 @@ class CloudPredictor(ABC):
         return self.backend.predict_proba_realtime(
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
         )
-
-    def _prepare_image_predict_args(self, **predict_kwargs):
-        split_type = None
-        content_type = "application/x-image"
-        predict_kwargs = copy.deepcopy(predict_kwargs)
-        transformer_kwargs = predict_kwargs.pop("transformer_kwargs", dict())
-        transformer_kwargs["strategy"] = "SingleRecord"
-
-        return {"split_type": split_type, "content_type": content_type, "transformer_kwargs": transformer_kwargs}
 
     def predict(
         self,
