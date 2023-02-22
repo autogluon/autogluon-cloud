@@ -707,32 +707,13 @@ class CloudPredictor(ABC):
         """
         path = self.local_output_path
         predictor_file_name = self.predictor_file_name
-        temp_session = self.sagemaker_session
-        temp_region = self._region
-        self.sagemaker_session = None
-        self._region = None
-        temp_endpoint = None
-        if self.endpoint:
-            temp_endpoint = self.endpoint
-            self._endpoint_saved = self.endpoint_name
-            self.endpoint = None
-
         save_pkl.save(path=os.path.join(path, predictor_file_name), object=self)
-        self.sagemaker_session = temp_session
-        self._region = temp_region
-        if temp_endpoint:
-            self.endpoint = temp_endpoint
-            self._endpoint_saved = None
+
         if not silent:
             logger.log(
                 20,
                 f"{type(self).__name__} saved. To load, use: predictor = {type(self).__name__}.load('{self.local_output_path!r}')",
             )
-
-    def _load_jobs(self):
-        self._fit_job.session = self.sagemaker_session
-        for job in self._batch_transform_jobs:
-            job.session = self.sagemaker_session
 
     @classmethod
     def load(cls, path: str, verbosity: Optional[int] = None) -> CloudPredictor:
@@ -755,11 +736,5 @@ class CloudPredictor(ABC):
 
         path = setup_outputdir(path, warn_if_exist=False)  # replace ~ with absolute path if it exists
         predictor: CloudPredictor = load_pkl.load(path=os.path.join(path, cls.predictor_file_name))
-        predictor.sagemaker_session = setup_sagemaker_session()
-        predictor._region = predictor.sagemaker_session.boto_region_name
-        predictor._load_jobs()
-        if hasattr(predictor, "_endpoint_saved") and predictor._endpoint_saved:
-            predictor.attach_endpoint(predictor._endpoint_saved)
-            predictor._endpoint_saved = None
         # TODO: Version compatibility check
         return predictor

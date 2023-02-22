@@ -1200,3 +1200,26 @@ class SagemakerBackend(Backend):
             os.remove(results_path)
 
         return pred, pred_proba
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Custom implementation of the pickle process"""
+        d = self.__dict__.copy()
+        d["sagemaker_session"] = None
+        d["_region"] = None
+        if self.endpoint is not None:
+            d["_endpoint_saved"] = self.endpoint.endpoint_name
+            d["endpoint"] = None
+
+        return d
+
+    def __setstate__(self, state):
+        """Custom implementation of the unpickle process"""
+        self.__dict__.update(state)
+        self.sagemaker_session = setup_sagemaker_session()
+        self._region = self.sagemaker_session.boto_region_name
+        if hasattr(self, "_endpoint_saved") and self._endpoint_saved is not None:
+            self.endpoiont = self.attach_endpoint(self._endpoint_saved)
+            self._endpoint_saved = None
+        self._fit_job.session = self.sagemaker_session
+        for job in self._batch_transform_jobs:
+            job.session = self.sagemaker_session
