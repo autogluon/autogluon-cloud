@@ -123,7 +123,7 @@ class CloudTestHelper:
             pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
             assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor.info()
-        assert info["recent_transform_job"]["status"] == "Completed"
+        assert info["recent_batch_inference_job"]["status"] == "Completed"
 
     @staticmethod
     def test_functionality(
@@ -175,7 +175,7 @@ class CloudTestHelper:
         pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
         assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor.info()
-        assert info["recent_transform_job"]["status"] == "Completed"
+        assert info["recent_batch_inference_job"]["status"] == "Completed"
 
         # Test deploy with already trained predictor
         trained_predictor_path = cloud_predictor._fit_job.get_output_path()
@@ -188,7 +188,7 @@ class CloudTestHelper:
         )
         assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor_no_train.info()
-        assert info["recent_transform_job"]["status"] == "Completed"
+        assert info["recent_batch_inference_job"]["status"] == "Completed"
 
 
 def pytest_addoption(parser):
