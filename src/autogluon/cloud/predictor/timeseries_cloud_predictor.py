@@ -165,7 +165,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Pandas.DataFrame
         Predict results in DataFrame
         """
-        return self.backend.predict_realtime(
+        return self.backend.predict_real_time(
             test_data=test_data,
             id_column=id_column,
             timestamp_column=timestamp_column,

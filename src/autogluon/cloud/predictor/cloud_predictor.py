@@ -456,7 +456,7 @@ class CloudPredictor(ABC):
         Pandas.DataFrame or Pandas.Series
             Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
         """
-        return self.backend.predict_proba_realtime(
+        return self.backend.predict_proba_real_time(
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
         )
 
