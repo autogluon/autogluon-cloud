@@ -8,10 +8,7 @@ from .sagemaker_backend import SagemakerBackend
 
 
 class TabularSagemakerBackend(SagemakerBackend):
-    @property
-    def name(self) -> str:
-        """Name of this backend"""
-        return TABULAR_SAGEMAKER
+    name = TABULAR_SAGEMAKER
 
     def _construct_config(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         assert self.predictor_type is not None

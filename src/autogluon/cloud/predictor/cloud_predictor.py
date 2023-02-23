@@ -59,7 +59,12 @@ class CloudPredictor(ABC):
         set_logger_verbosity(self.verbosity, logger=logger)
         self.local_output_path = self._setup_local_output_path(local_output_path)
         self.cloud_output_path = self._setup_cloud_output_path(cloud_output_path)
-        self.backend: Backend = BackendFactory.get_backend(self.backend_map[backend])
+        self.backend: Backend = BackendFactory.get_backend(
+            backend=self.backend_map[backend],
+            local_output_path=self.local_output_path,
+            cloud_output_path=self.cloud_output_path,
+            predictor_type=self.predictor_type,
+        )
 
     @property
     @abstractmethod
@@ -237,7 +242,7 @@ class CloudPredictor(ABC):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            *backend_kwargs,
+            **backend_kwargs,
         )
 
         return self
@@ -367,7 +372,7 @@ class CloudPredictor(ABC):
             initial_instance_count=initial_instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            *backend_kwargs,
+            **backend_kwargs,
         )
 
     def attach_endpoint(self, endpoint: Union[str, Endpoint]) -> None:
@@ -544,7 +549,7 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            backend_kwargs=backend_kwargs,
+            **backend_kwargs,
         )
 
     def predict_proba(
@@ -641,7 +646,7 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            backend_kwargs=backend_kwargs,
+            **backend_kwargs,
         )
 
     def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:

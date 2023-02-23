@@ -10,10 +10,7 @@ from .sagemaker_backend import SagemakerBackend
 
 
 class TimeSeriesSagemakerBackend(SagemakerBackend):
-    @property
-    def name(self) -> str:
-        """Name of this backend"""
-        return TIMESERIES_SAGEMAKER
+    name = TIMESERIES_SAGEMAKER
 
     def _preprocess_data(
         self,

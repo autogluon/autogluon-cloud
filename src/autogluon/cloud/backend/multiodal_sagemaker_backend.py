@@ -14,10 +14,7 @@ from .sagemaker_backend import SagemakerBackend
 
 
 class MultiModalSagemakerBackend(SagemakerBackend):
-    @property
-    def name(self) -> str:
-        """Name of this backend"""
-        return MULTIMODL_SAGEMAKER
+    name = MULTIMODL_SAGEMAKER
 
     @property
     def _realtime_predictor_cls(self) -> Predictor:

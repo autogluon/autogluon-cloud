@@ -5,8 +5,8 @@ import pandas as pd
 
 
 class Endpoint(ABC):
-    @abstractmethod
     @property
+    @abstractmethod
     def endpoint_name(self) -> str:
         """Name of the endpoint"""
         raise NotImplementedError

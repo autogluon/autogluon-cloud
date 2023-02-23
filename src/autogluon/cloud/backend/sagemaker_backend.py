@@ -49,6 +49,8 @@ logger = logging.getLogger(__name__)
 
 
 class SagemakerBackend(Backend):
+    name = SAGEMAKER
+
     def __init__(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
         self.initialize(
             local_output_path=local_output_path,
@@ -56,11 +58,6 @@ class SagemakerBackend(Backend):
             predictor_type=predictor_type,
             **kwargs,
         )
-
-    @property
-    def name(self) -> str:
-        """Name of this backend"""
-        return SAGEMAKER
 
     @property
     def _realtime_predictor_cls(self) -> Predictor:
@@ -198,7 +195,7 @@ class SagemakerBackend(Backend):
         Dict,
             General info of the job
         """
-        raise self._fit_job.info()
+        return self._fit_job.info()
 
     def fit(
         self,

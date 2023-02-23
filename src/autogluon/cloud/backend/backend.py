@@ -9,14 +9,10 @@ from ..endpoint.endpoint import Endpoint
 
 
 class Backend(ABC):
+    name = "backend"
+
     def __init__(self, **kwargs) -> None:
         self.initialize(**kwargs)
-
-    @abstractmethod
-    @property
-    def name(self) -> str:
-        """Name of this backend"""
-        raise NotImplementedError
 
     @abstractmethod
     def initialize(self, **kwargs) -> None:
@@ -46,8 +42,8 @@ class Backend(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
     @property
+    @abstractmethod
     def is_fit(self) -> bool:
         """Whether the backend is fitted"""
         raise NotImplementedError
