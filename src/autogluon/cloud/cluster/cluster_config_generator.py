@@ -3,9 +3,6 @@ from typing import Any, Dict
 
 
 class ClusterConfigGenerator(ABC):
-    def __init__(self) -> None:
-        pass
-
     @abstractmethod
     @staticmethod
     def get_default_config() -> Dict[str, Any]:

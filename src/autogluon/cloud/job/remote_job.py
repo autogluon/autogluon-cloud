@@ -3,9 +3,6 @@ from typing import Dict, Optional
 
 
 class RemoteJob(ABC):
-    def __init__(self) -> None:
-        pass
-
     @classmethod
     @abstractmethod
     def attach(cls, job_name):
