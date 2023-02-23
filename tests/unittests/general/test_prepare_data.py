@@ -14,7 +14,7 @@ def _prepare_predictor():
 def _prepare_path(input_file, output_type):
     cp = _prepare_predictor()
     file_name = "unittest"
-    path = cp._prepare_data(input_file, file_name, output_type)
+    path = cp.backend._prepare_data(input_file, file_name, output_type)
     return path
 
 

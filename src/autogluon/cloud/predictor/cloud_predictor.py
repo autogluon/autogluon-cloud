@@ -98,7 +98,6 @@ class CloudPredictor(ABC):
             return self.backend.endpoint.endpoint_name
         return None
 
-    @staticmethod
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
         """
         Generate required permission file in json format for CloudPredictor with your choice of backend.
