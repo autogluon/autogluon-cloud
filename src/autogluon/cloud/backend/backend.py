@@ -99,12 +99,12 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def predict_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+    def predict_real_time(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Realtime prediction with the endpoint"""
         raise NotImplementedError
 
     @abstractmethod
-    def predict_proba_realtime(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+    def predict_proba_real_time(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Realtime prediction probability with the endpoint"""
         raise NotImplementedError
 

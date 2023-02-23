@@ -423,7 +423,7 @@ class CloudPredictor(ABC):
         Pandas.Series
         Predict results in Series
         """
-        return self.backend.predict_realtime(
+        return self.backend.predict_real_time(
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
         )
 

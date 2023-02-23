@@ -16,7 +16,9 @@ class SagemakerEndpoint(Endpoint):
     @property
     def endpoint_name(self) -> str:
         """Name of the endpoint"""
-        return self._endpoint.endpoint_name
+        if self._endpoint is not None:
+            return self._endpoint.endpoint_name
+        return None
 
     def predict(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """

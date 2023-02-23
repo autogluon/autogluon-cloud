@@ -469,6 +469,7 @@ class SagemakerBackend(Backend):
         """
         assert self.endpoint is not None, "No deployed endpoint detected"
         self.endpoint.delete_endpoint()
+        self.endpoint = None
 
     def attach_endpoint(self, endpoint: Union[str, SagemakerEndpoint]) -> None:
         """
@@ -500,7 +501,7 @@ class SagemakerBackend(Backend):
         self.endpoint = None
         return detached_endpoint
 
-    def predict_realtime(
+    def predict_real_time(
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
@@ -534,7 +535,7 @@ class SagemakerBackend(Backend):
 
         return pred
 
-    def predict_proba_realtime(
+    def predict_proba_real_time(
         self,
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
