@@ -220,7 +220,7 @@ class MultiModalSagemakerBackend(SagemakerBackend):
                 test_data,
                 test_data_image_column=None,
                 transformer_kwargs=processed_args["transformer_kwargs"],
-                transform_kwargs=processed_args["transform_kwargs"], 
+                transform_kwargs=processed_args["transform_kwargs"],
                 **kwargs,
             )
         else:
