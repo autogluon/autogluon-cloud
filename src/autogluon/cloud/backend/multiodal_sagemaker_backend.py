@@ -220,7 +220,8 @@ class MultiModalSagemakerBackend(SagemakerBackend):
                 test_data,
                 test_data_image_column=None,
                 transformer_kwargs=processed_args["transformer_kwargs"],
-                transform_kwargs=processed_args["transform_kwargs"] ** kwargs,
+                transform_kwargs=processed_args["transform_kwargs"], 
+                **kwargs,
             )
         else:
             return super().predict_proba(
@@ -234,8 +235,12 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         content_type = "application/x-image"
         predict_kwargs = copy.deepcopy(predict_kwargs)
         transformer_kwargs = predict_kwargs.pop("transformer_kwargs", {})
+        if transformer_kwargs is None:
+            transformer_kwargs = {}
         transformer_kwargs["strategy"] = "SingleRecord"
         transform_kwargs = predict_kwargs.pop("transofrm_kwargs", {})
+        if transform_kwargs is None:
+            transform_kwargs = {}
         transform_kwargs["split_type"] = split_type
         transform_kwargs["content_type"] = content_type
 

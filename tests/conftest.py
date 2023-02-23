@@ -178,7 +178,7 @@ class CloudTestHelper:
         assert info["recent_batch_inference_job"]["status"] == "Completed"
 
         # Test deploy with already trained predictor
-        trained_predictor_path = cloud_predictor._fit_job.get_output_path()
+        trained_predictor_path = cloud_predictor.get_fit_job_output_path()
         cloud_predictor_no_train.deploy(predictor_path=trained_predictor_path, **deploy_kwargs)
         CloudTestHelper.test_endpoint(cloud_predictor_no_train, test_data, **predict_real_time_kwargs)
         cloud_predictor_no_train.cleanup_deployment()

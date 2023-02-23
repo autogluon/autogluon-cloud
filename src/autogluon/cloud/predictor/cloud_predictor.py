@@ -269,6 +269,17 @@ class CloudPredictor(ABC):
         Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
         """
         return self.backend.get_fit_job_status()
+    
+    def get_fit_job_output_path(self) -> str:
+        """
+        Get the output path in the cloud of the trained artifact
+
+        Returns
+        -------
+        str,
+            Output path of the job
+        """
+        return self.backend.get_fit_job_output_path()
 
     def download_trained_predictor(self, save_path: Optional[str] = None) -> str:
         """
