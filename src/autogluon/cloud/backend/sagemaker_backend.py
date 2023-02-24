@@ -753,7 +753,7 @@ class SagemakerBackend(Backend):
         save_path: Optional[str] = None,
         model_kwargs: Optional[Dict] = None,
         transformer_kwargs: Optional[Dict] = None,
-        **kwargs,
+        transform_kwargs: Optional[Dict] = None
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Predict using SageMaker batch transform.
@@ -809,7 +809,7 @@ class SagemakerBackend(Backend):
         transformer_kwargs: dict
             Any extra arguments needed to pass to transformer.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
-        **kwargs:
+        transform_kwargs:
             Any extra arguments needed to pass to transform.
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
@@ -837,7 +837,7 @@ class SagemakerBackend(Backend):
             save_path=save_path,
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
-            **kwargs,
+            transform_kwargs=transform_kwargs,
         )
 
         if include_predict:
