@@ -172,11 +172,7 @@ class MultiModalSagemakerBackend(SagemakerBackend):
             processed_args = self._prepare_image_predict_args(**kwargs)
             kwargs["transformer_kwargs"] = processed_args["transformer_kwargs"]
             kwargs["transform_kwargs"] = processed_args["transform_kwargs"]
-            return super().predict(
-                test_data,
-                test_data_image_column=None,
-                **kwargs
-            )
+            return super().predict(test_data, test_data_image_column=None, **kwargs)
         else:
             return super().predict(
                 test_data,
@@ -219,11 +215,7 @@ class MultiModalSagemakerBackend(SagemakerBackend):
             processed_args = self._prepare_image_predict_args(**kwargs)
             kwargs["transformer_kwargs"] = processed_args["transformer_kwargs"]
             kwargs["transform_kwargs"] = processed_args["transform_kwargs"]
-            return super().predict_proba(
-                test_data,
-                test_data_image_column=None,
-                **kwargs
-            )
+            return super().predict_proba(test_data, test_data_image_column=None, **kwargs)
         else:
             return super().predict_proba(
                 test_data,

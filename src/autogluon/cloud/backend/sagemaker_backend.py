@@ -753,7 +753,7 @@ class SagemakerBackend(Backend):
         save_path: Optional[str] = None,
         model_kwargs: Optional[Dict] = None,
         transformer_kwargs: Optional[Dict] = None,
-        transform_kwargs: Optional[Dict] = None
+        transform_kwargs: Optional[Dict] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Predict using SageMaker batch transform.
