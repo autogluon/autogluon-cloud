@@ -441,9 +441,9 @@ class SagemakerBackend(Backend):
             model_cls = AutoGluonRepackInferenceModel
         else:
             model_cls = AutoGluonNonRepackInferenceModel
-        model_kwargs_env = model_kwargs.get("env", None)
+        model_kwargs_env = model_kwargs.pop("env", None)
+        SAGEMAKER_MODEL_SERVER_WORKERS = "SAGEMAKER_MODEL_SERVER_WORKERS"
         if model_kwargs_env is not None:
-            SAGEMAKER_MODEL_SERVER_WORKERS = "SAGEMAKER_MODEL_SERVER_WORKERS"
             if (
                 SAGEMAKER_MODEL_SERVER_WORKERS in model_kwargs_env
                 and model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] > 1
@@ -453,6 +453,9 @@ class SagemakerBackend(Backend):
                 )
             else:
                 model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] = 1
+        else:
+            model_kwargs_env = {SAGEMAKER_MODEL_SERVER_WORKERS: 1}
+            
         model = model_cls(
             model_data=predictor_path,
             role=self.role_arn,
