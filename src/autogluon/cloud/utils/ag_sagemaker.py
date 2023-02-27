@@ -6,7 +6,7 @@ from sagemaker import fw_utils, image_uris, vpc_utils
 from sagemaker.estimator import Estimator
 from sagemaker.model import DIR_PARAM_NAME, SCRIPT_PARAM_NAME, Model
 from sagemaker.predictor import Predictor
-from sagemaker.serializers import CSVSerializer, NumpySerializer
+from sagemaker.serializers import CSVSerializer
 
 from .deserializers import PandasDeserializer
 from .sagemaker_utils import retrieve_latest_framework_version
@@ -223,11 +223,6 @@ class AutoGluonNonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
 class AutoGluonRealtimePredictor(Predictor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, serializer=ParquetSerializer(), deserializer=PandasDeserializer(), **kwargs)
-
-
-class AutoGluonImageRealtimePredictor(Predictor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, serializer=NumpySerializer(), deserializer=PandasDeserializer(), **kwargs)
 
 
 class AutoGluonMultiModalRealtimePredictor(Predictor):

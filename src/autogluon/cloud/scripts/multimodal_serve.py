@@ -1,13 +1,11 @@
 # flake8: noqa
 import base64
 import copy
-import hashlib
 import os
 from io import BytesIO, StringIO
 
 import numpy as np
 import pandas as pd
-from PIL import Image
 
 from autogluon.core.constants import BINARY, MULTICLASS
 from autogluon.core.utils import get_pred_from_proba_df

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import copy
 import logging
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
-from autogluon.common.loaders import load_pd
-
+from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from .cloud_predictor import CloudPredictor
 
 logger = logging.getLogger(__name__)
@@ -23,42 +21,18 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         return "timeseries"
 
+    @property
+    def backend_map(self) -> Dict:
+        """
+        Map between general backend to module specific backend
+        """
+        return {SAGEMAKER: TIMESERIES_SAGEMAKER}
+
     def _get_local_predictor_cls(self):
         from autogluon.timeseries import TimeSeriesPredictor
 
         predictor_cls = TimeSeriesPredictor
         return predictor_cls
-
-    def _preprocess_data(
-        self,
-        data: Union[pd.DataFrame, str],
-        id_column: str,
-        timestamp_column: str,
-        target: str,
-        static_features: Optional[Union[pd.DataFrame, str]] = None,
-    ) -> pd.DataFrame:
-        if isinstance(data, str):
-            data = load_pd.load(data)
-        else:
-            data = copy.copy(data)
-        cols = data.columns.to_list()
-        # Make sure id and timestamp columns are the first two columns, and target column is in the end
-        # This is to ensure in the container we know how to find id and timestamp columns, and whether there are static features being merged
-        timestamp_index = cols.index(timestamp_column)
-        cols.insert(0, cols.pop(timestamp_index))
-        id_index = cols.index(id_column)
-        cols.insert(0, cols.pop(id_index))
-        target_index = cols.index(target)
-        cols.append(cols.pop(target_index))
-        data = data[cols]
-
-        if static_features is not None:
-            # Merge static features so only one dataframe needs to be sent to remote container
-            if isinstance(static_features, str):
-                static_features = load_pd.load(static_features)
-            data = pd.merge(data, static_features, how="left", on=id_column)
-
-        return data
 
     def fit(
         self,
@@ -75,8 +49,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        autogluon_sagemaker_estimator_kwargs: Dict = None,
-        **kwargs,
+        backend_kwargs: Optional[Dict] = None,
     ) -> TimeSeriesCloudPredictor:
         """
         Fit the predictor with SageMaker.
@@ -116,42 +89,32 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        autogluon_sagemaker_estimator_kwargs: dict, default = dict()
-            Any extra arguments needed to initialize AutoGluonSagemakerEstimator
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework for all options
-        **kwargs:
-            Any extra arguments needed to pass to fit.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
+        backend_kwargs: dict, default = None
+            Any extra arguments needed to pass to the underneath backend.
+            For SageMaker backend, valid keys are:
+                1. autogluon_sagemaker_estimator_kwargs
+                    Any extra arguments needed to initialize AutoGluonSagemakerEstimator
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Estimator for all options
+                2. fit_kwargs
+                    Any extra arguments needed to pass to fit.
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
 
         Returns
         -------
         `TimeSeriesCloudPredictor` object. Returns self.
         """
-        predictor_fit_args = copy.deepcopy(predictor_fit_args)
-        train_data = predictor_fit_args.pop("train_data")
-        tuning_data = predictor_fit_args.pop("tuning_data", None)
-        target = predictor_init_args.get("target")
-        train_data = self._preprocess_data(
-            data=train_data,
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-            target=target,
-            static_features=static_features,
-        )
-        if tuning_data is not None:
-            tuning_data = self._preprocess_data(
-                data=tuning_data,
-                id_column=id_column,
-                timestamp_column=timestamp_column,
-                target=target,
-                static_features=static_features,
-            )
-        predictor_fit_args["train_data"] = train_data
-        predictor_fit_args["tuning_data"] = tuning_data
-        print(train_data)
-        return super().fit(
+        assert (
+            not self.backend.is_fit
+        ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        if backend_kwargs is None:
+            backend_kwargs = {}
+        backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
+        self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            static_features=static_features,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,
@@ -159,9 +122,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
-            **kwargs,
+            **backend_kwargs,
         )
+
+        return self
 
     def predict_real_time(
         self,
@@ -201,16 +165,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Pandas.DataFrame
         Predict results in DataFrame
         """
-        self._validate_predict_real_time_args(accept)
-        test_data = self._preprocess_data(
-            data=test_data,
+        return self.backend.predict_real_time(
+            test_data=test_data,
             id_column=id_column,
             timestamp_column=timestamp_column,
             target=target,
             static_features=static_features,
+            accept=accept,
         )
-        pred, _ = self._predict_real_time(test_data=test_data, accept=accept, split_pred_proba=False)
-        return pred
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
@@ -222,7 +184,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         timestamp_column: str,
         target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
-        **kwargs,
+        predictor_path: Optional[str] = None,
+        framework_version: str = "latest",
+        job_name: Optional[str] = None,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        backend_kwargs: Optional[Dict] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Predict using SageMaker batch transform.
@@ -247,22 +216,68 @@ class TimeSeriesCloudPredictor(CloudPredictor):
              https://auto.gluon.ai/stable/api/autogluon.predictor.html#timeseriesdataframe
         target: str
             Name of column that contains the target values to forecast
-        kwargs:
-            Refer to `CloudPredictor.predict()`
+        predictor_path: str
+            Path to the predictor tarball you want to use to predict.
+            Path can be both a local path or a S3 location.
+            If None, will use the most recent trained predictor trained with `fit()`.
+        framework_version: str, default = `latest`
+            Inference container version of autogluon.
+            If `latest`, will use the latest available container version.
+            If provided a specific version, will use this version.
+            If `custom_image_uri` is set, this argument will be ignored.
+        job_name: str, default = None
+            Name of the launched training job.
+            If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+        instance_count: int, default = 1,
+            Number of instances used to do batch transform.
+        instance_type: str, default = 'ml.m5.2xlarge'
+            Instance to be used for batch transform.
+        wait: bool, default = True
+            Whether to wait for batch transform to complete.
+            To be noticed, the function won't return immediately because there are some preparations needed prior transform.
+        backend_kwargs: dict, default = None
+            Any extra arguments needed to pass to the underneath backend.
+            For SageMaker backend, valid keys are:
+                1. download: bool, default = True
+                    Whether to download the batch transform results to the disk and load it after the batch transform finishes.
+                    Will be ignored if `wait` is `False`.
+                2. persist: bool, default = True
+                    Whether to persist the downloaded batch transform results on the disk.
+                    Will be ignored if `download` is `False`
+                3. save_path: str, default = None,
+                    Path to save the downloaded result.
+                    Will be ignored if `download` is `False`.
+                    If None, CloudPredictor will create one.
+                    If `persist` is `False`, file would first be downloaded to this path and then removed.
+                4. model_kwargs: dict, default = dict()
+                    Any extra arguments needed to initialize Sagemaker Model
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                5. transformer_kwargs: dict
+                    Any extra arguments needed to pass to transformer.
+                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+                6. transform_kwargs:
+                    Any extra arguments needed to pass to transform.
+                    Please refer to
+                    https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
         """
-        test_data = self._preprocess_data(
-            data=test_data,
+        if backend_kwargs is None:
+            backend_kwargs = {}
+        backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
+        return self.backend.predict(
+            test_data=test_data,
             id_column=id_column,
             timestamp_column=timestamp_column,
             target=target,
             static_features=static_features,
+            predictor_path=predictor_path,
+            framework_version=framework_version,
+            job_name=job_name,
+            instance_type=instance_type,
+            instance_count=instance_count,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            **backend_kwargs,
         )
-        pred, _ = super()._predict(
-            test_data=test_data,
-            split_pred_proba=False,
-            **kwargs,
-        )
-        return pred
 
     def predict_proba(
         self,

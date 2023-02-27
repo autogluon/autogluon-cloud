@@ -1,5 +1,5 @@
 import logging
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Optional
 
 import sagemaker
@@ -10,11 +10,12 @@ from ..utils.ag_sagemaker import (
     AutoGluonSagemakerEstimator,
 )
 from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, MODEL_ARTIFACT_NAME
+from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
 
 
-class SageMakerJob(ABC):
+class SageMakerJob(RemoteJob):
     def __init__(self, session=None):
         self.session = session or sagemaker.session.Session()
         self._job_name = None
@@ -88,13 +89,13 @@ class SageMakerJob(ABC):
         logger.warning("Job status not available in local mode. Please check the local log.")
         return None
 
-    def get_output_path(self):
+    def get_output_path(self) -> Optional[str]:
         """
         Get the output path of the job generated artifacts if any.
 
         Returns:
         --------
-        str:
+        Optional[str]:
             Output path of the job generated artifacts if any.
             If no artifact, return None
         """
