@@ -444,8 +444,13 @@ class SagemakerBackend(Backend):
         model_kwargs_env = model_kwargs.get("env", None)
         if model_kwargs_env is not None:
             SAGEMAKER_MODEL_SERVER_WORKERS = "SAGEMAKER_MODEL_SERVER_WORKERS"
-            if SAGEMAKER_MODEL_SERVER_WORKERS in model_kwargs_env and model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] > 1:
-                logger.warning(f"Setting {SAGEMAKER_MODEL_SERVER_WORKERS} to value larger than 1 might cause running out of RAM and/or GPU RAM")
+            if (
+                SAGEMAKER_MODEL_SERVER_WORKERS in model_kwargs_env
+                and model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] > 1
+            ):
+                logger.warning(
+                    f"Setting {SAGEMAKER_MODEL_SERVER_WORKERS} to value larger than 1 might cause running out of RAM and/or GPU RAM"
+                )
             else:
                 model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] = 1
         model = model_cls(
