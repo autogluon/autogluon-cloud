@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 
 class ClusterConfigGenerator(ABC):
@@ -12,8 +12,8 @@ class ClusterConfigGenerator(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def merge_config(new_config) -> Dict[str, Any]:
+    def update_config(new_config: Union[Dict[str, Any], str]) -> Dict[str, Any]:
         """
-        Merge specified config with the current one. Settings in new_config will overwrite the old one.
+        Update current config with given one. Settings in new_config will overwrite the old one.
         """
         raise NotImplementedError

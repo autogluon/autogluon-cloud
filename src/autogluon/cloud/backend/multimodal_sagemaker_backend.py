@@ -1,6 +1,6 @@
 import copy
 import os
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 import pandas as pd
 from sagemaker import Predictor
@@ -21,7 +21,9 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         """Class used for realtime endpoint"""
         return AutoGluonMultiModalRealtimePredictor
 
-    def _load_predict_real_time_test_data(self, test_data, test_data_image_column):
+    def _load_predict_real_time_test_data(
+        self, test_data: Union[str, pd.DataFrame], test_data_image_column: str
+    ) -> Tuple[pd.DataFrame, str]:
         import numpy as np
 
         if isinstance(test_data, str):
