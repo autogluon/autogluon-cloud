@@ -1,15 +1,19 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Union
 
+import os
+
+DEFAULT_CONFIG_LOCATION = os.path.join(__file__, "..", "default_cluster_configs")
 
 class ClusterConfigGenerator(ABC):
-    @abstractmethod
-    @staticmethod
-    def get_default_config() -> Dict[str, Any]:
+    default_config = os.path.join(DEFAULT_CONFIG_LOCATION, "DUMMY")
+
+    @classmethod
+    def get_default_config(cls) -> Dict[str, Any]:
         """
         Get default config of the cluster
         """
-        raise NotImplementedError
+        return cls.default_config
 
     @abstractmethod
     def update_config(new_config: Union[Dict[str, Any], str]) -> Dict[str, Any]:
