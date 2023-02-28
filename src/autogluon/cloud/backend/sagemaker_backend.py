@@ -455,7 +455,7 @@ class SagemakerBackend(Backend):
                 model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] = 1
         else:
             model_kwargs_env = {SAGEMAKER_MODEL_SERVER_WORKERS: 1}
-            
+
         model = model_cls(
             model_data=predictor_path,
             role=self.role_arn,

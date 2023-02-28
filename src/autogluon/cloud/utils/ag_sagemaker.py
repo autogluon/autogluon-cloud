@@ -141,7 +141,7 @@ class AutoGluonSagemakerInferenceModel(Model):
         # setting PYTHONUNBUFFERED to disable output buffering for endpoints logging
         if env is None:
             env = {}
-        env["PYTHONUNBUFFERED"]= "1"
+        env["PYTHONUNBUFFERED"] = "1"
         super().__init__(
             model_data=model_data,
             role=role,
