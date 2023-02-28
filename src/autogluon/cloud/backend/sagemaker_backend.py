@@ -242,8 +242,8 @@ class SagemakerBackend(Backend):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
-        volumes_size: int, default = 30
-            Size in GB of the EBS volume to use for storing input data during training (default: 30).
+        volume_size: int, default = 100
+            Size in GB of the EBS volume to use for storing input data during training (default: 100).
             Must be large enough to store training data if File Mode is used (which is the default).
         wait: bool, default = True
             Whether the call should wait until the job completes
@@ -351,6 +351,7 @@ class SagemakerBackend(Backend):
         instance_type: str = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
+        volume_size: int = 100,
         wait: bool = True,
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
@@ -378,6 +379,9 @@ class SagemakerBackend(Backend):
             Instance to be deployed for the endpoint
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint
+        volume_size: int, default = 100
+           The size, in GB, of the ML storage volume attached to individual inference instance associated with the production variant.
+           Currenly only Amazon EBS gp2 storage volumes are supported.
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
@@ -437,6 +441,21 @@ class SagemakerBackend(Backend):
             model_cls = AutoGluonRepackInferenceModel
         else:
             model_cls = AutoGluonNonRepackInferenceModel
+        model_kwargs_env = model_kwargs.pop("env", None)
+        SAGEMAKER_MODEL_SERVER_WORKERS = "SAGEMAKER_MODEL_SERVER_WORKERS"
+        if model_kwargs_env is not None:
+            if (
+                SAGEMAKER_MODEL_SERVER_WORKERS in model_kwargs_env
+                and int(model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS]) > 1
+            ):
+                logger.warning(
+                    f"Setting {SAGEMAKER_MODEL_SERVER_WORKERS} to value larger than 1 might cause running out of RAM and/or GPU RAM"
+                )
+            else:
+                model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] = "1"
+        else:
+            model_kwargs_env = {SAGEMAKER_MODEL_SERVER_WORKERS: "1"}
+
         model = model_cls(
             model_data=predictor_path,
             role=self.role_arn,
@@ -447,6 +466,7 @@ class SagemakerBackend(Backend):
             custom_image_uri=custom_image_uri,
             entry_point=entry_point,
             predictor_cls=predictor_cls,
+            env=model_kwargs_env,
             **model_kwargs,
         )
         if deploy_kwargs is None:
@@ -458,6 +478,7 @@ class SagemakerBackend(Backend):
                 endpoint_name=endpoint_name,
                 instance_type=instance_type,
                 initial_instance_count=initial_instance_count,
+                volume_size=volume_size,
                 wait=wait,
                 **deploy_kwargs,
             )
