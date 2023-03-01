@@ -56,7 +56,8 @@ class CloudPredictor(ABC):
             where `L` ranges from 0 to 50 (Note: higher values of `L` correspond to fewer print statements, opposite of verbosity levels).
         """
         self.verbosity = verbosity
-        set_logger_verbosity(self.verbosity, logger=logger)
+        cloud_logger = logging.getLogger("autogluon.cloud")
+        set_logger_verbosity(self.verbosity, logger=cloud_logger)
         self.local_output_path = self._setup_local_output_path(local_output_path)
         self.cloud_output_path = self._setup_cloud_output_path(cloud_output_path)
         self.backend: Backend = BackendFactory.get_backend(
