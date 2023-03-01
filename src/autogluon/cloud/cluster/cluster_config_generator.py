@@ -45,7 +45,8 @@ class ClusterConfigGenerator(ABC):
         new_config, Optional[Union[Dict[str, Any], str]]
             The new config to overwrite the current config.
             If None, specific keys that needs to be updated must be provided.
-            If both new_config and specific arguments to update the config are provided, will apply new_config first then override it with each specific aruguments
+            If both new_config and specific arguments to update the config are provided,
+            will apply new_config first then override it with each specific aruguments
         """
         if new_config is not None:
             if isinstance(new_config, str):
