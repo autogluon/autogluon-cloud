@@ -1,0 +1,38 @@
+# An unique identifier for the head node and workers of this cluster.
+cluster_name: default
+
+# The maximum number of workers nodes to launch in addition to the head
+max_workers: 2
+
+# Cloud-provider specific configuration.
+provider:
+    type: aws
+    region: us-west-2
+    availability_zone: us-west-2a
+    cache_stopped_nodes: False
+
+# How Ray will authenticate with newly launched nodes.
+auth:
+    ssh_user: ubuntu
+
+available_node_types:
+  # Configurations for the head node.
+  head:
+    node_config:
+      InstanceType: m5.2xlarge
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 100
+
+  # Configurations for the worker nodes.
+  worker:
+    min_workers: 2
+    node_config:
+      InstanceType: m5.2xlarge
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 100
+
+head_node_type: head
