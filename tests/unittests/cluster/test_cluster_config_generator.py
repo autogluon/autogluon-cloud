@@ -16,6 +16,8 @@ from autogluon.cloud.cluster.constants import (
     MIN_WORKERS,
     NODE_CONFIG,
     VOLUMN_SIZE,
+    PROVIDER,
+    REGION
 )
 
 
@@ -31,8 +33,10 @@ def test_generate_config(config_generator, config):
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _create_config_file(config)
-        config_generator: ClusterConfigGenerator = config_generator(config)
+        region = "us-west-2"
+        config_generator: ClusterConfigGenerator = config_generator(config, region=region)
         assert isinstance(config_generator.config, dict)
+        assert config_generator.config[PROVIDER][REGION] == region
 
 
 @pytest.mark.parametrize("config", [None, {"foo": "bar"}, "dummy.yaml"])
@@ -44,7 +48,7 @@ def test_update_ray_aws_cluster_config(config):
         dummy_config = {"cluster_name": "foo"}
         config_generator.update_config(dummy_config)
         assert config_generator.config["cluster_name"] == "foo"
-        config_generator.update_config(config_generator.default_config)
+        config_generator.update_config(config_generator.default_config_file)
         config_generator.update_config(instance_type="foo", instance_count=2, volumes_size=2, custom_image_uri="bar")
         node = config_generator.config[AVAILABLE_NODE_TYPES]["worker"]
         node_config = node[NODE_CONFIG]

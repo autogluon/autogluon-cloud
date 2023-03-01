@@ -8,9 +8,9 @@ DEFAULT_CONFIG_LOCATION = os.path.join(os.path.dirname(__file__), "..", "default
 
 
 class ClusterConfigGenerator(ABC):
-    default_config = os.path.join(DEFAULT_CONFIG_LOCATION, "DUMMY")
+    default_config_file = os.path.join(DEFAULT_CONFIG_LOCATION, "DUMMY")
 
-    def __init__(self, config: Optional[Union[str, Dict[str, Any]]] = None) -> None:
+    def __init__(self, config: Optional[Union[str, Dict[str, Any]]] = None, **kwargs) -> None:
         """
         Parameter
         ---------
@@ -20,18 +20,19 @@ class ClusterConfigGenerator(ABC):
             If str, must be a path pointing to a yaml file containing the config.
         """
         if config is None:
-            config = self.default_config
+            config = self.default_config_file
         if not isinstance(config, dict):
             with open(config, "r") as yaml_file:
                 config = yaml.safe_load(yaml_file)
         self.config = config
+        self._default_config = self.get_default_config()
 
     @classmethod
     def get_default_config(cls) -> Dict[str, Any]:
         """
         Get default config of the cluster
         """
-        with open(cls.default_config, "r") as yaml_file:
+        with open(cls.default_config_file, "r") as yaml_file:
             config = yaml.safe_load(yaml_file)
         return config
 

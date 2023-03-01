@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from .cluster_config_generator import DEFAULT_CONFIG_LOCATION, ClusterConfigGenerator
 from .constants import (
@@ -13,11 +13,27 @@ from .constants import (
     MIN_WORKERS,
     NODE_CONFIG,
     VOLUMN_SIZE,
+    PROVIDER,
+    REGION
 )
 
 
 class RayAWSClusterConfigGenerator(ClusterConfigGenerator):
-    default_config = os.path.join(DEFAULT_CONFIG_LOCATION, "ray_aws_default_cluster_config.yaml")
+    default_config_file = os.path.join(DEFAULT_CONFIG_LOCATION, "ray_aws_default_cluster_config.yaml")
+    
+    def __init__(self, config: Optional[Union[str, Dict[str, Any]]] = None, region: Optional[str] = "us-east-1", **kwargs) -> None:
+        """
+        Parameter
+        ---------
+        config, Optional[Union[str, Dict[str, Any]]]
+            Config to be used to launch up the cluster. Default: None
+            If not set, will use the default config pre-defined.
+            If str, must be a path pointing to a yaml file containing the config.
+        region, Optional[str]
+            Region to launch the cluster. Default us-east-1
+        """
+        super().__init__(config=config)
+        self._update_region(region)
 
     def _update_config(
         self,
@@ -67,11 +83,23 @@ class RayAWSClusterConfigGenerator(ClusterConfigGenerator):
 
     def _set_available_node_types(self):
         """Set available node types to be default ones if user didn't provide any"""
-        default_config = self.get_default_config()
+        default_config = self._default_config
         available_node_types: Dict[str, Any] = self.config.get(AVAILABLE_NODE_TYPES, None)
         if available_node_types is None:
             available_node_types = default_config[AVAILABLE_NODE_TYPES]
         self.config.update(available_node_types)
+        
+    def _set_provider(self):
+        """Set provider to be default ones if user didn't provide any"""
+        default_config = self._default_config
+        provider: Dict[str, Any] = self.config.get(PROVIDER, None)
+        if provider is None:
+            provider = default_config[PROVIDER]
+        self.config.update({PROVIDER: provider})
+
+    def _update_region(self, region):
+        self._set_provider()
+        self.config[PROVIDER].update({REGION: region})
 
     def _update_instance_type(self, instance_type):
         if instance_type is not None:
@@ -102,12 +130,13 @@ class RayAWSClusterConfigGenerator(ClusterConfigGenerator):
                 assert (
                     node_config is not None
                 ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+                block_mappings = self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG][BLOCK_DEVICE_MAPPINGS]
                 if BLOCK_DEVICE_MAPPINGS not in node_config:
-                    self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG][BLOCK_DEVICE_MAPPINGS] = [
+                    block_mappings = [
                         {"DeviceName": "/dev/sda1", EBS: {VOLUMN_SIZE: volumes_size}}
                     ]
                 else:
-                    self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG][BLOCK_DEVICE_MAPPINGS][0][EBS].update(
+                    block_mappings[0][EBS].update(
                         {VOLUMN_SIZE: volumes_size}
                     )
 
