@@ -22,7 +22,7 @@ from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
 from ..utils.utils import unzip_file
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("autogluon.cloud")
 
 
 class CloudPredictor(ABC):
