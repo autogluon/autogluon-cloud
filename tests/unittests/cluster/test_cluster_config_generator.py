@@ -15,9 +15,9 @@ from autogluon.cloud.cluster.constants import (
     MAX_WORKERS,
     MIN_WORKERS,
     NODE_CONFIG,
-    VOLUMN_SIZE,
     PROVIDER,
-    REGION
+    REGION,
+    VOLUMN_SIZE,
 )
 
 
