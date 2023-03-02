@@ -8,7 +8,7 @@ DEFAULT_CONFIG_LOCATION = os.path.join(os.path.dirname(__file__), "..", "default
 
 
 class ClusterConfigGenerator(ABC):
-    default_config_file = os.path.join(DEFAULT_CONFIG_LOCATION, "DUMMY")
+    default_config_file = os.path.join(DEFAULT_CONFIG_LOCATION, "DEFAULT_CONFIG")
 
     def __init__(self, config: Optional[Union[str, Dict[str, Any]]] = None, **kwargs) -> None:
         """

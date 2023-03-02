@@ -14,7 +14,7 @@ from .constants import (
     NODE_CONFIG,
     PROVIDER,
     REGION,
-    VOLUMN_SIZE,
+    VOLUME_SIZE,
 )
 from .ray_cluster_config_generator import RayClusterConfigGenerator
 
@@ -41,7 +41,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
     def _update_config(
         self,
         instance_type: Optional[str] = None,
-        instance_count: Optional[str] = None,
+        instance_count: Optional[int] = None,
         worker_node_name: Optional[str] = "worker",
         volumes_size: Optional[int] = None,
         custom_image_uri: Optional[str] = None,
@@ -81,7 +81,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         """
         self._update_instance_type(instance_type=instance_type)
         self._update_instance_count(instance_count=instance_count, worker_node_name=worker_node_name)
-        self._update_volumn_size(volumes_size=volumes_size)
+        self._update_volume_size(volumes_size=volumes_size)
         self._update_custom_image(custom_image_uri=custom_image_uri)
 
     def _set_available_node_types(self):
@@ -125,7 +125,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             ), f"Didn't find node definition for {worker_node_name}. Please make sure you provided the correct `worker_node_name`"
             self.config[AVAILABLE_NODE_TYPES][worker_node_name].update({MIN_WORKERS: worker_instance_count})
 
-    def _update_volumn_size(self, volumes_size):
+    def _update_volume_size(self, volumes_size):
         if volumes_size is not None:
             self._set_available_node_types()
             for node in self.config[AVAILABLE_NODE_TYPES]:
@@ -135,9 +135,9 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
                 ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
                 block_mappings = self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG][BLOCK_DEVICE_MAPPINGS]
                 if BLOCK_DEVICE_MAPPINGS not in node_config:
-                    block_mappings = [{"DeviceName": "/dev/sda1", EBS: {VOLUMN_SIZE: volumes_size}}]
+                    block_mappings = [{"DeviceName": "/dev/sda1", EBS: {VOLUME_SIZE: volumes_size}}]
                 else:
-                    block_mappings[0][EBS].update({VOLUMN_SIZE: volumes_size})
+                    block_mappings[0][EBS].update({VOLUME_SIZE: volumes_size})
 
     def _update_custom_image(self, custom_image_uri):
         if custom_image_uri is not None:

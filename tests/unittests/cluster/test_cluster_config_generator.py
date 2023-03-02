@@ -17,7 +17,7 @@ from autogluon.cloud.cluster.constants import (
     NODE_CONFIG,
     PROVIDER,
     REGION,
-    VOLUMN_SIZE,
+    VOLUME_SIZE,
 )
 
 
@@ -54,5 +54,5 @@ def test_update_ray_aws_cluster_config(config):
         node_config = node[NODE_CONFIG]
         assert node_config[INSTANCE_TYPE] == "foo"
         assert config_generator.config[MAX_WORKERS] == 1 and node[MIN_WORKERS] == 1
-        assert node_config[BLOCK_DEVICE_MAPPINGS][0][EBS][VOLUMN_SIZE] == 2
+        assert node_config[BLOCK_DEVICE_MAPPINGS][0][EBS][VOLUME_SIZE] == 2
         assert config_generator.config[DOCKER][IMAGE] == "bar"
