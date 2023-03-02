@@ -1,7 +1,7 @@
 from typing import Dict
 
-from cluster_manager import ClusterManager
-from ray_cluster_config_generator import RayClusterConfigGenerator
+from .cluster_manager import ClusterManager
+from .ray_cluster_config_generator import RayClusterConfigGenerator
 
 
 class RayClusterManager(ClusterManager):

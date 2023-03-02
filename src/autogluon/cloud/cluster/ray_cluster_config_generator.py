@@ -1,21 +1,7 @@
-from typing import Any, Dict, Union
+import os
 
-from cluster_config_generator import ClusterConfigGenerator
+from .cluster_config_generator import DEFAULT_CONFIG_LOCATION, ClusterConfigGenerator
 
 
 class RayClusterConfigGenerator(ClusterConfigGenerator):
-    def __init__(self) -> None:
-        pass
-
-    @staticmethod
-    def get_default_config() -> Dict[str, Any]:
-        """
-        Get default config of the cluster
-        """
-        raise NotImplementedError
-
-    def update_config(new_config: Union[Dict[str, Any], str]) -> Dict[str, Any]:
-        """
-        Update current config with given one. Settings in new_config will overwrite the old one.
-        """
-        raise NotImplementedError
+    default_config_file = os.path.join(DEFAULT_CONFIG_LOCATION, "RAY_DUMMY")
