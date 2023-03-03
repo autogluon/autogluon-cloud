@@ -1,12 +1,16 @@
 from abc import ABC, abstractmethod
 from typing import Dict
 
-from .cluster_config_generator import ClusterConfigGenerator
-
 
 class ClusterManager(ABC):
-    def __init__(self) -> None:
-        self.cluster_config_generator = ClusterConfigGenerator()
+    def __init__(self, config: str) -> None:
+        """
+        Parameters
+        ----------
+        config, str
+            Path to a yaml file defining the configuration of the cluster
+        """
+        self.config = config
 
     @abstractmethod
     @staticmethod
