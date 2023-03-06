@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import json
 import logging
 import os
@@ -22,7 +21,6 @@ class RayAWSClusterManager(RayClusterManager):
         Generate trust relationship and iam policy required to manage cluster
         Users can use the generated files to create an IAM role for themselves.
         IMPORTANT: Make sure you review both files before creating the role!
-
         Parameters
         ----------
         account_id: str
@@ -30,7 +28,6 @@ class RayAWSClusterManager(RayClusterManager):
         output_path: str
             Where you would like the generated file being written to.
             If not specified, will write to the current folder.
-
         Return
         ------
         A dict containing the trust relationship and IAM policy files paths
@@ -65,35 +62,3 @@ class RayAWSClusterManager(RayClusterManager):
         )
 
         return {"trust_relationship": trust_relationship_file_path, "iam_policy": iam_policy_file_path}
-=======
-from typing import Dict
-
-from .ray_cluster_manager import RayClusterManager
-
-
-class RayAWSClusterManager(RayClusterManager):
-    @staticmethod
-    def generate_default_permission() -> Dict[str, str]:
-        """
-        Generate trust relationship and iam policy required to manage cluster
-        """
-        raise NotImplementedError
-
-    def setup_connection(self, port) -> None:
-        """
-        Setup connection between local and remote ray cluster to enable job submission
-        """
-        raise NotImplementedError
-
-    def setup_dashboard(self, port) -> None:
-        """
-        Setup ray dashboard to monitor cluster status
-        """
-        raise NotImplementedError
-
-    def exec(self, command) -> None:
-        """
-        Execute the command on the head node of the cluster
-        """
-        raise NotImplementedError
->>>>>>> check
