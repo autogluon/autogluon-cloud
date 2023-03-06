@@ -32,9 +32,13 @@ class RayClusterManager(ClusterManager):
         """
         if ray_up_args is None:
             ray_up_args = []
-        cmd = ["ray", "up", config, "-y"] + ray_up_args
-        subprocess.run(cmd)
-        if config is not None:
+        if config is None:
+            config = self.config
+        cmd = ["ray", "up", config, "-y", "--disable-usage-stats"] + ray_up_args
+        print(cmd)
+        result = subprocess.run(cmd, check=True)
+
+        if result.returncode == 0:
             self.config = config
 
     def down(self, ray_down_args: Optional[List[str]] = None, **kwargs) -> None:
@@ -50,8 +54,8 @@ class RayClusterManager(ClusterManager):
         """
         if ray_down_args is None:
             ray_down_args = []
-        cmd = ["ray", "up", self.config, "-y"] + ray_down_args
-        subprocess.run(cmd)
+        cmd = ["ray", "down", self.config, "-y"] + ray_down_args
+        subprocess.run(cmd, check=True)
 
     def configure_ray_on_cluster(self) -> None:
         """
@@ -85,9 +89,9 @@ class RayClusterManager(ClusterManager):
             Whether to make this a blocking call or not
         """
         cmd = f"ray dashboard -p {port} {self.config}"
-        if block:
+        if not block:
             cmd = "nohup " + cmd + "&>/dev/null &"
-        result = subprocess.run(cmd, shell=True)
+        result = subprocess.run(cmd, shell=True, check=True)
         if result.returncode != 0:
             error_msg = "Failed to setup the dashboard."
             if block:
@@ -95,8 +99,13 @@ class RayClusterManager(ClusterManager):
             raise ValueError(error_msg)
         logger.log(20, f"Dashboard is available at localhost:{port}")
 
-    def exec(self, command) -> None:
+    def exec(
+        self,
+        command,
+        ray_exec_args: Optional[List[str]] = None,
+    ) -> None:
         """
         Execute the command on the head node of the cluster
         """
-        raise NotImplementedError
+        cmd = ["ray", "exec", *ray_exec_args, self.config, command]
+        subprocess.run(cmd, check=True)

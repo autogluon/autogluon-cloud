@@ -12,8 +12,8 @@ class ClusterManager(ABC):
         """
         self.config = config
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
         raise NotImplementedError
