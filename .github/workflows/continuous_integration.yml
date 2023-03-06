@@ -271,11 +271,11 @@ jobs:
             other_than_docs:
               - '!(docs/**)**'
       - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        role-to-assume: arn:aws:iam::369469875935:role/CloudCluster
-        role-duration-seconds: 7200
-        aws-region: us-east-1
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: arn:aws:iam::369469875935:role/CloudCluster
+          role-duration-seconds: 7200
+          aws-region: us-east-1
       - name: Test Cluster
         if: steps.changes.outputs.other_than_docs == 'true'
         run: |
