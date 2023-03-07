@@ -472,13 +472,16 @@ class SagemakerBackend(Backend):
         if deploy_kwargs is None:
             deploy_kwargs = {}
 
+        # VolumeSize parameter is not allowed for the selected Instance type ml.g4dn.* or ml.p3.*
+        if not instance_type.startswith(tuple(["ml.g", "ml.p"])):
+            deploy_kwargs.update(volume_size=volume_size)
+
         logger.log(20, "Deploying model to the endpoint")
         self.endpoint = SagemakerEndpoint(
             model.deploy(
                 endpoint_name=endpoint_name,
                 instance_type=instance_type,
                 initial_instance_count=initial_instance_count,
-                volume_size=volume_size,
                 wait=wait,
                 **deploy_kwargs,
             )
