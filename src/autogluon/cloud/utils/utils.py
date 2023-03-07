@@ -8,6 +8,7 @@ import zipfile
 
 import PIL
 from PIL import Image
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -86,3 +87,7 @@ def split_pred_and_pred_proba(prediction):
         pred_proba.columns = [[c.rsplit("_", 1)[0] for c in pred_proba.columns]]
 
     return pred, pred_proba
+
+
+def get_utc_timestamp_now():
+    return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")

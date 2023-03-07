@@ -34,7 +34,7 @@ class RayClusterManager(ClusterManager):
             ray_up_args = []
         if config is None:
             config = self.config
-        cmd = ["ray", "up", config, "-y", "--disable-usage-stats"] + ray_up_args
+        cmd = ["ray", "up", config, "-y", "--disable-usage-stats", "--no-config-cache"] + ray_up_args
         result = subprocess.run(cmd, check=True)
 
         if result.returncode == 0:
@@ -53,7 +53,7 @@ class RayClusterManager(ClusterManager):
         """
         if ray_down_args is None:
             ray_down_args = []
-        cmd = ["ray", "down", self.config, "-y"] + ray_down_args
+        cmd = ["ray", "down", self.config, "-y", "--no-config-cache"] + ray_down_args
         subprocess.run(cmd, check=True)
 
     def configure_ray_on_cluster(self) -> None:
@@ -61,6 +61,7 @@ class RayClusterManager(ClusterManager):
         Configure ray runtime on the cluster if not a ray cluster already
         """
         # ray runtime will be automatically configured with ray up
+        pass
 
     def setup_connection(self, port: int = 8265, **kwargs) -> None:
         """
