@@ -35,7 +35,6 @@ class RayClusterManager(ClusterManager):
         if config is None:
             config = self.config
         cmd = ["ray", "up", config, "-y", "--disable-usage-stats"] + ray_up_args
-        print(cmd)
         result = subprocess.run(cmd, check=True)
 
         if result.returncode == 0:

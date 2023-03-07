@@ -115,6 +115,7 @@ install_requires = [
     "pyarrow>=9.0,<10.0",
     "PyYAML>=5.0,<5.5",
     "Pillow>=9.3.0,<10.0",
+    "ray[default]>=2.3.0,<3"
 ]
 
 extras_require = dict()
