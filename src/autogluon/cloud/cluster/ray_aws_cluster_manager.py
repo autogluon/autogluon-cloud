@@ -21,6 +21,7 @@ class RayAWSClusterManager(RayClusterManager):
         Generate trust relationship and iam policy required to manage cluster
         Users can use the generated files to create an IAM role for themselves.
         IMPORTANT: Make sure you review both files before creating the role!
+
         Parameters
         ----------
         account_id: str
@@ -28,6 +29,7 @@ class RayAWSClusterManager(RayClusterManager):
         output_path: str
             Where you would like the generated file being written to.
             If not specified, will write to the current folder.
+
         Return
         ------
         A dict containing the trust relationship and IAM policy files paths
