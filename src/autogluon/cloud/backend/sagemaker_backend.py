@@ -26,15 +26,14 @@ from ..utils.ag_sagemaker import (
 )
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import SAGEMAKER_RESOURCE_PREFIX, VALID_ACCEPT
-from ..utils.iam import (
-    IAM_POLICY_FILE_NAME,
-    SAGEMAKER_CLOUD_POLICY,
-    SAGEMAKER_TRUST_RELATIONSHIP,
-    TRUST_RELATIONSHIP_FILE_NAME,
-    replace_iam_policy_place_holder,
-    replace_trust_relationship_place_holder,
-)
+from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
 from ..utils.misc import MostRecentInsertedOrderedDict
+from ..utils.sagemaker_iam import (
+    SAGEMAKER_CLOUD_POLICY,
+    SAGEMAKER_IAM_POLICY_FILE_NAME,
+    SAGEMAKER_TRUST_RELATIONSHIP,
+    SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME,
+)
 from ..utils.sagemaker_utils import parse_framework_version
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
@@ -113,8 +112,8 @@ class SagemakerBackend(Backend):
         """
         if output_path is None:
             output_path = "."
-        trust_relationship_file_path = os.path.join(output_path, TRUST_RELATIONSHIP_FILE_NAME)
-        iam_policy_file_path = os.path.join(output_path, IAM_POLICY_FILE_NAME)
+        trust_relationship_file_path = os.path.join(output_path, SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME)
+        iam_policy_file_path = os.path.join(output_path, SAGEMAKER_IAM_POLICY_FILE_NAME)
 
         trust_relationship = replace_trust_relationship_place_holder(
             trust_relationship_document=SAGEMAKER_TRUST_RELATIONSHIP, account_id=account_id

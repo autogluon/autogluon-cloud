@@ -1,3 +1,6 @@
 from .cluster_config_generator import ClusterConfigGenerator
+from .cluster_manager import ClusterManager
 from .ray_aws_cluster_config_generator import RayAWSClusterConfigGenerator
+from .ray_aws_cluster_manager import RayAWSClusterManager
 from .ray_cluster_config_generator import RayClusterConfigGenerator
+from .ray_cluster_manager import RayClusterManager

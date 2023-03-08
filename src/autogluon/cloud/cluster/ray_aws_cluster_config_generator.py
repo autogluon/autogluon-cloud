@@ -3,10 +3,13 @@ from typing import Any, Dict, Optional, Union
 
 from .cluster_config_generator import DEFAULT_CONFIG_LOCATION
 from .constants import (
+    ARN,
     AVAILABLE_NODE_TYPES,
     BLOCK_DEVICE_MAPPINGS,
+    CLUSTER_NAME,
     DOCKER,
     EBS,
+    IAM_INSTANCE_PROFILE,
     IMAGE,
     INSTANCE_TYPE,
     MAX_WORKERS,
@@ -23,7 +26,11 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
     default_config_file = os.path.join(DEFAULT_CONFIG_LOCATION, "ray_aws_default_cluster_config.yaml")
 
     def __init__(
-        self, config: Optional[Union[str, Dict[str, Any]]] = None, region: Optional[str] = "us-east-1", **kwargs
+        self,
+        config: Optional[Union[str, Dict[str, Any]]] = None,
+        cluster_name: Optional[str] = "ag_ray_aws_default",
+        region: Optional[str] = "us-east-1",
+        **kwargs,
     ) -> None:
         """
         Parameter
@@ -32,19 +39,25 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             Config to be used to launch up the cluster. Default: None
             If not set, will use the default config pre-defined.
             If str, must be a path pointing to a yaml file containing the config.
+        cluster_name: Optional[str]. Default ag_ray_aws_default
+            Name of the cluster being deployed
         region, Optional[str]
             Region to launch the cluster. Default us-east-1
         """
         super().__init__(config=config)
+        self._update_cluster_name(cluster_name)
         self._update_region(region)
 
     def _update_config(
         self,
         instance_type: Optional[str] = None,
         instance_count: Optional[int] = None,
+        head_node_name: Optional[str] = "head",
         worker_node_name: Optional[str] = "worker",
         volumes_size: Optional[int] = None,
         custom_image_uri: Optional[str] = None,
+        head_instance_profile: Optional[str] = None,
+        worker_instance_profile: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -66,8 +79,10 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
                 https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#available-node-types-node-type-name-node-type-min-workers
                 https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#max-workers
                 https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#cluster-configuration-max-workers
+        head_node_name: str, default = head
+            Name of the head node inside the yaml file. This is used to correctly configure the head instance profile if specified.
         worker_node_name: str, default = worker
-            Name of the worker node inside the yaml file. This is used to correctly configure the instance count if specified.
+            Name of the worker node inside the yaml file. This is used to correctly configure the instance count and worker instance profile if specified.
         volumes_size: int, default = None
             Size in GB of the EBS volume to use for each of the node.
             If provided, will overwrite `available_node_types.node_config.BlockDeviceMappings.Ebs.VolmueSize`
@@ -78,11 +93,21 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             If provided, will overwrite `docker.image`
             To learn more,
                 https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#docker-image
+        head_instance_profile: Optional[str], default = None
+            The instance profile arn to be attched to the head node. If not specified, a default one will be created with full EC2 and S3 permissions.
+            To learn how to scope down the permission,
+                https://github.com/ray-project/ray/issues/9327
+        worker_instance_profile: Optional[str], default = None
+            The instance profile arn to be attched to the worker node. If not specified, a default one will be created with full EC2 and S3 permissions.
+            To learn how to scope down the permission,
+                https://github.com/ray-project/ray/issues/9327
         """
         self._update_instance_type(instance_type=instance_type)
         self._update_instance_count(instance_count=instance_count, worker_node_name=worker_node_name)
         self._update_volume_size(volumes_size=volumes_size)
         self._update_custom_image(custom_image_uri=custom_image_uri)
+        self._update_instance_profile(node=head_node_name, instance_profile=head_instance_profile)
+        self._update_instance_profile(node=worker_node_name, instance_profile=worker_instance_profile)
 
     def _set_available_node_types(self):
         """Set available node types to be default ones if user didn't provide any"""
@@ -99,6 +124,9 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         if provider is None:
             provider = default_config[PROVIDER]
         self.config.update({PROVIDER: provider})
+
+    def _update_cluster_name(self, cluster_name):
+        self.config.update({CLUSTER_NAME: cluster_name})
 
     def _update_region(self, region):
         self._set_provider()
@@ -144,3 +172,15 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             if DOCKER not in self.config:
                 self.config[DOCKER] = {}
             self.config[DOCKER].update({IMAGE: custom_image_uri})
+
+    def _update_instance_profile(self, node, instance_profile):
+        if instance_profile is not None:
+            self._set_available_node_types()
+            assert node in self.config[AVAILABLE_NODE_TYPES], f"Specified node {node} is not available in the config."
+            node_config: Dict[str, Any] = self.config[node].get(NODE_CONFIG, None)
+            assert (
+                node_config is not None
+            ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+            self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG].update(
+                {IAM_INSTANCE_PROFILE: {ARN: instance_profile}}
+            )

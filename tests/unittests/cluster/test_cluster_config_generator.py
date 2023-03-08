@@ -45,6 +45,7 @@ def test_update_ray_aws_cluster_config(config):
         os.chdir(temp_dir)
         _create_config_file(config)
         config_generator = RayAWSClusterConfigGenerator(config)
+        # Test update
         dummy_config = {"cluster_name": "foo"}
         config_generator.update_config(dummy_config)
         assert config_generator.config["cluster_name"] == "foo"
@@ -56,3 +57,9 @@ def test_update_ray_aws_cluster_config(config):
         assert config_generator.config[MAX_WORKERS] == 1 and node[MIN_WORKERS] == 1
         assert node_config[BLOCK_DEVICE_MAPPINGS][0][EBS][VOLUME_SIZE] == 2
         assert config_generator.config[DOCKER][IMAGE] == "bar"
+        config = config_generator.config
+        # Test save
+        saved_config = os.path.join(temp_dir, "config.yaml")
+        config_generator.save_config(saved_config)
+        config_generator = RayAWSClusterConfigGenerator(saved_config)
+        assert config == config_generator.config
