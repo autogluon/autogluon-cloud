@@ -68,7 +68,7 @@ class RayJob(RemoteJob):
     def run(
         self,
         entry_point: str,
-        runtime_env: Dict[str, Any] = {"working_dir": "./"},
+        runtime_env: Dict[str, Any] = None,
         job_name: Optional[str] = None,
         wait: bool = True,
         ray_submit_job_args: Optional[Dict[str, Any]] = None,
@@ -81,7 +81,7 @@ class RayJob(RemoteJob):
         ----------
         entry_point: str
             The shell command to run for this job.
-        runtime_env: Dict[str, Any]. Default {"working_dir": "./"}
+        runtime_env: Dict[str, Any]. Default None
             The runtime environment to install and run this job in.
             To learn more,
                 https://docs.ray.io/en/latest/cluster/running-applications/job-submission/sdk.html
