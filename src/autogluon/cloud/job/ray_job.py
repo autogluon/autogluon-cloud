@@ -33,6 +33,7 @@ class RayJob(RemoteJob):
     def job_name(self):
         return self._job_name
 
+    @classmethod
     def attach(cls, job_name: str, **kwargs):
         """
         Reattach to a job given its name.
@@ -47,7 +48,8 @@ class RayJob(RemoteJob):
             job_name=job_name,
             status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED}
         )
-        logs = obj.client.get_job_logs(job_id=job_name) 
+        logs = obj.client.get_job_logs(job_id=job_name)
+        obj._job_name = job_name
         logger.log(20, logs)
         
         return obj
@@ -118,7 +120,6 @@ class RayJob(RemoteJob):
             )
             logs = self.client.get_job_logs(job_id=job_name) 
             logger.log(20, logs)
-            print(logs)
 
     def get_job_status(self) -> Optional[str]:
         """

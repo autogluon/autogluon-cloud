@@ -53,7 +53,7 @@ class RayClusterManager(ClusterManager):
         """
         if ray_down_args is None:
             ray_down_args = []
-        cmd = ["ray", "down", self.config, "-y", "--no-config-cache"] + ray_down_args
+        cmd = ["ray", "down", self.config, "-y"] + ray_down_args
         subprocess.run(cmd, check=True)
 
     def configure_ray_on_cluster(self) -> None:
