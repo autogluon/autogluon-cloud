@@ -5,10 +5,10 @@ import os
 import shutil
 import tarfile
 import zipfile
+from datetime import datetime, timezone
 
 import PIL
 from PIL import Image
-from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 

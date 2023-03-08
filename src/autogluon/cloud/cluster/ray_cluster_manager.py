@@ -61,7 +61,6 @@ class RayClusterManager(ClusterManager):
         Configure ray runtime on the cluster if not a ray cluster already
         """
         # ray runtime will be automatically configured with ray up
-        pass
 
     def setup_connection(self, port: int = 8265, **kwargs) -> None:
         """

@@ -22,11 +22,7 @@ def test_ray_aws_cluster(test_helper):
             cluster_manager.setup_connection()
             # use ray job to check connection
             job = RayJob()
-            job.run(
-                entry_point="echo hi",
-                runtime_env=None,
-                wait=True
-            )
+            job.run(entry_point="echo hi", runtime_env=None, wait=True)
             info = job.info()
             assert info["status"] == "SUCCEEDED"
         finally:

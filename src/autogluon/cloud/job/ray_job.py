@@ -1,12 +1,11 @@
-from typing import Dict, Optional, Any
-from ray.job_submission import JobSubmissionClient, JobStatus
-
-from .remote_job import RemoteJob
-from ..utils.utils import get_utc_timestamp_now
-
-import time
 import logging
+import time
+from typing import Any, Dict, Optional
 
+from ray.job_submission import JobStatus, JobSubmissionClient
+
+from ..utils.utils import get_utc_timestamp_now
+from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class RayJob(RemoteJob):
         self.client = JobSubmissionClient(address)
         self._job_name = None
         self._output_path = None
-        
+
     @property
     def job_name(self):
         return self._job_name
@@ -45,13 +44,12 @@ class RayJob(RemoteJob):
         """
         obj = cls(**kwargs)
         obj._wait_until_status(
-            job_name=job_name,
-            status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED}
+            job_name=job_name, status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED}
         )
         logs = obj.client.get_job_logs(job_id=job_name)
         obj._job_name = job_name
         logger.log(20, logs)
-        
+
         return obj
 
     def info(self) -> Dict:
@@ -64,11 +62,7 @@ class RayJob(RemoteJob):
             A dictionary containing the general information about the job.
         """
         assert self.job_name is not None, "No job detected. Please submit a job first"
-        info = dict(
-            name=self.job_name,
-            status=self.get_job_status(),
-            artifact_path=self.get_output_path()
-        )
+        info = dict(name=self.job_name, status=self.get_job_status(), artifact_path=self.get_output_path())
         return info
 
     def run(
@@ -77,12 +71,12 @@ class RayJob(RemoteJob):
         runtime_env: Dict[str, Any] = {"working_dir": "./"},
         job_name: Optional[str] = None,
         wait: bool = True,
-        ray_submit_job_args : Optional[Dict[str, Any]] = None,
-        **kwargs
+        ray_submit_job_args: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ):
         """
         Execute the job
-        
+
         Parameters
         ----------
         entry_point: str
@@ -105,20 +99,16 @@ class RayJob(RemoteJob):
         if ray_submit_job_args is None:
             ray_submit_job_args = {}
         self.client.submit_job(
-            entrypoint=entry_point,
-            runtime_env=runtime_env,
-            submission_id=job_name,
-            **ray_submit_job_args
+            entrypoint=entry_point, runtime_env=runtime_env, submission_id=job_name, **ray_submit_job_args
         )
         logger.log(20, f"Submitted job {job_name} to the cluster")
         self._job_name = job_name
         if wait:
             logger.warning("We don't support log streaming currently. Logs will be avaialbe when the job is finished")
             self._wait_until_status(
-                job_name=job_name,
-                status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED}
+                job_name=job_name, status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED}
             )
-            logs = self.client.get_job_logs(job_id=job_name) 
+            logs = self.client.get_job_logs(job_id=job_name)
             logger.log(20, logs)
 
     def get_job_status(self) -> Optional[str]:
@@ -139,7 +129,7 @@ class RayJob(RemoteJob):
         Get the output path of the job generated artifacts if any.
         """
         return self._output_path
-    
+
     def _wait_until_status(self, job_name, status_to_wait_for, log_frequency=10):
         while True:
             status = self.client.get_job_status(job_name)
@@ -147,4 +137,3 @@ class RayJob(RemoteJob):
             if status in status_to_wait_for:
                 break
             time.sleep(log_frequency)
-
