@@ -7,7 +7,7 @@ def test_ray_job():
     # Create a local cluster to test ray job
     try:
         subprocess.run(["ray", "start", "--head"])
-        job = RayJob()
+        job = RayJob(address="localhost:8265")
         job.run(entry_point="echo hi", runtime_env=None, wait=True)
         info = job.info()
         assert info["status"] == "SUCCEEDED"
