@@ -1,6 +1,6 @@
 import subprocess
 
-import pytest
+# import pytest
 
 from autogluon.cloud.job.ray_job import RayJob
 
