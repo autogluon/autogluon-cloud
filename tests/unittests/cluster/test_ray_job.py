@@ -1,13 +1,10 @@
-import subprocess
-
-import pytest
-import tempfile
 import os
+import subprocess
+import tempfile
 
 from autogluon.cloud.job.ray_job import RayJob
 
 
-# @pytest.mark.local_only
 def test_ray_job():
     # Create a local cluster to test ray job
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -16,7 +13,9 @@ def test_ray_job():
             os.environ.pop("RAY_ADDRESS", None)
             dashboard_port = "8266"  # not using the default 8265 to avoid conflicts
             address = f"http://127.0.0.1:{dashboard_port}"
-            result = subprocess.run(["ray", "start", "--head", "--dashboard-port", dashboard_port], capture_output=True, check=True)
+            result = subprocess.run(
+                ["ray", "start", "--head", "--dashboard-port", dashboard_port], capture_output=True, check=True
+            )
             job = RayJob(address=address)
             job.run(entry_point="echo hi", runtime_env=None, wait=True)
             info = job.info()

@@ -193,26 +193,6 @@ class CloudTestHelper:
 
 def pytest_addoption(parser):
     parser.addoption("--framework_version", action="store", default="source")
-    parser.addoption("--local_only", action="store_true", default=False, help="run local only tests")
-
-
-def pytest_configure(config):
-    config.addinivalue_line("markers", "local_only: mark test as local that can't be run on github action")
-
-
-def pytest_collection_modifyitems(config, items):
-    skil_local_only = pytest.mark.skip(reason="need --local option to run")
-    custom_markers = dict(
-        local_only=skil_local_only,
-    )
-    if config.getoption("--local_only"):
-        # --local_only given in cli: do not skip slow tests
-        custom_markers.pop("local_only", None)
-
-    for item in items:
-        for marker in custom_markers:
-            if marker in item.keywords:
-                item.add_marker(custom_markers[marker])
 
 
 @pytest.fixture(scope="session")
