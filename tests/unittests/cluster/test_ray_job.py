@@ -1,13 +1,15 @@
 import subprocess
+import pytest
 
 from autogluon.cloud.job.ray_job import RayJob
 
 
+@pytest.mark.local_only
 def test_ray_job():
     # Create a local cluster to test ray job
     try:
         subprocess.run(["ray", "start", "--head"])
-        job = RayJob(address="localhost:8265")
+        job = RayJob()
         job.run(entry_point="echo hi", runtime_env=None, wait=True)
         info = job.info()
         assert info["status"] == "SUCCEEDED"
