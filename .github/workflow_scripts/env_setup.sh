@@ -17,6 +17,7 @@ function install_cloud {
 
 function install_cloud_test {
     python3 -m pip install --upgrade pytest-xdist # Enable running tests in parallel for speedup
+    python3 -m pip install --upgrade pytest-forked
     python3 -m pip install --upgrade -e ./[tests]
 }
 
