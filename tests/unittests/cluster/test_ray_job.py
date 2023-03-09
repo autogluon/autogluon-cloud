@@ -1,8 +1,9 @@
 import subprocess
 
+from autogluon.cloud.job.ray_job import RayJob
+
 # import pytest
 
-from autogluon.cloud.job.ray_job import RayJob
 
 
 # @pytest.mark.local_only
