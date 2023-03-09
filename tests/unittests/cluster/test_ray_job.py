@@ -13,8 +13,8 @@ def test_ray_job():
             os.environ.pop("RAY_ADDRESS", None)
             dashboard_port = "8266"  # not using the default 8265 to avoid conflicts
             address = f"http://127.0.0.1:{dashboard_port}"
-            result = subprocess.run(
-                ["ray", "start", "--head", "--dashboard-port", dashboard_port], capture_output=True, check=True
+            subprocess.run(
+                ["ray", "start", "--head", "--dashboard-port", dashboard_port], check=True
             )
             job = RayJob(address=address)
             job.run(entry_point="echo hi", runtime_env=None, wait=True)
