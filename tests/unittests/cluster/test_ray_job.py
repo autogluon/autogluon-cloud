@@ -1,6 +1,7 @@
 import os
 import subprocess
 import tempfile
+import time
 
 from autogluon.cloud.job.ray_job import RayJob
 
@@ -24,5 +25,10 @@ def test_ray_job():
             job3 = RayJob.attach(job_name=job2_name, address=address)
             info = job3.info()
             assert info["status"] == "SUCCEEDED"
+            timeout_job = RayJob(address=address)
+            start = time.time()
+            timeout_job.run(entry_point="sleep 60", runtime_env=None, wait=True, timeout=2)
+            end = time.time()
+            assert end - start < 60
         finally:
             subprocess.run(["ray", "stop"])

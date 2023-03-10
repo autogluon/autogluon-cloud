@@ -71,6 +71,7 @@ class RayJob(RemoteJob):
         runtime_env: Dict[str, Any] = None,
         job_name: Optional[str] = None,
         wait: bool = True,
+        timeout: int = 3600,
         ray_submit_job_args: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
@@ -89,6 +90,8 @@ class RayJob(RemoteJob):
             Name of the job being submitted. If not specified, will create one with pattern `ag-ray-{timestamp}`
         wait: bool. Default True
             Whether to wait
+        timeout: int. Default 3600
+            Timeout in second. If `wait` is True, will stop the job once timeout is reached.
         ray_submit_job_args : Optional[Dict[str, Any]]. Default None
             Additional args to be passed to ray JobSubmissionClient.submit_job call.
             To learn more,
@@ -106,7 +109,9 @@ class RayJob(RemoteJob):
         if wait:
             logger.warning("We don't support log streaming currently. Logs will be avaialbe when the job is finished")
             self._wait_until_status(
-                job_name=job_name, status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED}
+                job_name=job_name,
+                status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED},
+                timeout=timeout
             )
             logs = self.client.get_job_logs(job_id=job_name)
             logger.log(20, logs)
@@ -130,10 +135,16 @@ class RayJob(RemoteJob):
         """
         return self._output_path
 
-    def _wait_until_status(self, job_name, status_to_wait_for, log_frequency=10):
-        while True:
+    def _wait_until_status(self, job_name, status_to_wait_for, timeout, log_frequency=10):
+        start = time.time()
+        finished = False
+        while time.time() - start <= timeout:
             status = self.client.get_job_status(job_name)
             logger.log(20, f"status: {status}")
             if status in status_to_wait_for:
+                finished = True
                 break
             time.sleep(log_frequency)
+        if not finished:
+            logger.log(20, f"timeout: {timeout} secs reached. Will stop the job")
+            self.client.stop_job(job_id=job_name)
