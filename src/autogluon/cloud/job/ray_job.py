@@ -1,4 +1,5 @@
 import logging
+import math
 import time
 from typing import Any, Dict, Optional
 
@@ -44,7 +45,9 @@ class RayJob(RemoteJob):
         """
         obj = cls(**kwargs)
         obj._wait_until_status(
-            job_name=job_name, status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED}
+            job_name=job_name,
+            status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED},
+            timeout=math.inf,  # TODO: do we add timeout to attach api too?
         )
         logs = obj.client.get_job_logs(job_id=job_name)
         obj._job_name = job_name
