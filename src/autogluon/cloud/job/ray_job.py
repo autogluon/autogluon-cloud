@@ -111,7 +111,7 @@ class RayJob(RemoteJob):
             self._wait_until_status(
                 job_name=job_name,
                 status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED},
-                timeout=timeout
+                timeout=timeout,
             )
             logs = self.client.get_job_logs(job_id=job_name)
             logger.log(20, logs)
