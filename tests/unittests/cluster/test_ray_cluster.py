@@ -3,6 +3,7 @@ import tempfile
 import time
 
 from autogluon.cloud.cluster import RayAWSClusterConfigGenerator, RayAWSClusterManager
+from autogluon.cloud.job.ray_job import RayJob
 
 
 def test_ray_aws_cluster(test_helper):
@@ -19,5 +20,10 @@ def test_ray_aws_cluster(test_helper):
             # sleep to give some time for the worker nodes to scale up
             time.sleep(180)
             cluster_manager.setup_connection()
+            time.sleep(10)
+            job = RayJob()
+            job.run(entry_point="echo hi", runtime_env=None, wait=True)
+            info = job.info()
+            assert info["status"] == "SUCCEEDED"
         finally:
             cluster_manager.down()
