@@ -120,7 +120,7 @@ install_requires = [
 
 extras_require = dict()
 
-test_requirements = ["tox", "pytest", "pytest-cov"]
+test_requirements = ["tox", "pytest", "pytest-cov", "moto[all]"]
 
 test_requirements = list(set(test_requirements))
 extras_require["tests"] = test_requirements
