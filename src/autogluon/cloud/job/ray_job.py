@@ -27,11 +27,17 @@ class RayJob(RemoteJob):
         """
         self.client = JobSubmissionClient(address)
         self._job_name = None
-        self._output_path = None
+        self._output_path = output_path
 
     @property
     def job_name(self):
         return self._job_name
+    
+    @property
+    def completed(self):
+        if not self.job_name:
+            return False
+        return self.get_job_status() in ["STOPPED", "SUCCEEDED", "FAILED"]
 
     @classmethod
     def attach(cls, job_name: str, **kwargs):
@@ -151,3 +157,7 @@ class RayJob(RemoteJob):
         if not finished:
             logger.log(20, f"timeout: {timeout} secs reached. Will stop the job")
             self.client.stop_job(job_id=job_name)
+            
+
+class RayFitJob(RayJob):
+    pass
