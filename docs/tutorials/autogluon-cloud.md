@@ -60,7 +60,7 @@ cloud_predictor = TabularCloudPredictor(
     cloud_output_path="YOUR_S3_BUCKET_PATH"
 ).fit(
     predictor_init_args=predictor_init_args,
-    predictor_fit_args=predictor_init_args,
+    predictor_fit_args=predictor_fit_args,
     instance_type="ml.m5.2xlarge"  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
     wait=True  # Set this to False to make it an unblocking call and immediately return
 )
