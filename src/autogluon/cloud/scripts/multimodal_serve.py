@@ -27,6 +27,9 @@ def model_fn(model_dir):
     column_types.pop(label_column)
     globals()["column_names"] = list(column_types.keys())
 
+    if hasattr(model, "optimize_for_inference"):
+        model.optimize_for_inference()
+
     return model
 
 
