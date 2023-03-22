@@ -17,19 +17,19 @@ from .serializers import MultiModalSerializer, ParquetSerializer
 class AutoGluonSagemakerEstimator(Estimator):
     def __init__(
         self,
-        entry_point,
         region,
         framework_version,
         py_version,
         instance_type,
+        entry_point=None,
         source_dir=None,
         hyperparameters=None,
-        custom_image_uri=None,
+        image_uri=None,
         **kwargs,
     ):
         self.framework_version = framework_version
         self.py_version = py_version
-        self.image_uri = custom_image_uri
+        self.image_uri = image_uri
         if self.image_uri is None:
             self.image_uri = image_uris.retrieve(
                 "autogluon",
@@ -107,9 +107,12 @@ class AutoGluonSagemakerEstimator(Estimator):
         init_params = super()._prepare_init_params_from_job_description(
             job_details, model_channel_name=model_channel_name
         )
-        # This two parameters will not be used, but is required to reattach the job
+        # These parameters will not be used, but is required to reattach the job
         init_params["region"] = "us-east-1"
-        init_params["framework_version"] = retrieve_latest_framework_version()
+        framework_version, py_version = retrieve_latest_framework_version()
+        py_version = py_version[0]
+        init_params["framework_version"] = framework_version
+        init_params["py_version"] = py_version
         return init_params
 
 
