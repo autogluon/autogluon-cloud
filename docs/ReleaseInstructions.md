@@ -4,17 +4,18 @@
 
 * Check all dependency version ranges.
   * Ensure all dependencies are not capped by major version, unless the reason is documented inline.
-    * Example of major version cap: `scikit-learn<2`
+    * ❎ Avoid - major version cap: `scikit-learn<2`
   * Ensure all dependencies have an upper cap, unless the reason is documented inline.
-    * Example of no upper cap: `scikit-learn>=1.0`
+    * ❎ Avoid - no upper cap: `scikit-learn>=1.0`
   * Ensure no dependency is pinned to an exact version unless the reason is documented inline.
-    * Example: `scikit-learn==1.1.3`. This is very fragile and overly strict.
+    * ❎ Avoid - `scikit-learn==1.1.3`. This is very fragile and overly strict.
   * Ensure all dependencies are capped by minor version and not micro version unless the reason is documented inline.
     * Minor version capping would be `<x.y`. Micro version capping would be `<x.y.z`.
-    * Avoid capping to `<x.y.0`, instead do the cleaner identical cap: `<x.y`.
+    * ❎ Avoid: capping to `<x.y.0`
+    * ✅ Do: `<x.y`.
   * Ensure all dependencies are lower bound capped to a reasonable version.
-    * Example: `scikit-learn<1.2` is not reasonable because it is almost certain that `scikit-learn==0.0.1` is not supported.
-      * A better range: `scikit-learn>=1.0,<1.2`
+    * ❎ Avoid: `scikit-learn<1.2` is not reasonable because it is almost certain that `scikit-learn==0.0.1` is not supported.
+    * ✅ A better range: `scikit-learn>=1.0,<1.2`
   * Ensure all upper caps are using `<` and not `<=`.
 * Try upgrading all dependency version range upper caps to include the latest stable release.
   * Note: For micro releases, this is optional.
