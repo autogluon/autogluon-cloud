@@ -9,6 +9,9 @@ import logging
 from ..endpoint.endpoint import Endpoint
 from .backend import Backend
 from ..job.ray_job import RayFitJob
+from ..utils.dlc_utils import parse_framework_version
+from ..utils.constants import CLOUD_RESOURCE_PREFIX
+from ..utils.utils import get_utc_timestamp_now
 
 
 logger = logging.getLogger(__name__)
@@ -133,7 +136,7 @@ class RayBackend(Backend):
             logger.log(20, f"Training with framework_version=={framework_version}")
 
         if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+            job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""

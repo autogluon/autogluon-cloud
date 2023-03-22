@@ -1,4 +1,4 @@
-from .constants import POLICY_ACCOUNT_PLACE_HOLDER, POLICY_BUCKET_PLACE_HOLDER, SAGEMAKER_RESOURCE_PREFIX
+from .constants import POLICY_ACCOUNT_PLACE_HOLDER, POLICY_BUCKET_PLACE_HOLDER, CLOUD_RESOURCE_PREFIX
 
 SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME = "ag_cloud_sagemaker_trust_relationship.json"
 SAGEMAKER_IAM_POLICY_FILE_NAME = "ag_cloud_sagemaker_iam_policy.json"
@@ -45,11 +45,11 @@ SAGEMAKER_CLOUD_POLICY = {
                 "sagemaker:ListTags",  # Needed for re-attach job
             ],
             "Resource": [
-                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:endpoint/{SAGEMAKER_RESOURCE_PREFIX}*",
-                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:endpoint-config/{SAGEMAKER_RESOURCE_PREFIX}*",
+                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:endpoint/{CLOUD_RESOURCE_PREFIX}*",
+                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:endpoint-config/{CLOUD_RESOURCE_PREFIX}*",
                 f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:model/autogluon-inference*",
-                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:training-job/{SAGEMAKER_RESOURCE_PREFIX}*",
-                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:transform-job/{SAGEMAKER_RESOURCE_PREFIX}*",
+                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:training-job/{CLOUD_RESOURCE_PREFIX}*",
+                f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:transform-job/{CLOUD_RESOURCE_PREFIX}*",
             ],
         },
         {

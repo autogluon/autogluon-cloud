@@ -9,7 +9,7 @@ from sagemaker.predictor import Predictor
 from sagemaker.serializers import CSVSerializer
 
 from .deserializers import PandasDeserializer
-from .sagemaker_utils import retrieve_latest_framework_version
+from .dlc_utils import retrieve_latest_framework_version
 from .serializers import MultiModalSerializer, ParquetSerializer
 
 

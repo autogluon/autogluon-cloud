@@ -25,7 +25,7 @@ from ..utils.ag_sagemaker import (
     AutoGluonRepackInferenceModel,
 )
 from ..utils.aws_utils import setup_sagemaker_session
-from ..utils.constants import SAGEMAKER_RESOURCE_PREFIX, VALID_ACCEPT
+from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
 from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
 from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.sagemaker_iam import (
@@ -34,7 +34,7 @@ from ..utils.sagemaker_iam import (
     SAGEMAKER_TRUST_RELATIONSHIP,
     SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME,
 )
-from ..utils.sagemaker_utils import parse_framework_version
+from ..utils.dlc_utils import parse_framework_version
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
@@ -268,7 +268,7 @@ class SagemakerBackend(Backend):
             logger.log(20, f"Training with framework_version=={framework_version}")
 
         if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+            job_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 
         if autogluon_sagemaker_estimator_kwargs is None:
             autogluon_sagemaker_estimator_kwargs = {}
@@ -400,7 +400,7 @@ class SagemakerBackend(Backend):
         predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
 
         if not endpoint_name:
-            endpoint_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+            endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
         if custom_image_uri:
             framework_version, py_version = None, None
             logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
@@ -1131,7 +1131,7 @@ class SagemakerBackend(Backend):
         predictor_path = self._upload_predictor(predictor_path, cloud_key_prefix + "/predictor")
 
         if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+            job_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 
         if test_data_image_column is not None:
             logger.warning("Batch inference with image modality could be slow because of some technical details.")
