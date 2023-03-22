@@ -42,6 +42,7 @@ SAGEMAKER_CLOUD_POLICY = {
                 "sagemaker:UpdateArtifact",
                 "sagemaker:UpdateEndpoint",
                 "sagemaker:InvokeEndpoint",
+                "sagemaker:ListTags",  # Needed for re-attach job
             ],
             "Resource": [
                 f"arn:aws:sagemaker:*:{POLICY_ACCOUNT_PLACE_HOLDER}:endpoint/{SAGEMAKER_RESOURCE_PREFIX}*",

@@ -145,10 +145,13 @@ class CloudTestHelper:
             **fit_kwargs,
         )
         info = cloud_predictor.info()
+        job_name = info["fit_job"]["name"]
         assert info["local_output_path"] is not None
         assert info["cloud_output_path"] is not None
-        assert info["fit_job"]["name"] is not None
+        assert job_name is not None
         assert info["fit_job"]["status"] == "Completed"
+
+        cloud_predictor.attach_job(job_name)
 
         if deploy_kwargs is None:
             deploy_kwargs = dict()
