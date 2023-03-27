@@ -46,7 +46,7 @@ fi
 setup_build_contrib_env
 
 install_cloud
-cd docs && sphinx-build -b html _build/html
+cd docs && sphinx-build -b html . _build/html
 
 COMMAND_EXIT_CODE=$?
 if [[ $COMMAND_EXIT_CODE -ne 0 ]]; then
