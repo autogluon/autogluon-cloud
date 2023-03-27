@@ -29,6 +29,11 @@ hide-toc: true
 
 AutoGluon-Cloud: Train and Deploy AutoGluon on the Cloud
 
+:::
+::::
+
+::::::
+
 AutoGluon-Cloud aims to provide user tools to train, fine-tune and deploy `AutoGluon <https://auto.gluon.ai/stable/index.html>`_ backed models on the cloud. With just a few lines of code, users can train a model and perform inference on the cloud without worrying about MLOps details such as resource management.
 
 Currently, AutoGluon-Cloud supports `AWS SageMaker <https://aws.amazon.com/sagemaker/>`_ as the cloud backend.
@@ -70,5 +75,17 @@ maxdepth: 2
 hidden:
 ---
 
-<tutorials/autogluon-cloud>
+Cloud <tutorials/index>
+```
+
+```{toctree}
+---
+caption: API
+maxdepth: 1
+hidden:
+---
+
+TabularCloudPredictor <api/autogluon.cloud.TabularCloudPredictor>
+MultiModalCloudPredictor <api/autogluon.cloud.MultiModalCloudPredictor>
+TimeSeriesCloudPredictor <api/autogluon.cloud.TimeSeriesCloudPredictor>
 ```

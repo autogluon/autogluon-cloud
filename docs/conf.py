@@ -47,7 +47,7 @@ if len(nb_dirs_to_exec) > 0:
         nb_execution_excludepatterns.append(os.path.join(nb_dir, '*.ipynb'))
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', '_templates', 'olds', 'README.md', 'ReleaseInstructions.md', 'jupyter_execute']
+exclude_patterns = ['_build', '_templates', 'README.md', 'ReleaseInstructions.md', 'jupyter_execute']
 master_doc = 'index'
 numfig = True
 numfig_secnum_depth = 2
@@ -62,7 +62,6 @@ html_theme_options = {
     'light_logo': 'autogluon.png',
     'dark_logo': 'autogluon-w.png',
     'globaltoc_collapse': False,
-    # 'google_analytics_account': 'UA-XXXXX', # set to enable google analytics
 }
 
 html_sidebars = {
