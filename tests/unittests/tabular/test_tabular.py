@@ -59,6 +59,8 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
                 custom_image_uri=inference_custom_image_uri,
             ),
         )
-        local_predictor = cloud_predictor.to_local_predictor(require_version_match=False)
+        local_predictor = cloud_predictor.to_local_predictor(
+            require_version_match=False, require_py_version_match=False
+        )
         models = local_predictor.get_model_names()
         assert "ImagePredictor" in models
