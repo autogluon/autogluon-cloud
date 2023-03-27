@@ -45,12 +45,8 @@ fi
 
 setup_build_contrib_env
 
-sed -i -e "s@###_PLACEHOLDER_WEB_CONTENT_ROOT_###@https://$site@g" docs/config.ini
-sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_LABEL_###@$other_doc_version_text@g" docs/config.ini
-sed -i -e "s@###_OTHER_VERSIONS_DOCUMENTATION_BRANCH_###@$other_doc_version_branch@g" docs/config.ini
-
 install_cloud
-cd docs && d2lbook build rst && d2lbook build html
+cd docs && sphinx-build -b html _build/html
 
 COMMAND_EXIT_CODE=$?
 if [[ $COMMAND_EXIT_CODE -ne 0 ]]; then
