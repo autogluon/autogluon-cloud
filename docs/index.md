@@ -68,9 +68,10 @@ cloud_predictor.cleanup_deployment()
 # Batch inference
 result = cloud_predictor.predict(test_data)
 ```
+:::
 
 
-::::{dropdown} Multimodal
+:::{dropdown} Multimodal
 :animate: fade-in-slide-down
 :color: primary
 
@@ -96,9 +97,10 @@ cloud_predictor.cleanup_deployment()
 # Batch inference
 result = cloud_predictor.predict(test_data)
 ```
+:::
 
 
-::::{dropdown} TimeSeries
+:::{dropdown} TimeSeries
 :animate: fade-in-slide-down
 :color: primary
 
@@ -141,6 +143,8 @@ result = cloud_predictor.predict(
     target=target
 )
 ```
+:::
+
 
 ## {octicon}`package` Installation
 
