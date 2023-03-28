@@ -41,14 +41,22 @@ Currently, AutoGluon-Cloud supports [AWS SageMaker](<https://aws.amazon.com/sage
 ## {octicon}`rocket` Quick Examples
 
 ```python
-from autogluon.cloud import TabularCloudPredictor
 import pandas as pd
+from autogluon.cloud import TabularCloudPredictor
+
 train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv")
 test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv")
-predictor_init_args = {"label": "class"}  # init args you would pass to AG TabularPredictor
-predictor_fit_args = {"train_data": train_data, "time_limit": 120}  # fit args you would pass to AG TabularPredictor
-cloud_predictor = TabularCloudPredictor(cloud_output_path='YOUR_S3_BUCKET_PATH')
-cloud_predictor.fit(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
+predictor_init_args = {
+    "label": "class"
+}  # init args you would pass to AG TabularPredictor
+predictor_fit_args = {
+    "train_data": train_data,
+    "time_limit": 120,
+}  # fit args you would pass to AG TabularPredictor
+cloud_predictor = TabularCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
+cloud_predictor.fit(
+    predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
+)
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(test_data)
 cloud_predictor.cleanup_deployment()
