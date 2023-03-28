@@ -156,6 +156,7 @@ result = cloud_predictor.predict(
 pip install -U pip
 pip install -U setuptools wheel
 pip install --pre autogluon.cloud  # You don't need to install autogluon itself locally
+pip install --upgrade sagemaker  # This is required to ensure the information about newly released containers is available.
 ```
 
 ```{toctree}
