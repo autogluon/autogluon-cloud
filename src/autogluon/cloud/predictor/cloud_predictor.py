@@ -298,6 +298,9 @@ class CloudPredictor(ABC):
             Path to the saved model.
         """
         path = self.backend.get_fit_job_output_path()
+        assert (
+            path is not None
+        ), "No fit job associated with this CloudPredictor. Either attach to a fit job with `attach_job()` or start one with `fit()`"
         if not save_path:
             save_path = self.local_output_path
         save_path = self._download_predictor(path, save_path)
