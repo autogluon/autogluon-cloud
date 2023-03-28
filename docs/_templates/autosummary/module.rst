@@ -2,11 +2,23 @@
 
 .. automodule:: {{ fullname }}
 
-   {% block functions %}
-   {% if functions %}
-   .. rubric:: Functions
+   {% block attributes %}
+   {% if attributes %}
+   .. rubric:: {{ _('Module Attributes') }}
 
    .. autosummary::
+   {% for item in attributes %}
+      {{ item }}
+   {%- endfor %}
+   {% endif %}
+   {% endblock %}
+
+   {% block functions %}
+   {% if functions %}
+   .. rubric:: {{ _('Functions') }}
+
+   .. autosummary::
+       :toctree: 
    {% for item in functions %}
       {{ item }}
    {%- endfor %}
@@ -15,9 +27,10 @@
 
    {% block classes %}
    {% if classes %}
-   .. rubric:: Classes
+   .. rubric:: {{ _('Classes') }}
 
    .. autosummary::
+      :toctree: 
    {% for item in classes %}
       {{ item }}
    {%- endfor %}
@@ -26,7 +39,7 @@
 
    {% block exceptions %}
    {% if exceptions %}
-   .. rubric:: Exceptions
+   .. rubric:: {{ _('Exceptions') }}
 
    .. autosummary::
    {% for item in exceptions %}
@@ -34,3 +47,16 @@
    {%- endfor %}
    {% endif %}
    {% endblock %}
+
+{% block modules %}
+{% if modules %}
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+{% for item in modules %}
+   {{ item }}
+{%- endfor %}
+{% endif %}
+{% endblock %}

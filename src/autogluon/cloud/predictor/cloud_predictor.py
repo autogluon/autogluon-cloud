@@ -650,6 +650,7 @@ class CloudPredictor(ABC):
         return self.backend.predict_proba(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
+            include_predict=include_predict,
             predictor_path=predictor_path,
             framework_version=framework_version,
             job_name=job_name,
