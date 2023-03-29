@@ -84,9 +84,9 @@ def default_setup_args(*, version):
             "Operating System :: POSIX",
             "Operating System :: Unix",
             "Programming Language :: Python :: 3",
-            "Programming Language :: Python :: 3.7",
             "Programming Language :: Python :: 3.8",
             "Programming Language :: Python :: 3.9",
+            "Programming Language :: Python :: 3.10",
             "Topic :: Software Development",
             "Topic :: Scientific/Engineering :: Artificial Intelligence",
             "Topic :: Scientific/Engineering :: Information Analysis",
@@ -102,7 +102,7 @@ def default_setup_args(*, version):
     return setup_args
 
 
-version = "0.1.1"
+version = "0.2.0"
 version = update_version(version, use_file_if_exists=False, create_file=True)
 
 install_requires = [
