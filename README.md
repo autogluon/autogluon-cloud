@@ -17,7 +17,7 @@ Currently, AutoGluon-Cloud supports [AWS SageMaker](https://aws.amazon.com/sagem
 # First install package from terminal:
 # pip install -U pip
 # pip install -U setuptools wheel
-# pip install --pre autogluon.cloud  # You don't need to install autogluon itself locally
+# pip install autogluon.cloud  # You don't need to install autogluon itself locally
 
 from autogluon.cloud import TabularCloudPredictor
 import pandas as pd
