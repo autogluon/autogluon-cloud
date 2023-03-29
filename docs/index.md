@@ -171,6 +171,16 @@ Cloud <tutorials/index>
 
 ```{toctree}
 ---
+caption: Resources
+maxdepth: 1
+hidden:
+---
+
+Versions <versions.rst>
+```
+
+```{toctree}
+---
 caption: API
 maxdepth: 1
 hidden:
