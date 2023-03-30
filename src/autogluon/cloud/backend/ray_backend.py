@@ -1,19 +1,26 @@
 from __future__ import annotations
 
-import copy
-import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
+from sagemaker import image_uris
 
 import boto3
 import pandas as pd
-from sagemaker import image_uris
+import copy
+import logging
+import os
 
+from ..cluster.ray_aws_cluster_config_generator import RayAWSClusterConfigGenerator
+from ..cluster.ray_aws_cluster_manager import RayAWSClusterManager
+from ..data import FormatConverterFactory
 from ..endpoint.endpoint import Endpoint
-from ..job.ray_job import RayFitJob
-from ..utils.constants import CLOUD_RESOURCE_PREFIX
-from ..utils.dlc_utils import parse_framework_version
-from ..utils.utils import get_utc_timestamp_now
 from .backend import Backend
+from ..job.ray_job import RayFitJob
+from ..utils.dlc_utils import parse_framework_version
+from ..utils.constants import CLOUD_RESOURCE_PREFIX
+from ..utils.utils import get_utc_timestamp_now
+from ..utils.s3_utils import upload_file, s3_path_to_bucket_prefix
+from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
+
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +36,7 @@ class RayBackend(Backend):
         self._fit_job = RayFitJob(output_path=cloud_output_path + "/model")
         self._boto_session = boto3.session.Session()
         self.region = self._boto_session.region_name
-        assert (
-            self.region is not None
-        ), "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
+        assert self.region is not None, "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
 
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
@@ -85,10 +90,11 @@ class RayBackend(Backend):
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
+        instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        custom_config: Optional[Union[str, Dict[str, Any]]] = None
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -116,15 +122,19 @@ class RayBackend(Backend):
             If None, CloudPredictor will create one with prefix ag-cloudpredictor
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
-        instance_count: int, default = 1
+        instance_count: Union[int, str], default = "auto",
             Number of instance used to fit the predictor.
-        volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training (default: 100).
-            Must be large enough to store training data if File Mode is used (which is the default).
+            if not specified, will use isntance_count = number of folds to be trained to maximize parallalism
+        volume_size: int, default = 256
+            Size in GB of the EBS volume to use for storing input data during training (default: 256).
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
+        custom_config: Optional[Union[str, Dict[str, Any]]], default = None
+            Config to be used to launch up the cluster. Default: None
+            If not set, will use the default config pre-defined.
+            If str, must be a path pointing to a yaml file containing the config.
         """
         if image_column is not None:
             logger.warning("Distributed training doesn't support image modality yet. Will ignore")
@@ -132,26 +142,37 @@ class RayBackend(Backend):
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
         tune_data = predictor_fit_args.pop("tuning_data", None)
-        image_uri = custom_image_uri
-        if custom_image_uri:
-            framework_version, py_version = None, None
-            logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
-        else:
-            framework_version, py_version = parse_framework_version(
-                framework_version, "training", minimum_version="0.7.0"
-            )
-            logger.log(20, f"Training with framework_version=={framework_version}")
-            image_uri = image_uris(
-                "autogluon",
-                region=self.region,
-                version=framework_version,
-                py_version=py_version,
-                image_scope="training",
-                instance_type=instance_type,
-            )
+        num_bag_folds = predictor_fit_args.get("num_bag_folds", 8)
+
+        if instance_count == "auto":
+            instance_count = num_bag_folds
+        image_uri = self._get_image_uri(
+            framework_version=framework_version,
+            custom_image_uri=custom_image_uri,
+            instance_type=instance_type
+        )
+        train_data, tune_data = self._upload_data(
+            train_data=train_data,
+            tune_data=tune_data
+        )
 
         if not job_name:
             job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
+
+        config = self._generate_config(
+            config=custom_config,
+            instance_type=instance_type,
+            instance_count=instance_count,
+            volumes_size=volume_size,
+            custom_image_uri=image_uri
+        )
+        cluster_manager = RayAWSClusterManager(
+            config=config,
+            cloud_output_bucket=self.cloud_output_path
+        )
+        cluster_manager.up()
+        cluster_manager.setup_connection()
+        job = RayFitJob(output_path=self.cloud_output_path + "/model")
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
@@ -210,3 +231,72 @@ class RayBackend(Backend):
     def predict_proba(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Batch inference probability"""
         raise NotImplementedError
+    
+    def _get_image_uri(self, framework_version: str, custom_image_uri: str, instance_type: str):
+        image_uri = custom_image_uri
+        if custom_image_uri:
+            framework_version, py_version = None, None
+            logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
+        else:
+            framework_version, py_version = parse_framework_version(
+                framework_version, "training", minimum_version="0.7.0"
+            )
+            logger.log(20, f"Training with framework_version=={framework_version}")
+            image_uri = image_uris(
+                "autogluon",
+                region=self.region,
+                version=framework_version,
+                py_version=py_version,
+                image_scope="training",
+                instance_type=instance_type,
+            )
+        return image_uri
+    
+    def _upload_data(self, train_data: Union[str, pd.DataFrame], tune_data: Optional[Union[str, pd.DataFrame]] = None) -> Tuple[str, str]:
+        cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
+        util_key_prefix = cloud_key_prefix + "/utils"
+        train_data = self._prepare_data(train_data, "train")
+        logger.log(20, "Uploading train data..")
+        upload_file(
+            file_name=train_data,
+            bucket=cloud_bucket,
+            prefix=util_key_prefix
+        )
+        logger.log(20, "Train data uploaded successfully")
+        if tune_data is not None:
+            logger.log(20, "Uploading tune data...")
+            tune_data = self._prepare_data(tune_data, "tune")
+            upload_file(
+                file_name=tune_data,
+                bucket=cloud_bucket,
+                prefix=util_key_prefix
+            )
+            logger.log(20, "Tune data uploaded successfully")
+        return train_data, tune_data
+    
+    def _prepare_data(self, data: Union[str, pd.DataFrame], filename: str, output_type: str = "csv"):
+        path = os.path.join(self.local_output_path, "utils")
+        converter = FormatConverterFactory.get_converter(output_type)
+        return converter.convert(data, path, filename)
+    
+    def _generate_config(
+        self,
+        config: Optional[Union[str, Dict[str, Any]]] = None,
+        instance_type: Optional[str] = None,
+        instance_count: Optional[int] = None,
+        volumes_size: Optional[int] = None,
+        custom_image_uri: Optional[str] = None,
+    ):
+        config_generator = RayAWSClusterConfigGenerator(config=config, region=self.region)
+        if config is None:
+            config_generator.update_config(
+                instance_type=instance_type,
+                instance_count=instance_count,
+                volumes_size=volumes_size,
+                custom_image_uri=custom_image_uri,
+                head_instance_profile=RAY_INSTANCE_PROFILE_NAME,
+                worker_instance_profile=RAY_INSTANCE_PROFILE_NAME
+            )
+            config = os.path.join(self.local_output_path, "utils", "ag_ray_aws_cluster_config.yaml")
+            config_generator.save_config(save_path=config)
+        return config

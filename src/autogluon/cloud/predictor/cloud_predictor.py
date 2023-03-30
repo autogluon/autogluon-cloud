@@ -172,7 +172,7 @@ class CloudPredictor(ABC):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        volume_size: int = 100,
+        volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
@@ -203,8 +203,8 @@ class CloudPredictor(ABC):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
-        volumes_size: int, default = 30
-            Size in GB of the EBS volume to use for storing input data during training (default: 30).
+        volumes_size: int, default = 256
+            Size in GB of the EBS volume to use for storing input data during training (default: 256).
             Must be large enough to store training data if File Mode is used (which is the default).
         wait: bool, default = True
             Whether the call should wait until the job completes
