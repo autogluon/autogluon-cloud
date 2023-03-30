@@ -26,6 +26,7 @@ from ..utils.ag_sagemaker import (
 )
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
+from ..utils.dlc_utils import parse_framework_version
 from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
 from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.sagemaker_iam import (
@@ -34,7 +35,6 @@ from ..utils.sagemaker_iam import (
     SAGEMAKER_TRUST_RELATIONSHIP,
     SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME,
 )
-from ..utils.dlc_utils import parse_framework_version
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,

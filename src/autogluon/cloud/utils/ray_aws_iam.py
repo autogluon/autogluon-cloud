@@ -1,7 +1,11 @@
-from .constants import POLICY_ACCOUNT_PLACE_HOLDER
+from .constants import POLICY_ACCOUNT_PLACE_HOLDER, POLICY_BUCKET_PLACE_HOLDER
 
 RAY_AWS_TRUST_RELATIONSHIP_FILE_NAME = "ag_cloud_ray_aws_trust_relationship.json"
 RAY_AWS_IAM_POLICY_FILE_NAME = "ag_cloud_ray_aws_iam_policy.json"
+
+RAY_AWS_ROLE_NAME = "AGRayCluster-v1"
+RAY_AWS_POLICY_NAME = "AGRayClusterPolicy-v1"
+RAY_INSTANCE_PROFILE_NAME = RAY_AWS_ROLE_NAME
 
 RAY_AWS_TRUST_RELATIONSHIP = {
     "Version": "2012-10-17",
@@ -61,6 +65,23 @@ RAY_AWS_CLOUD_POLICY = {
                 "iam:PassRole",
             ],
             "Resource": ["*"],
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:AbortMultipartUpload",
+            ],
+            "Resource": [
+                f"arn:aws:s3:::{POLICY_BUCKET_PLACE_HOLDER}/*",
+                f"arn:aws:s3:::{POLICY_BUCKET_PLACE_HOLDER}",
+                "arn:aws:s3:::*SageMaker*",
+                "arn:aws:s3:::*Sagemaker*",
+                "arn:aws:s3:::*sagemaker*",
+            ],
         },
     ],
 }

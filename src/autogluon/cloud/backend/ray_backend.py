@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
-
-import pandas as pd
 import copy
 import logging
+from typing import Any, Dict, List, Optional, Union
+
+import boto3
+import pandas as pd
+from sagemaker import image_uris
 
 from ..endpoint.endpoint import Endpoint
-from .backend import Backend
 from ..job.ray_job import RayFitJob
-from ..utils.dlc_utils import parse_framework_version
 from ..utils.constants import CLOUD_RESOURCE_PREFIX
+from ..utils.dlc_utils import parse_framework_version
 from ..utils.utils import get_utc_timestamp_now
-
+from .backend import Backend
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,11 @@ class RayBackend(Backend):
         self.cloud_output_path = cloud_output_path
         self.predictor_type = predictor_type
         self._fit_job = RayFitJob(output_path=cloud_output_path + "/model")
+        self._boto_session = boto3.session.Session()
+        self.region = self._boto_session.region_name
+        assert (
+            self.region is not None
+        ), "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
 
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
@@ -126,14 +132,23 @@ class RayBackend(Backend):
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
         tune_data = predictor_fit_args.pop("tuning_data", None)
+        image_uri = custom_image_uri
         if custom_image_uri:
             framework_version, py_version = None, None
             logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
         else:
             framework_version, py_version = parse_framework_version(
-                framework_version, "training", minimum_version="0.6.0"
+                framework_version, "training", minimum_version="0.7.0"
             )
             logger.log(20, f"Training with framework_version=={framework_version}")
+            image_uri = image_uris(
+                "autogluon",
+                region=self.region,
+                version=framework_version,
+                py_version=py_version,
+                image_scope="training",
+                instance_type=instance_type,
+            )
 
         if not job_name:
             job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()

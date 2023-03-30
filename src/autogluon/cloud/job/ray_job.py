@@ -32,7 +32,7 @@ class RayJob(RemoteJob):
     @property
     def job_name(self):
         return self._job_name
-    
+
     @property
     def completed(self):
         if not self.job_name:
@@ -157,7 +157,7 @@ class RayJob(RemoteJob):
         if not finished:
             logger.log(20, f"timeout: {timeout} secs reached. Will stop the job")
             self.client.stop_job(job_id=job_name)
-            
+
 
 class RayFitJob(RayJob):
     pass

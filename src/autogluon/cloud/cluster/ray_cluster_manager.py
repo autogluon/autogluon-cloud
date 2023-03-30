@@ -30,6 +30,7 @@ class RayClusterManager(ClusterManager):
             To learn more,
                 https://docs.ray.io/en/latest/cluster/cli.html#ray-up
         """
+        self._setup_role_and_permission()
         if ray_up_args is None:
             ray_up_args = []
         if config is None:
@@ -108,3 +109,10 @@ class RayClusterManager(ClusterManager):
         """
         cmd = ["ray", "exec", *ray_exec_args, self.config, command]
         subprocess.run(cmd, check=True)
+
+    def _setup_role_and_permission():
+        """
+        Setup the cloud role and permission required to launch the cluster.
+        The implementation will differ between cloud providers.
+        """
+        pass
