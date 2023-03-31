@@ -1,27 +1,38 @@
 import os
 from pathlib import Path
 
+from ..backend.constant import TABULAR_SAGEMAKER, MULTIMODL_SAGEMAKER, TIMESERIES_SAGEMAKER, TABULAR_RAY
+
 
 class ScriptManager:
     CLOUD_PATH = Path(__file__).parent.parent.absolute()
     SCRIPTS_PATH = os.path.join(CLOUD_PATH, "scripts")
-    TRAIN_SCRIPT_PATH = os.path.join(SCRIPTS_PATH, "train.py")
-    TABULAR_SERVE_SCRIPT_PATH = os.path.join(SCRIPTS_PATH, "tabular_serve.py")
-    MULTIMODAL_SERVE_SCRIPT_PATH = os.path.join(SCRIPTS_PATH, "multimodal_serve.py")
-    TIMESERIES_SERVE_SCRIPT_PATH = os.path.join(SCRIPTS_PATH, "timeseries_serve.py")
-    _SERVE_SCRIPT_MAP = dict(
-        tabular=TABULAR_SERVE_SCRIPT_PATH,
-        multimodal=MULTIMODAL_SERVE_SCRIPT_PATH,
-        timeseries=TIMESERIES_SERVE_SCRIPT_PATH,
+    SAGEMAKER_SCRIPTS_PATH = os.path.join(SCRIPTS_PATH, "sagemaker_scripts")
+    RAY_SCRIPTS_PATH = os.path.join(SCRIPTS_PATH, "ray_scripts")
+    SAGEMAKER_TRAIN_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "train.py")
+    SAGEMAKER_TABULAR_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "tabular_serve.py")
+    SAGEMAKER_MULTIMODAL_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "multimodal_serve.py")
+    SAGEMAKER_TIMESERIES_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "timeseries_serve.py")
+    RAY_TABULAR_TRAIN_SCRIPT_PATH = os.path.join(RAY_SCRIPTS_PATH, "train.py")
+    _BACKEND_SERVE_SCRIPT_MAP = dict(
+        TABULAR_SAGEMAKER=SAGEMAKER_TABULAR_SERVE_SCRIPT_PATH,
+        MULTIMODL_SAGEMAKER=SAGEMAKER_MULTIMODAL_SERVE_SCRIPT_PATH,
+        TIMESERIES_SAGEMAKER=SAGEMAKER_TIMESERIES_SERVE_SCRIPT_PATH
+    )
+    _BACKEND_TRAIN_MAP = dict(
+        TABULAR_SAGEMAKER=SAGEMAKER_TRAIN_SCRIPT_PATH,
+        MULTIMODL_SAGEMAKER=SAGEMAKER_TRAIN_SCRIPT_PATH,
+        TIMESERIES_SAGEMAKER=SAGEMAKER_TRAIN_SCRIPT_PATH,
+        TABULAR_RAY=RAY_TABULAR_TRAIN_SCRIPT_PATH
     )
 
     @classmethod
-    def get_train_script(cls, predictor_type, framework_version):
-        assert predictor_type in ["tabular", "multimodal", "timeseries"]
+    def get_train_script(cls, backend_type, framework_version):
+        assert backend_type in cls._BACKEND_TRAIN_MAP
         # tabular, multimodal, timeseries share the same training script
-        return cls.TRAIN_SCRIPT_PATH
+        return cls._BACKEND_TRAIN_MAP[backend_type]
 
     @classmethod
-    def get_serve_script(cls, predictor_type, framework_version):
-        assert predictor_type in ["tabular", "multimodal", "timeseries"]
-        return cls._SERVE_SCRIPT_MAP[predictor_type]
+    def get_serve_script(cls, backend_type, framework_version):
+        assert backend_type in cls._BACKEND_SERVE_SCRIPT_MAP
+        return cls._BACKEND_SERVE_SCRIPT_MAP[backend_type]

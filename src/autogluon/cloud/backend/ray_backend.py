@@ -20,6 +20,7 @@ from ..utils.constants import CLOUD_RESOURCE_PREFIX
 from ..utils.utils import get_utc_timestamp_now
 from ..utils.s3_utils import upload_file, s3_path_to_bucket_prefix
 from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
+from ..scripts import ScriptManager
 
 
 logger = logging.getLogger(__name__)
@@ -156,9 +157,6 @@ class RayBackend(Backend):
             tune_data=tune_data
         )
 
-        if not job_name:
-            job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
-
         config = self._generate_config(
             config=custom_config,
             instance_type=instance_type,
@@ -170,9 +168,33 @@ class RayBackend(Backend):
             config=config,
             cloud_output_bucket=self.cloud_output_path
         )
-        cluster_manager.up()
-        cluster_manager.setup_connection()
-        job = RayFitJob(output_path=self.cloud_output_path + "/model")
+        cluster_up = False
+        try:
+            cluster_manager.up()
+            cluster_up = True
+            cluster_manager.setup_connection()
+            if not job_name:
+                job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
+            job = RayFitJob(output_path=self.cloud_output_path + "/model")
+            job.run(
+                entry_point=ScriptManager.get_train_script(
+                    backend_type=self.name,
+                    framework_version=framework_version
+                ),
+                job_name=job_name,
+                wait=wait
+            )
+        except Exception as e:
+            logger.warning("Exception occured. Will tear down the cluster if needed.")
+            raise e
+        finally:
+            if cluster_up:
+                try:
+                    cluster_manager.down()
+                except Exception as down_e:
+                    logger.warning("Failed to tear down the cluster. Please go to the console to terminate instanecs manually")
+                    raise down_e
+            
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
