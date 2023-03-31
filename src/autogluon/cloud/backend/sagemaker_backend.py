@@ -284,8 +284,7 @@ class SagemakerBackend(Backend):
         code_location = self.cloud_output_path + "/code"
 
         self._train_script_path = ScriptManager.get_train_script(
-            backend_type=self.name,
-            framework_version=framework_version
+            backend_type=self.name, framework_version=framework_version
         )
         entry_point = self._train_script_path
         user_entry_point = autogluon_sagemaker_estimator_kwargs.pop("entry_point", None)
@@ -312,8 +311,7 @@ class SagemakerBackend(Backend):
             config=config,
             image_column=image_column,
             serving_script=ScriptManager.get_serve_script(
-                backend_type=self.name, 
-                framework_version=framework_version
+                backend_type=self.name, framework_version=framework_version
             ),  # Training and Inference should have the same framework_version
         )
         if fit_kwargs is None:
@@ -415,8 +413,7 @@ class SagemakerBackend(Backend):
             logger.log(20, f"Deploying with framework_version=={framework_version}")
 
         self._serve_script_path = ScriptManager.get_serve_script(
-            backend_type=self.name, 
-            framework_version=framework_version
+            backend_type=self.name, framework_version=framework_version
         )
         entry_point = self._serve_script_path
         if model_kwargs is None:
@@ -1153,8 +1150,7 @@ class SagemakerBackend(Backend):
         test_input = self._upload_batch_predict_data(test_data, cloud_bucket, cloud_key_prefix)
 
         self._serve_script_path = ScriptManager.get_serve_script(
-            backend_type=self.name, 
-            framework_version=framework_version
+            backend_type=self.name, framework_version=framework_version
         )
         entry_point = self._serve_script_path
         if model_kwargs is None:

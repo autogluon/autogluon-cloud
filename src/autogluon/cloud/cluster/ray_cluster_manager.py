@@ -115,4 +115,3 @@ class RayClusterManager(ClusterManager):
         Setup the cloud role and permission required to launch the cluster.
         The implementation will differ between cloud providers.
         """
-        pass

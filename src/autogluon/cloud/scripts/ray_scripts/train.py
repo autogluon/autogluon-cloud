@@ -1,14 +1,15 @@
-from autogluon.tabular import TabularPredictor, TabularDataset
-from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
+import argparse
+import json
+import os
+import shutil
 from datetime import datetime, timezone
 from typing import Optional
+
+import boto3
 from botocore.exceptions import ClientError
 
-import argparse
-import boto3
-import json
-import shutil
-import os
+from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
+from autogluon.tabular import TabularDataset, TabularPredictor
 
 
 def get_utc_timestamp_now():
@@ -35,7 +36,7 @@ def upload_file(file_name: str, bucket: str, prefix: Optional[str] = None):
         object_name = prefix + "/" + object_name
 
     # Upload the file
-    s3_client = boto3.client('s3')
+    s3_client = boto3.client("s3")
     try:
         s3_client.upload_file(file_name, bucket, object_name)
     except ClientError as e:
@@ -52,7 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("--leaderboard", action="store_true")
     parser.set_defaults(leaderboard=False)
     args = parser.parse_args()
-    
+
     train_data = TabularDataset(args.train_data)
     tune_data = None
     if args.tune_data is not None:
@@ -61,26 +62,19 @@ if __name__ == "__main__":
     predictor_fit_args = json.loads(args.predictor_fit_args)
     save_path = f"ag_distributed_training_{get_utc_timestamp_now}"
     predictor_init_args["path"] = save_path
-    
+
     print("Start training TabularPredictor")
-    predictor = TabularPredictor(predictor_init_args).fit(train_data=train_data, tuning_data=tune_data, **predictor_fit_args)
+    predictor = TabularPredictor(predictor_init_args).fit(
+        train_data=train_data, tuning_data=tune_data, **predictor_fit_args
+    )
     model_artifact = shutil.make_archive("model", "gztar", save_path)
     cloud_bucket, cloud_prefix = s3_path_to_bucket_prefix(args.model_output_path)
     print(f"Uploading model artifact to {args.model_output_path}")
-    upload_file(
-        file_name=model_artifact,
-        bucket=cloud_bucket,
-        prefix=cloud_prefix
-    )
-    
+    upload_file(file_name=model_artifact, bucket=cloud_bucket, prefix=cloud_prefix)
+
     if args.leaderboard:
         lb = predictor.leaderboard(silent=False)
         leaderboard_file = "leaderboard.csv"
         lb.to_csv(leaderboard_file)
-        upload_file(
-            file_name=leaderboard_file,
-            bucket=cloud_bucket,
-            prefix=cloud_prefix
-        )
+        upload_file(file_name=leaderboard_file, bucket=cloud_bucket, prefix=cloud_prefix)
     print("Training finished")
-    

@@ -1,33 +1,45 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union, Tuple
-from sagemaker import image_uris
-
-import boto3
-import pandas as pd
 import copy
+import json
 import logging
 import os
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from ..cluster.ray_aws_cluster_config_generator import RayAWSClusterConfigGenerator
-from ..cluster.ray_aws_cluster_manager import RayAWSClusterManager
+import pandas as pd
+from sagemaker import image_uris
+
+from ..cluster.ray_cluster_config_generator import RayClusterConfigGenerator
+from ..cluster.ray_cluster_manager import RayClusterManager
 from ..data import FormatConverterFactory
 from ..endpoint.endpoint import Endpoint
-from .backend import Backend
 from ..job.ray_job import RayFitJob
-from ..utils.dlc_utils import parse_framework_version
-from ..utils.constants import CLOUD_RESOURCE_PREFIX
-from ..utils.utils import get_utc_timestamp_now
-from ..utils.s3_utils import upload_file, s3_path_to_bucket_prefix
-from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
 from ..scripts import ScriptManager
-
+from ..utils.constants import CLOUD_RESOURCE_PREFIX
+from ..utils.dlc_utils import parse_framework_version
+from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
+from ..utils.s3_utils import s3_path_to_bucket_prefix, upload_file
+from ..utils.utils import get_utc_timestamp_now
+from .backend import Backend
+from .constant import RAY
 
 logger = logging.getLogger(__name__)
 
 
 class RayBackend(Backend):
-    name = "ray_backend"
+    name = RAY
+
+    @property
+    def _cluster_config_generator() -> RayClusterConfigGenerator:
+        return RayClusterConfigGenerator
+
+    @property
+    def _cluster_manager() -> RayClusterManager:
+        return RayClusterManager
+
+    @property
+    def _config_file_name() -> str:
+        return "ag_ray_cluster_config.yaml"
 
     def initialize(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
         """Initialize the backend."""
@@ -35,13 +47,10 @@ class RayBackend(Backend):
         self.cloud_output_path = cloud_output_path
         self.predictor_type = predictor_type
         self._fit_job = RayFitJob(output_path=cloud_output_path + "/model")
-        self._boto_session = boto3.session.Session()
-        self.region = self._boto_session.region_name
-        assert self.region is not None, "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
 
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
-        raise NotImplementedError
+        return RayClusterManager.generate_default_permission(**kwargs)
 
     def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to fit call"""
@@ -57,7 +66,7 @@ class RayBackend(Backend):
         job_name: str
             The name of the job being attached
         """
-        raise NotImplementedError
+        self._fit_job = RayFitJob.attach(job_name)
 
     @property
     def is_fit(self) -> bool:
@@ -69,17 +78,17 @@ class RayBackend(Backend):
         Get the status of the training job.
         This is useful when the user made an asynchronous call to the `fit()` function
         """
-        raise NotImplementedError
+        return self._fit_job.get_job_status()
 
     def get_fit_job_output_path(self) -> str:
         """Get the output path in the cloud of the trained artifact"""
-        raise NotImplementedError
+        return self._fit_job.get_output_path()
 
     def get_fit_job_info(self) -> Dict[str, Any]:
         """
         Get general info of the training job.
         """
-        raise NotImplementedError
+        return self._fit_job.info()
 
     def fit(
         self,
@@ -95,7 +104,7 @@ class RayBackend(Backend):
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        custom_config: Optional[Union[str, Dict[str, Any]]] = None
+        custom_config: Optional[Union[str, Dict[str, Any]]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -148,26 +157,18 @@ class RayBackend(Backend):
         if instance_count == "auto":
             instance_count = num_bag_folds
         image_uri = self._get_image_uri(
-            framework_version=framework_version,
-            custom_image_uri=custom_image_uri,
-            instance_type=instance_type
+            framework_version=framework_version, custom_image_uri=custom_image_uri, instance_type=instance_type
         )
-        train_data, tune_data = self._upload_data(
-            train_data=train_data,
-            tune_data=tune_data
-        )
+        train_data, tune_data = self._upload_data(train_data=train_data, tune_data=tune_data)
 
         config = self._generate_config(
             config=custom_config,
             instance_type=instance_type,
             instance_count=instance_count,
             volumes_size=volume_size,
-            custom_image_uri=image_uri
+            custom_image_uri=image_uri,
         )
-        cluster_manager = RayAWSClusterManager(
-            config=config,
-            cloud_output_bucket=self.cloud_output_path
-        )
+        cluster_manager = self._cluster_manager(config=config, cloud_output_bucket=self.cloud_output_path)
         cluster_up = False
         try:
             cluster_manager.up()
@@ -176,14 +177,15 @@ class RayBackend(Backend):
             if not job_name:
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
-            job.run(
-                entry_point=ScriptManager.get_train_script(
-                    backend_type=self.name,
-                    framework_version=framework_version
-                ),
-                job_name=job_name,
-                wait=wait
-            )
+            train_script = ScriptManager.get_train_script(backend_type=self.name, framework_version=framework_version)
+            predictor_init_args = json.dumps(predictor_init_args)
+            predictor_fit_args = json.dumps(predictor_fit_args)
+            entry_point_command = f"python3 {train_script} --predictor_init_args {predictor_init_args} --predictor_fit_args {predictor_fit_args} --train_data {train_data}"
+            if tune_data is not None:
+                entry_point_command += f" --tune_data {tune_data}"
+            if leaderboard:
+                entry_point_command += f" --leaderboard"
+            job.run(entry_point=entry_point_command, job_name=job_name, wait=wait)
         except Exception as e:
             logger.warning("Exception occured. Will tear down the cluster if needed.")
             raise e
@@ -192,9 +194,10 @@ class RayBackend(Backend):
                 try:
                     cluster_manager.down()
                 except Exception as down_e:
-                    logger.warning("Failed to tear down the cluster. Please go to the console to terminate instanecs manually")
+                    logger.warning(
+                        "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
+                    )
                     raise down_e
-            
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
@@ -253,7 +256,7 @@ class RayBackend(Backend):
     def predict_proba(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Batch inference probability"""
         raise NotImplementedError
-    
+
     def _get_image_uri(self, framework_version: str, custom_image_uri: str, instance_type: str):
         image_uri = custom_image_uri
         if custom_image_uri:
@@ -273,34 +276,28 @@ class RayBackend(Backend):
                 instance_type=instance_type,
             )
         return image_uri
-    
-    def _upload_data(self, train_data: Union[str, pd.DataFrame], tune_data: Optional[Union[str, pd.DataFrame]] = None) -> Tuple[str, str]:
+
+    def _upload_data(
+        self, train_data: Union[str, pd.DataFrame], tune_data: Optional[Union[str, pd.DataFrame]] = None
+    ) -> Tuple[str, str]:
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
         util_key_prefix = cloud_key_prefix + "/utils"
         train_data = self._prepare_data(train_data, "train")
         logger.log(20, "Uploading train data..")
-        upload_file(
-            file_name=train_data,
-            bucket=cloud_bucket,
-            prefix=util_key_prefix
-        )
+        upload_file(file_name=train_data, bucket=cloud_bucket, prefix=util_key_prefix)
         logger.log(20, "Train data uploaded successfully")
         if tune_data is not None:
             logger.log(20, "Uploading tune data...")
             tune_data = self._prepare_data(tune_data, "tune")
-            upload_file(
-                file_name=tune_data,
-                bucket=cloud_bucket,
-                prefix=util_key_prefix
-            )
+            upload_file(file_name=tune_data, bucket=cloud_bucket, prefix=util_key_prefix)
             logger.log(20, "Tune data uploaded successfully")
         return train_data, tune_data
-    
+
     def _prepare_data(self, data: Union[str, pd.DataFrame], filename: str, output_type: str = "csv"):
         path = os.path.join(self.local_output_path, "utils")
         converter = FormatConverterFactory.get_converter(output_type)
         return converter.convert(data, path, filename)
-    
+
     def _generate_config(
         self,
         config: Optional[Union[str, Dict[str, Any]]] = None,
@@ -309,7 +306,7 @@ class RayBackend(Backend):
         volumes_size: Optional[int] = None,
         custom_image_uri: Optional[str] = None,
     ):
-        config_generator = RayAWSClusterConfigGenerator(config=config, region=self.region)
+        config_generator = self._cluster_config_generator(config=config, region=self.region)
         if config is None:
             config_generator.update_config(
                 instance_type=instance_type,
@@ -317,8 +314,8 @@ class RayBackend(Backend):
                 volumes_size=volumes_size,
                 custom_image_uri=custom_image_uri,
                 head_instance_profile=RAY_INSTANCE_PROFILE_NAME,
-                worker_instance_profile=RAY_INSTANCE_PROFILE_NAME
+                worker_instance_profile=RAY_INSTANCE_PROFILE_NAME,
             )
-            config = os.path.join(self.local_output_path, "utils", "ag_ray_aws_cluster_config.yaml")
+            config = os.path.join(self.local_output_path, "utils", self._config_file_name)
             config_generator.save_config(save_path=config)
         return config
