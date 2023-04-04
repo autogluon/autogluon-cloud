@@ -15,7 +15,7 @@ RAY_AWS_TRUST_RELATIONSHIP = {
 RAY_AWS_CLOUD_POLICY = {
     "Version": "2012-10-17",
     "Statement": [
-        {"Effect": "Allow", "Action": "ec2:RunInstances", "Resource": "arn:aws:ec2:*::image/ami-*"},
+        {"Effect": "Allow", "Action": "ec2:RunInstances", "Resource": ["arn:aws:ec2:*::image/ami-*"]},
         {
             "Effect": "Allow",
             "Action": "ec2:RunInstances",
@@ -37,9 +37,9 @@ RAY_AWS_CLOUD_POLICY = {
                 "ec2:CreateTags",
                 "ec2:StopInstances",
             ],
-            "Resource": f"arn:aws:ec2:*:{POLICY_ACCOUNT_PLACE_HOLDER}:instance/*",
+            "Resource": [f"arn:aws:ec2:*:{POLICY_ACCOUNT_PLACE_HOLDER}:instance/*"],
         },
-        {"Effect": "Allow", "Action": ["ec2:Describe*", "ec2:AuthorizeSecurityGroupIngress"], "Resource": "*"},
+        {"Effect": "Allow", "Action": ["ec2:Describe*", "ec2:AuthorizeSecurityGroupIngress"], "Resource": ["*"]},
         {
             "Effect": "Allow",
             "Action": ["ec2:CreateSecurityGroup"],
@@ -51,7 +51,7 @@ RAY_AWS_CLOUD_POLICY = {
         {
             "Effect": "Allow",
             "Action": ["ec2:CreateKeyPair"],
-            "Resource": f"arn:aws:ec2:*:{POLICY_ACCOUNT_PLACE_HOLDER}:key-pair/*",
+            "Resource": [f"arn:aws:ec2:*:{POLICY_ACCOUNT_PLACE_HOLDER}:key-pair/*"],
         },
         {
             "Effect": "Allow",
@@ -85,3 +85,5 @@ RAY_AWS_CLOUD_POLICY = {
         },
     ],
 }
+
+ECR_READ_ONLY = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"

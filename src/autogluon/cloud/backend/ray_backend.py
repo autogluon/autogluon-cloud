@@ -4,10 +4,15 @@ import copy
 import json
 import logging
 import os
+import time
+import yaml
+import shutil
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 from sagemaker import image_uris
+
+from autogluon.common.utils.s3_utils import s3_bucket_prefix_to_path
 
 from ..cluster.ray_cluster_config_generator import RayClusterConfigGenerator
 from ..cluster.ray_cluster_manager import RayClusterManager
@@ -20,6 +25,7 @@ from ..utils.dlc_utils import parse_framework_version
 from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
 from ..utils.s3_utils import s3_path_to_bucket_prefix, upload_file
 from ..utils.utils import get_utc_timestamp_now
+from ..utils.iam import get_instance_profile_arn
 from .backend import Backend
 from .constant import RAY
 
@@ -30,15 +36,15 @@ class RayBackend(Backend):
     name = RAY
 
     @property
-    def _cluster_config_generator() -> RayClusterConfigGenerator:
+    def _cluster_config_generator(self) -> RayClusterConfigGenerator:
         return RayClusterConfigGenerator
 
     @property
-    def _cluster_manager() -> RayClusterManager:
+    def _cluster_manager(self) -> RayClusterManager:
         return RayClusterManager
 
     @property
-    def _config_file_name() -> str:
+    def _config_file_name(self) -> str:
         return "ag_ray_cluster_config.yaml"
 
     def initialize(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
@@ -46,6 +52,7 @@ class RayBackend(Backend):
         self.local_output_path = local_output_path
         self.cloud_output_path = cloud_output_path
         self.predictor_type = predictor_type
+        self.region = None
         self._fit_job = RayFitJob(output_path=cloud_output_path + "/model")
 
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
@@ -99,7 +106,7 @@ class RayBackend(Backend):
         leaderboard: bool = True,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
-        instance_type: str = "ml.m5.2xlarge",
+        instance_type: str = "ml.m5.2xlarge",  # SageMaker instance type needed to fetch image uri
         instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
@@ -159,7 +166,20 @@ class RayBackend(Backend):
         image_uri = self._get_image_uri(
             framework_version=framework_version, custom_image_uri=custom_image_uri, instance_type=instance_type
         )
+        ag_args = self._construct_ag_args(
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args
+        )
+        train_script = ScriptManager.get_train_script(backend_type=self.name, framework_version=framework_version)
+        util_path = os.path.join(self.local_output_path, "utils")
+        shutil.copy(train_script, util_path)
+        # TODO: remove this hack
+        self.cloud_output_path = "s3://" + self.cloud_output_path
         train_data, tune_data = self._upload_data(train_data=train_data, tune_data=tune_data)
+
+        if instance_type.startswith("ml."):
+            # Remove the ml. prefix from SageMaker instance type
+            instance_type = ".".join(instance_type.split(".")[1:])
 
         config = self._generate_config(
             config=custom_config,
@@ -171,25 +191,36 @@ class RayBackend(Backend):
         cluster_manager = self._cluster_manager(config=config, cloud_output_bucket=self.cloud_output_path)
         cluster_up = False
         try:
-            cluster_manager.up()
-            cluster_up = True
+            # cluster_manager.up()
+            # cluster_up = True
+            # time.sleep(180)
             cluster_manager.setup_connection()
+            time.sleep(10)  # waiting for connection to setup
             if not job_name:
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
-            train_script = ScriptManager.get_train_script(backend_type=self.name, framework_version=framework_version)
+            
+            train_script_dir = os.path.dirname(train_script)
             predictor_init_args = json.dumps(predictor_init_args)
             predictor_fit_args = json.dumps(predictor_fit_args)
-            entry_point_command = f"python3 {train_script} --predictor_init_args {predictor_init_args} --predictor_fit_args {predictor_fit_args} --train_data {train_data}"
+            entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path ag_args.yaml --train_data {train_data} --model_output_path s3://{self.get_fit_job_output_path()}"  # remove s3 once integrated with cloud predictor
             if tune_data is not None:
                 entry_point_command += f" --tune_data {tune_data}"
             if leaderboard:
                 entry_point_command += f" --leaderboard"
-            job.run(entry_point=entry_point_command, job_name=job_name, wait=wait)
+            job.run(
+                entry_point=entry_point_command,
+                runtime_env={
+                    "working_dir": util_path
+                },
+                job_name=job_name,
+                wait=wait
+            )
         except Exception as e:
             logger.warning("Exception occured. Will tear down the cluster if needed.")
             raise e
         finally:
+            pass
             if cluster_up:
                 try:
                     cluster_manager.down()
@@ -267,7 +298,7 @@ class RayBackend(Backend):
                 framework_version, "training", minimum_version="0.7.0"
             )
             logger.log(20, f"Training with framework_version=={framework_version}")
-            image_uri = image_uris(
+            image_uri = image_uris.retrieve(
                 "autogluon",
                 region=self.region,
                 version=framework_version,
@@ -276,6 +307,18 @@ class RayBackend(Backend):
                 instance_type=instance_type,
             )
         return image_uri
+    
+    def _construct_ag_args(self, predictor_init_args, predictor_fit_args, **kwargs):
+        assert self.predictor_type is not None
+        config = dict(
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            **kwargs,
+        )
+        path = os.path.join(self.local_output_path, "utils", "ag_args.yaml")
+        with open(path, "w") as f:
+            yaml.dump(config, f)
+        return path
 
     def _upload_data(
         self, train_data: Union[str, pd.DataFrame], tune_data: Optional[Union[str, pd.DataFrame]] = None
@@ -285,11 +328,13 @@ class RayBackend(Backend):
         train_data = self._prepare_data(train_data, "train")
         logger.log(20, "Uploading train data..")
         upload_file(file_name=train_data, bucket=cloud_bucket, prefix=util_key_prefix)
+        train_data = s3_bucket_prefix_to_path(bucket=cloud_bucket, prefix=f"{util_key_prefix}/{os.path.basename(train_data)}")
         logger.log(20, "Train data uploaded successfully")
         if tune_data is not None:
             logger.log(20, "Uploading tune data...")
             tune_data = self._prepare_data(tune_data, "tune")
             upload_file(file_name=tune_data, bucket=cloud_bucket, prefix=util_key_prefix)
+            tune_data = s3_bucket_prefix_to_path(bucket=cloud_bucket, prefix=f"{util_key_prefix}/{os.path.basename(tune_data)}")
             logger.log(20, "Tune data uploaded successfully")
         return train_data, tune_data
 
@@ -313,8 +358,8 @@ class RayBackend(Backend):
                 instance_count=instance_count,
                 volumes_size=volumes_size,
                 custom_image_uri=custom_image_uri,
-                head_instance_profile=RAY_INSTANCE_PROFILE_NAME,
-                worker_instance_profile=RAY_INSTANCE_PROFILE_NAME,
+                head_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),
+                worker_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),
             )
             config = os.path.join(self.local_output_path, "utils", self._config_file_name)
             config_generator.save_config(save_path=config)

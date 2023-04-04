@@ -25,9 +25,10 @@ class RayJob(RemoteJob):
             output_path: Optional[str]. Default None
                 Remote output_path to store the job artifacts, if any.
         """
-        self.client = JobSubmissionClient(address)
+        self.client = None
         self._job_name = None
         self._output_path = output_path
+        self._address = address
 
     @property
     def job_name(self):
@@ -50,6 +51,7 @@ class RayJob(RemoteJob):
             Name of the job to be attached.
         """
         obj = cls(**kwargs)
+        obj.client = JobSubmissionClient(obj._address)
         obj._wait_until_status(
             job_name=job_name,
             status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED},
@@ -110,6 +112,8 @@ class RayJob(RemoteJob):
             job_name = f"ag-ray-{get_utc_timestamp_now()}"
         if ray_submit_job_args is None:
             ray_submit_job_args = {}
+        if self.client is None:
+            self.client = JobSubmissionClient(self._address)
         self.client.submit_job(
             entrypoint=entry_point, runtime_env=runtime_env, submission_id=job_name, **ray_submit_job_args
         )

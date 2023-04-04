@@ -19,15 +19,15 @@ class RayTabularBackend(RayBackend):
     name = TABULAR_RAY
 
     @property
-    def _cluster_config_generator() -> RayClusterConfigGenerator:
+    def _cluster_config_generator(self) -> RayClusterConfigGenerator:
         return RayAWSClusterConfigGenerator
 
     @property
-    def _cluster_manager() -> RayClusterManager:
+    def _cluster_manager(self) -> RayClusterManager:
         return RayAWSClusterManager
 
     @property
-    def _config_file_name() -> str:
+    def _config_file_name(self) -> str:
         return "ag_ray_aws_cluster_config.yaml"
 
     def initialize(self, **kwargs) -> None:

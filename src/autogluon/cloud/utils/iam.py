@@ -73,3 +73,9 @@ def create_instance_profile(instance_profile_name: str) -> str:
 def add_role_to_instance_profile(instance_profile_name: str, role_name: str):
     iam_client = boto3.client("iam")
     iam_client.add_role_to_instance_profile(InstanceProfileName=instance_profile_name, RoleName=role_name)
+
+
+def get_instance_profile_arn(instance_profile_name: str) -> str:
+    iam_client = boto3.client("iam")
+    response = iam_client.get_instance_profile(InstanceProfileName=instance_profile_name)
+    return response["InstanceProfile"]["Arn"]

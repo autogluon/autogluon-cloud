@@ -23,6 +23,7 @@ from ..utils.ray_aws_iam import (
     RAY_AWS_TRUST_RELATIONSHIP,
     RAY_AWS_TRUST_RELATIONSHIP_FILE_NAME,
     RAY_INSTANCE_PROFILE_NAME,
+    ECR_READ_ONLY
 )
 from .ray_cluster_manager import RayClusterManager
 
@@ -102,7 +103,10 @@ class RayAWSClusterManager(RayClusterManager):
         )
         create_iam_role(role_name=RAY_AWS_ROLE_NAME, trust_relationship=trust_relationship)
         policy_arn = create_iam_policy(policy_name=RAY_AWS_POLICY_NAME, policy=iam_policy)
-        attach_iam_policy(role_name=RAY_AWS_ROLE_NAME, policy_arn=policy_arn)
-        create_instance_profile(instance_profile_name=RAY_INSTANCE_PROFILE_NAME)
-        add_role_to_instance_profile(instance_profile_name=RAY_INSTANCE_PROFILE_NAME, role_name=RAY_AWS_ROLE_NAME)
+        if policy_arn is not None:
+            attach_iam_policy(role_name=RAY_AWS_ROLE_NAME, policy_arn=policy_arn)
+        attach_iam_policy(role_name=RAY_AWS_ROLE_NAME, policy_arn=ECR_READ_ONLY)
+        instance_profile_arn = create_instance_profile(instance_profile_name=RAY_INSTANCE_PROFILE_NAME)
+        if instance_profile_arn is not None:
+            add_role_to_instance_profile(instance_profile_name=RAY_INSTANCE_PROFILE_NAME, role_name=RAY_AWS_ROLE_NAME)
         time.sleep(5)  # Leave sometime to allow resource to propagate

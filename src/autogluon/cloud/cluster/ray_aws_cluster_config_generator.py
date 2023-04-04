@@ -115,7 +115,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         available_node_types: Dict[str, Any] = self.config.get(AVAILABLE_NODE_TYPES, None)
         if available_node_types is None:
             available_node_types = default_config[AVAILABLE_NODE_TYPES]
-        self.config.update(available_node_types)
+        self.config.update({AVAILABLE_NODE_TYPES: available_node_types})
 
     def _set_provider(self):
         """Set provider to be default ones if user didn't provide any"""
@@ -136,7 +136,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         if instance_type is not None:
             self._set_available_node_types()
             for node in self.config[AVAILABLE_NODE_TYPES]:
-                node_config: Dict[str, Any] = self.config[node].get(NODE_CONFIG, None)
+                node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
                 assert (
                     node_config is not None
                 ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
@@ -157,7 +157,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         if volumes_size is not None:
             self._set_available_node_types()
             for node in self.config[AVAILABLE_NODE_TYPES]:
-                node_config: Dict[str, Any] = self.config[node].get(NODE_CONFIG, None)
+                node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
                 assert (
                     node_config is not None
                 ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
@@ -177,7 +177,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         if instance_profile is not None:
             self._set_available_node_types()
             assert node in self.config[AVAILABLE_NODE_TYPES], f"Specified node {node} is not available in the config."
-            node_config: Dict[str, Any] = self.config[node].get(NODE_CONFIG, None)
+            node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
             assert (
                 node_config is not None
             ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
