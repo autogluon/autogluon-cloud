@@ -200,7 +200,6 @@ class RayBackend(Backend):
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
             
-            train_script_dir = os.path.dirname(train_script)
             predictor_init_args = json.dumps(predictor_init_args)
             predictor_fit_args = json.dumps(predictor_fit_args)
             entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path ag_args.yaml --train_data {train_data} --model_output_path s3://{self.get_fit_job_output_path()}"  # remove s3 once integrated with cloud predictor
@@ -211,7 +210,8 @@ class RayBackend(Backend):
             job.run(
                 entry_point=entry_point_command,
                 runtime_env={
-                    "working_dir": util_path
+                    "working_dir": util_path,
+                    "env_vars": {"AG_DISTRIBUTED_MODE": "1", "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/utils/"}
                 },
                 job_name=job_name,
                 wait=wait
@@ -221,14 +221,14 @@ class RayBackend(Backend):
             raise e
         finally:
             pass
-            if cluster_up:
-                try:
-                    cluster_manager.down()
-                except Exception as down_e:
-                    logger.warning(
-                        "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
-                    )
-                    raise down_e
+            # if cluster_up:
+            #     try:
+            #         cluster_manager.down()
+            #     except Exception as down_e:
+            #         logger.warning(
+            #             "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
+            #         )
+            #         raise down_e
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
