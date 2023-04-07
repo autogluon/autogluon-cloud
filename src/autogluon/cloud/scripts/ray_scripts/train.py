@@ -1,16 +1,26 @@
 import argparse
-import json
 import os
 import shutil
+import ray
+import time
 import yaml
 from datetime import datetime, timezone
 from typing import Optional
 
 import boto3
-from botocore.exceptions import ClientError
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.tabular import TabularDataset, TabularPredictor
+
+
+def wait_for_nodes_to_be_ready():
+    expected_num_nodes = os.environ.get("AG_NUM_NODES")
+    ray.init("auto")
+    print("Waiting for worker nodes to be ready")
+    while len(ray.nodes()) < expected_num_nodes:
+        time.sleep("5")
+    ray.shutdown()
+    print("All nodes ready")
 
 
 def get_utc_timestamp_now():
@@ -38,17 +48,12 @@ def upload_file(file_name: str, bucket: str, prefix: Optional[str] = None):
 
     # Upload the file
     s3_client = boto3.client("s3")
-    try:
-        s3_client.upload_file(file_name, bucket, object_name)
-    except ClientError as e:
-        raise e
+    s3_client.upload_file(file_name, bucket, object_name)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ag_args_path", type=str, required=True)
-    # parser.add_argument("--predictor_init_args", type=str, required=True)
-    # parser.add_argument("--predictor_fit_args", type=str, required=True)
     parser.add_argument("--train_data", type=str, required=True)
     parser.add_argument("--tune_data", type=str, required=False)
     parser.add_argument("--model_output_path", type=str, required=True)
@@ -56,6 +61,7 @@ if __name__ == "__main__":
     parser.set_defaults(leaderboard=False)
     args = parser.parse_args()
 
+    wait_for_nodes_to_be_ready()
     train_data = TabularDataset(args.train_data)
     tune_data = None
     if args.tune_data is not None:
@@ -64,8 +70,6 @@ if __name__ == "__main__":
         ag_args = yaml.safe_load(f)
     predictor_init_args = ag_args["predictor_init_args"]
     predictor_fit_args = ag_args["predictor_fit_args"]
-    # predictor_init_args = json.loads(args.predictor_init_args)
-    # predictor_fit_args = json.loads(args.predictor_fit_args)
     save_path = f"ag_distributed_training_{get_utc_timestamp_now()}"
     predictor_init_args["path"] = save_path
 

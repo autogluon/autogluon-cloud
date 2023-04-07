@@ -211,7 +211,11 @@ class RayBackend(Backend):
                 entry_point=entry_point_command,
                 runtime_env={
                     "working_dir": util_path,
-                    "env_vars": {"AG_DISTRIBUTED_MODE": "1", "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/utils/"}
+                    "env_vars": {
+                        "AG_DISTRIBUTED_MODE": "1",
+                        "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/utils/",
+                        "AG_NUM_NODES": str(instance_count)
+                    }
                 },
                 job_name=job_name,
                 wait=wait

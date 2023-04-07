@@ -7,6 +7,7 @@ from autogluon.cloud.utils.iam import (
     create_iam_policy,
     create_iam_role,
     create_instance_profile,
+    delete_iam_policy
 )
 
 
@@ -32,3 +33,4 @@ def test_iam_utils():
     add_role_to_instance_profile(dummy_instance_profile, dummy_role)
     instance_profile = iam_client.get_instance_profile(InstanceProfileName=dummy_instance_profile)["InstanceProfile"]
     assert instance_profile["Roles"][0]["Arn"] == dummy_role_arn
+    delete_iam_policy(dummy_policy_arn)
