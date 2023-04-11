@@ -4,12 +4,12 @@ import copy
 import json
 import logging
 import os
-import time
-import yaml
 import shutil
+import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+import yaml
 from sagemaker import image_uris
 
 from autogluon.common.utils.s3_utils import s3_bucket_prefix_to_path
@@ -22,10 +22,10 @@ from ..job.ray_job import RayFitJob
 from ..scripts import ScriptManager
 from ..utils.constants import CLOUD_RESOURCE_PREFIX
 from ..utils.dlc_utils import parse_framework_version
+from ..utils.iam import get_instance_profile_arn
 from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
 from ..utils.s3_utils import s3_path_to_bucket_prefix, upload_file
 from ..utils.utils import get_utc_timestamp_now
-from ..utils.iam import get_instance_profile_arn
 from .backend import Backend
 from .constant import RAY
 
@@ -54,6 +54,7 @@ class RayBackend(Backend):
         self.predictor_type = predictor_type
         self.region = None
         self._fit_job = RayFitJob(output_path=cloud_output_path + "/model")
+        os.makedirs(os.path.join(self.local_output_path, "job"), exist_ok=True)
 
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
@@ -61,7 +62,16 @@ class RayBackend(Backend):
 
     def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to fit call"""
-        raise NotImplementedError
+        custom_config = kwargs.get("custom_config", None)
+        cluster_name = kwargs.get("cluster_name", None)
+        initialization_commands = kwargs.get("initialization_commands", None)
+        ephemeral_cluster = kwargs.get("ephemeral_cluster", True)
+        return dict(
+            custom_config=custom_config,
+            cluster_name=cluster_name,
+            initialization_commands=initialization_commands,
+            ephemeral_cluster=ephemeral_cluster,
+        )
 
     def attach_job(self, job_name: str) -> None:
         """
@@ -111,7 +121,10 @@ class RayBackend(Backend):
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        ephemeral_cluster: bool = True,
         custom_config: Optional[Union[str, Dict[str, Any]]] = None,
+        cluster_name: Optional[str] = None,
+        initialization_commands: Optional[List[str]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -141,40 +154,68 @@ class RayBackend(Backend):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: Union[int, str], default = "auto",
             Number of instance used to fit the predictor.
-            if not specified, will use isntance_count = number of folds to be trained to maximize parallalism
+            If not specified, will use isntance_count = number of folds to be trained to maximize parallalism
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training (default: 256).
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
+        ephemeral_cluster: bool, default = True
+            Whether to tear down the cluster once the job finished or not.
+            If set to False, the user would need to shutdown the cluster manually.
         custom_config: Optional[Union[str, Dict[str, Any]]], default = None
             Config to be used to launch up the cluster. Default: None
             If not set, will use the default config pre-defined.
             If str, must be a path pointing to a yaml file containing the config.
+        cluster_name: Optional[str] = None, default = None
+            The name of the cluster being launched.
+            If not specified, will be auto-generated with format f"ag_ray_aws_default_{timestamp}".
+            If custom_config is provided, this option will not overwrite cluster name in your custom_config
+        initialization_commands: Optional[List[str]], default = None
+            The initialization commands of the ray cluster.
+            If not specified, will contain a default ECR login command to be able to pull AG DLC image, i.e.
+                - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com
+            To learn more about initialization_commands,
+                https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#initialization-commands
         """
         if image_column is not None:
-            logger.warning("Distributed training doesn't support image modality yet. Will ignore")
-            image_column = None
+            raise ValueError("Distributed training doesn't support image modality yet")
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
         tune_data = predictor_fit_args.pop("tuning_data", None)
-        num_bag_folds = predictor_fit_args.get("num_bag_folds", 8)
+        presets = predictor_fit_args.pop("presets", [])
+        num_bag_folds = predictor_fit_args.get("num_bag_folds", None)
 
         if instance_count == "auto":
             instance_count = num_bag_folds
+        else:
+            if (
+                instance_count > 1
+                and "best_quality" not in presets
+                and "high_quality" not in presets
+                and "good_quality" not in presets
+                and num_bag_folds is None
+            ):
+                logger.warning(
+                    f"Tabular Predictor will be trained without bagging hence not distributed, but you specified instance count > 1: {instance_count}."
+                )
+                logger.warning("Will deploy cluster with 1 instance only to save costs")
+                instance_count = 1
+        if instance_count is None:
+            if "best_quality" in presets or "high_quality" in presets or "good_quality" in presets:
+                instance_count = 8
+            else:
+                instance_count = 1
+
         image_uri = self._get_image_uri(
             framework_version=framework_version, custom_image_uri=custom_image_uri, instance_type=instance_type
         )
-        ag_args = self._construct_ag_args(
-            predictor_init_args=predictor_init_args,
-            predictor_fit_args=predictor_fit_args
-        )
+        self._construct_ag_args(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
         train_script = ScriptManager.get_train_script(backend_type=self.name, framework_version=framework_version)
-        util_path = os.path.join(self.local_output_path, "utils")
-        shutil.copy(train_script, util_path)
-        # TODO: remove this hack
-        self.cloud_output_path = "s3://" + self.cloud_output_path
+        job_path = os.path.join(self.local_output_path, "job")
+        shutil.copy(train_script, job_path)
+        self.cloud_output_path = self.cloud_output_path
         train_data, tune_data = self._upload_data(train_data=train_data, tune_data=tune_data)
 
         if instance_type.startswith("ml."):
@@ -183,26 +224,29 @@ class RayBackend(Backend):
 
         config = self._generate_config(
             config=custom_config,
+            cluster_name=cluster_name,
             instance_type=instance_type,
             instance_count=instance_count,
             volumes_size=volume_size,
             custom_image_uri=image_uri,
+            initialization_commands=initialization_commands,
         )
         cluster_manager = self._cluster_manager(config=config, cloud_output_bucket=self.cloud_output_path)
         cluster_up = False
         try:
-            # cluster_manager.up()
-            # cluster_up = True
-            # time.sleep(180)
+            logger.log(20, "Lauching up ray cluster")
+            cluster_manager.up()
+            cluster_up = True
+            time.sleep(10)
             cluster_manager.setup_connection()
             time.sleep(10)  # waiting for connection to setup
             if not job_name:
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
-            
+
             predictor_init_args = json.dumps(predictor_init_args)
             predictor_fit_args = json.dumps(predictor_fit_args)
-            entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path ag_args.yaml --train_data {train_data} --model_output_path s3://{self.get_fit_job_output_path()}"  # remove s3 once integrated with cloud predictor
+            entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path ag_args.yaml --train_data {train_data} --model_output_path {self.get_fit_job_output_path()}"  # remove s3 once integrated with cloud predictor
             if tune_data is not None:
                 entry_point_command += f" --tune_data {tune_data}"
             if leaderboard:
@@ -210,29 +254,37 @@ class RayBackend(Backend):
             job.run(
                 entry_point=entry_point_command,
                 runtime_env={
-                    "working_dir": util_path,
+                    "working_dir": job_path,
                     "env_vars": {
                         "AG_DISTRIBUTED_MODE": "1",
                         "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/utils/",
-                        "AG_NUM_NODES": str(instance_count)
-                    }
+                        "AG_NUM_NODES": str(instance_count),
+                    },
                 },
                 job_name=job_name,
-                wait=wait
+                wait=wait,
             )
+            if job.get_job_status() != "SUCCEEDED":
+                raise ValueError("Training job failed. Please check the log for reason.")
         except Exception as e:
             logger.warning("Exception occured. Will tear down the cluster if needed.")
             raise e
         finally:
-            pass
-            # if cluster_up:
-            #     try:
-            #         cluster_manager.down()
-            #     except Exception as down_e:
-            #         logger.warning(
-            #             "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
-            #         )
-            #         raise down_e
+            if ephemeral_cluster:
+                if cluster_up:
+                    logger.log(20, "Tearing down cluster")
+                    try:
+                        cluster_manager.down()
+                    except Exception as down_e:
+                        logger.warning(
+                            "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
+                        )
+                        raise down_e
+            else:
+                logger.info(
+                    20,
+                    "Cluster not being destroyed because `ephemeral_cluster` set to False. Please destory the cluster yourself.",
+                )
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
@@ -311,7 +363,7 @@ class RayBackend(Backend):
                 instance_type=instance_type,
             )
         return image_uri
-    
+
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, **kwargs):
         assert self.predictor_type is not None
         config = dict(
@@ -319,7 +371,7 @@ class RayBackend(Backend):
             predictor_fit_args=predictor_fit_args,
             **kwargs,
         )
-        path = os.path.join(self.local_output_path, "utils", "ag_args.yaml")
+        path = os.path.join(self.local_output_path, "job", "ag_args.yaml")
         with open(path, "w") as f:
             yaml.dump(config, f)
         return path
@@ -332,13 +384,17 @@ class RayBackend(Backend):
         train_data = self._prepare_data(train_data, "train")
         logger.log(20, "Uploading train data..")
         upload_file(file_name=train_data, bucket=cloud_bucket, prefix=util_key_prefix)
-        train_data = s3_bucket_prefix_to_path(bucket=cloud_bucket, prefix=f"{util_key_prefix}/{os.path.basename(train_data)}")
+        train_data = s3_bucket_prefix_to_path(
+            bucket=cloud_bucket, prefix=f"{util_key_prefix}/{os.path.basename(train_data)}"
+        )
         logger.log(20, "Train data uploaded successfully")
         if tune_data is not None:
             logger.log(20, "Uploading tune data...")
             tune_data = self._prepare_data(tune_data, "tune")
             upload_file(file_name=tune_data, bucket=cloud_bucket, prefix=util_key_prefix)
-            tune_data = s3_bucket_prefix_to_path(bucket=cloud_bucket, prefix=f"{util_key_prefix}/{os.path.basename(tune_data)}")
+            tune_data = s3_bucket_prefix_to_path(
+                bucket=cloud_bucket, prefix=f"{util_key_prefix}/{os.path.basename(tune_data)}"
+            )
             logger.log(20, "Tune data uploaded successfully")
         return train_data, tune_data
 
@@ -350,12 +406,14 @@ class RayBackend(Backend):
     def _generate_config(
         self,
         config: Optional[Union[str, Dict[str, Any]]] = None,
+        cluster_name: Optional[str] = None,
         instance_type: Optional[str] = None,
         instance_count: Optional[int] = None,
         volumes_size: Optional[int] = None,
         custom_image_uri: Optional[str] = None,
+        initialization_commands: Optional[List[str]] = None,
     ):
-        config_generator = self._cluster_config_generator(config=config, region=self.region)
+        config_generator = self._cluster_config_generator(config=config, cluster_name=cluster_name, region=self.region)
         if config is None:
             config_generator.update_config(
                 instance_type=instance_type,
@@ -364,6 +422,7 @@ class RayBackend(Backend):
                 custom_image_uri=custom_image_uri,
                 head_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),
                 worker_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),
+                initialization_commands=initialization_commands,
             )
             config = os.path.join(self.local_output_path, "utils", self._config_file_name)
             config_generator.save_config(save_path=config)

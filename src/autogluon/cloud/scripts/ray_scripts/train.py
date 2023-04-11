@@ -1,24 +1,24 @@
 import argparse
 import os
 import shutil
-import ray
 import time
-import yaml
 from datetime import datetime, timezone
 from typing import Optional
 
 import boto3
+import ray
+import yaml
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.tabular import TabularDataset, TabularPredictor
 
 
 def wait_for_nodes_to_be_ready():
-    expected_num_nodes = os.environ.get("AG_NUM_NODES")
+    expected_num_nodes = int(os.environ.get("AG_NUM_NODES"))
     ray.init("auto")
     print("Waiting for worker nodes to be ready")
     while len(ray.nodes()) < expected_num_nodes:
-        time.sleep("5")
+        time.sleep(5)
     ray.shutdown()
     print("All nodes ready")
 

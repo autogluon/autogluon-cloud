@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Dict
 
 import boto3
 
@@ -9,14 +9,14 @@ from ..cluster.ray_aws_cluster_config_generator import RayAWSClusterConfigGenera
 from ..cluster.ray_aws_cluster_manager import RayAWSClusterManager
 from ..cluster.ray_cluster_config_generator import RayClusterConfigGenerator
 from ..cluster.ray_cluster_manager import RayClusterManager
-from .constant import TABULAR_RAY
+from .constant import RAY_AWS, TABULAR_RAY_AWS
 from .ray_backend import RayBackend
 
 logger = logging.getLogger(__name__)
 
 
-class RayTabularBackend(RayBackend):
-    name = TABULAR_RAY
+class RayAWSBackend(RayBackend):
+    name = RAY_AWS
 
     @property
     def _cluster_config_generator(self) -> RayClusterConfigGenerator:
@@ -43,6 +43,6 @@ class RayTabularBackend(RayBackend):
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
         return RayAWSClusterManager.generate_default_permission(**kwargs)
 
-    def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
-        """Parse backend specific kwargs and get them ready to be sent to fit call"""
-        raise NotImplementedError
+
+class TabularRayAWSBackend(RayAWSBackend):
+    name = TABULAR_RAY_AWS

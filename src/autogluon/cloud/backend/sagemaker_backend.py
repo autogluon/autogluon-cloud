@@ -206,7 +206,7 @@ class SagemakerBackend(Backend):
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
+        instance_count: Union[int, str] = 1,
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
@@ -269,6 +269,14 @@ class SagemakerBackend(Backend):
 
         if not job_name:
             job_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
+
+        if instance_count == "auto":
+            instance_count = 1
+        if instance_count > 1:
+            logger.warning(
+                "We don't support distributed training with sagemaker backend yet. Will change instance_count to be 1"
+            )
+            instance_count = 1
 
         if autogluon_sagemaker_estimator_kwargs is None:
             autogluon_sagemaker_estimator_kwargs = {}

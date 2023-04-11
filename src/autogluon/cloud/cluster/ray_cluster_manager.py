@@ -90,7 +90,7 @@ class RayClusterManager(ClusterManager):
         """
         cmd = f"ray dashboard -p {port} {self.config}"
         if not block:
-            cmd = "nohup " + cmd + "&>/dev/null &"
+            cmd = "nohup " + cmd + " >/dev/null 2>&1 &"
         result = subprocess.run(cmd, shell=True, check=True)
         if result.returncode != 0:
             error_msg = "Failed to setup the dashboard."
@@ -115,3 +115,4 @@ class RayClusterManager(ClusterManager):
         Setup the cloud role and permission required to launch the cluster.
         The implementation will differ between cloud providers.
         """
+        raise NotImplementedError

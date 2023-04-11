@@ -29,7 +29,11 @@ class CloudPredictor(ABC):
     predictor_file_name = "CloudPredictor.pkl"
 
     def __init__(
-        self, cloud_output_path: str, local_output_path: Optional[str] = None, backend=SAGEMAKER, verbosity: int = 2
+        self,
+        cloud_output_path: str,
+        local_output_path: Optional[str] = None,
+        backend: str = SAGEMAKER,
+        verbosity: int = 2,
     ) -> None:
         """
         Parameters
@@ -49,6 +53,10 @@ class CloudPredictor(ABC):
             Note: To call `fit()` twice and save all results of each fit,
             you must specify different `local_output_path` locations or don't specify `local_output_path` at all.
             Otherwise files from first `fit()` will be overwritten by second `fit()`.
+        backend: str, default = "sagemaker"
+            The backend to use. Valid options are: "sagemaker" and "ray_aws".
+            SageMaker backend supports training, deploying and batch inference on AWS SageMaker. Only single instance training is supported.
+            RayAWS backend supports distributed training by creating an ephemeral ray cluster on AWS. Deployment and batch inferenc are not supported yet.
         verbosity : int, default = 2
             Verbosity levels range from 0 to 4 and control how much information is printed.
             Higher levels correspond to more detailed print statements (you can set verbosity = 0 to suppress warnings).
@@ -171,7 +179,7 @@ class CloudPredictor(ABC):
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
+        instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
@@ -203,6 +211,7 @@ class CloudPredictor(ABC):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
+            If not specified, will decide by the backend
         volumes_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training (default: 256).
             Must be large enough to store training data if File Mode is used (which is the default).
@@ -219,7 +228,19 @@ class CloudPredictor(ABC):
                 2. fit_kwargs
                     Any extra arguments needed to pass to fit.
                     Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
-
+            For RayAWS backend, valid keys are:
+                1. custom_config: Optional[Union[str, Dict[str, Any]]] = None,
+                    The custom cluster configuration.
+                    Please refer to https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#cluster-yaml-configuration-options for details
+                2. cluster_name: Optional[str] = None,
+                    The name of the ephemeral cluster being created.
+                    If not specified, will be auto-generated with format f"ag_ray_aws_default_{timestamp}"
+                3. initialization_commands: Optional[List[str]], default = None
+                    The initialization commands of the ray cluster.
+                    If not specified, will contain a default ECR login command to be able to pull AG DLC image, i.e.
+                        - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com
+                    To learn more about initialization_commands,
+                        https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#initialization-commands
         Returns
         -------
         `CloudPredictor` object. Returns self.

@@ -7,7 +7,8 @@ from autogluon.cloud.utils.iam import (
     create_iam_policy,
     create_iam_role,
     create_instance_profile,
-    delete_iam_policy
+    delete_iam_policy,
+    get_policy,
 )
 
 
@@ -23,7 +24,8 @@ def test_iam_utils():
         "Version": "2012-10-17",
         "Statement": [{"Effect": "Allow", "Action": "none:null", "Resource": "*"}],
     }
-    dummy_policy_arn = create_iam_policy("dommy_policy", dummy_policy)
+    dummy_policy_name = "dommy_policy"
+    dummy_policy_arn = create_iam_policy(dummy_policy_name, dummy_policy)
     assert dummy_policy_arn is not None
     attach_iam_policy(dummy_role, dummy_policy_arn)
     attached_policy = iam_client.list_attached_role_policies(RoleName=dummy_role)["AttachedPolicies"]
@@ -33,4 +35,5 @@ def test_iam_utils():
     add_role_to_instance_profile(dummy_instance_profile, dummy_role)
     instance_profile = iam_client.get_instance_profile(InstanceProfileName=dummy_instance_profile)["InstanceProfile"]
     assert instance_profile["Roles"][0]["Arn"] == dummy_role_arn
-    delete_iam_policy(dummy_policy_arn)
+    policy_arn = get_policy(dummy_policy_name, scope="Local")
+    delete_iam_policy(policy_arn)

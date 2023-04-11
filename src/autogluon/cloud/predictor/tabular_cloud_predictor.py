@@ -1,7 +1,7 @@
 import logging
 from typing import Dict
 
-from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER
+from ..backend.constant import RAY_AWS, SAGEMAKER, TABULAR_RAY_AWS, TABULAR_SAGEMAKER
 from .cloud_predictor import CloudPredictor
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class TabularCloudPredictor(CloudPredictor):
         """
         Map between general backend to module specific backend
         """
-        return {SAGEMAKER: TABULAR_SAGEMAKER}
+        return {SAGEMAKER: TABULAR_SAGEMAKER, RAY_AWS: TABULAR_RAY_AWS}
 
     def _get_local_predictor_cls(self):
         from autogluon.tabular import TabularPredictor

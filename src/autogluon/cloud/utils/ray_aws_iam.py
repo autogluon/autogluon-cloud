@@ -83,6 +83,7 @@ RAY_AWS_CLOUD_POLICY = {
                 "arn:aws:s3:::*sagemaker*",
             ],
         },
+        {"Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": ["*"]},
     ],
 }
 
