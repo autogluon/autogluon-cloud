@@ -209,6 +209,7 @@ class SagemakerBackend(Backend):
         instance_count: Union[int, str] = 1,
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
+        timeout: int = 24*60*60,
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
@@ -244,6 +245,8 @@ class SagemakerBackend(Backend):
         volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training (default: 100).
             Must be large enough to store training data if File Mode is used (which is the default).
+        timeout: int, default = 24*60*60
+            Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
@@ -288,6 +291,12 @@ class SagemakerBackend(Backend):
         ):
             autogluon_sagemaker_estimator_kwargs["disable_profiler"] = True
             autogluon_sagemaker_estimator_kwargs["debugger_hook_config"] = False
+        max_run = autogluon_sagemaker_estimator_kwargs.get("max_run", None)
+        if max_run is None:
+            autogluon_sagemaker_estimator_kwargs["max_run"] = timeout
+        else:
+            logger.warning(f"Both `max_run`: {max_run} and `timeout`: {timeout} are specified. Will ignore timeout")
+
         output_path = self.cloud_output_path + "/model"
         code_location = self.cloud_output_path + "/code"
 

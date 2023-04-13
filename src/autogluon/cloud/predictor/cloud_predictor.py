@@ -182,6 +182,7 @@ class CloudPredictor(ABC):
         instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
+        timeout: int = 24*60*60,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
     ) -> CloudPredictor:
@@ -215,6 +216,8 @@ class CloudPredictor(ABC):
         volumes_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training (default: 256).
             Must be large enough to store training data if File Mode is used (which is the default).
+        timeout: int, default = 24*60*60
+            Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
@@ -262,6 +265,7 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
+            timeout=timeout,
             wait=wait,
             **backend_kwargs,
         )

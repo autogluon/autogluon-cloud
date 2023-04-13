@@ -2,10 +2,12 @@
 # TODO: Investigate and re-enable after release
 #!/bin/bash
 
-# set -ex
+AG_VERSION="${1:-source}"
 
-# source $(dirname "$0")/env_setup.sh
+set -ex
 
-# install_cloud_test
+source $(dirname "$0")/env_setup.sh
 
-# python3 -m pytest --forked --junitxml=results.xml tests/unittests/cluster/
+install_cloud_test
+
+python3 -m pytest --forked --junitxml=results.xml tests/unittests/cluster/ --framework_version $AG_VERSION

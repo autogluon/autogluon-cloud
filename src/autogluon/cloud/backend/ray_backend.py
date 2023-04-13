@@ -120,6 +120,7 @@ class RayBackend(Backend):
         instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
+        timeout: int = 24*60*60,
         wait: bool = True,
         ephemeral_cluster: bool = True,
         custom_config: Optional[Union[str, Dict[str, Any]]] = None,
@@ -157,6 +158,8 @@ class RayBackend(Backend):
             If not specified, will use isntance_count = number of folds to be trained to maximize parallalism
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training (default: 256).
+        timeout: int, default = 24*60*60
+            Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
@@ -221,6 +224,8 @@ class RayBackend(Backend):
         if instance_type.startswith("ml."):
             # Remove the ml. prefix from SageMaker instance type
             instance_type = ".".join(instance_type.split(".")[1:])
+            
+        self._setup_role_and_permission()
 
         config = self._generate_config(
             config=custom_config,
@@ -262,6 +267,7 @@ class RayBackend(Backend):
                     },
                 },
                 job_name=job_name,
+                timeout=timeout,
                 wait=wait,
             )
             if job.get_job_status() != "SUCCEEDED":
@@ -281,7 +287,7 @@ class RayBackend(Backend):
                         )
                         raise down_e
             else:
-                logger.info(
+                logger.log(
                     20,
                     "Cluster not being destroyed because `ephemeral_cluster` set to False. Please destory the cluster yourself.",
                 )
@@ -402,6 +408,9 @@ class RayBackend(Backend):
         path = os.path.join(self.local_output_path, "utils")
         converter = FormatConverterFactory.get_converter(output_type)
         return converter.convert(data, path, filename)
+    
+    def _setup_role_and_permission(self):
+        raise NotImplementedError
 
     def _generate_config(
         self,

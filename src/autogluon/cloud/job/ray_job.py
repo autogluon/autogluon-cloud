@@ -82,7 +82,7 @@ class RayJob(RemoteJob):
         runtime_env: Dict[str, Any] = None,
         job_name: Optional[str] = None,
         wait: bool = True,
-        timeout: int = 3600,
+        timeout: int = 24*60*60,
         ray_submit_job_args: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
@@ -146,7 +146,8 @@ class RayJob(RemoteJob):
         """
         Get the output path of the job generated artifacts if any.
         """
-        return self._output_path
+        output_path = self._output_path + "/" + "model.zip" if not self._output_path.endswith("/") else self._output_path + "model.zip"
+        return output_path
 
     def _wait_until_status(self, job_name, status_to_wait_for, timeout, log_frequency=10):
         start = time.time()

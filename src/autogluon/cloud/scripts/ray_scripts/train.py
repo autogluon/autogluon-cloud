@@ -79,8 +79,9 @@ if __name__ == "__main__":
     )
     print("Compressing the model artifacts")
     model_artifact = shutil.make_archive("model", "zip", save_path)
-    cloud_bucket, cloud_prefix = s3_path_to_bucket_prefix(args.model_output_path)
-    print(f"Uploading model artifact to {args.model_output_path}")
+    model_output_path = os.path.dirname(args.model_output_path)
+    cloud_bucket, cloud_prefix = s3_path_to_bucket_prefix(model_output_path)
+    print(f"Uploading model artifact to {model_output_path}")
     upload_file(file_name=model_artifact, bucket=cloud_bucket, prefix=cloud_prefix)
 
     if args.leaderboard:
