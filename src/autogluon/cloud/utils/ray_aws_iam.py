@@ -59,8 +59,11 @@ RAY_AWS_CLOUD_POLICY = {
                 "iam:GetInstanceProfile",
                 "iam:CreateInstanceProfile",
                 "iam:CreateRole",
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
                 "iam:GetRole",
                 "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
                 "iam:AddRoleToInstanceProfile",
                 "iam:PassRole",
             ],
@@ -84,6 +87,11 @@ RAY_AWS_CLOUD_POLICY = {
             ],
         },
         {"Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": ["*"]},
+        {
+            "Effect": "Allow",
+            "Action": ["iam:ListPolicies", "iam:ListEntitiesForPolicy", "iam:ListPolicyVersions"],
+            "Resource": ["*"],
+        },
     ],
 }
 

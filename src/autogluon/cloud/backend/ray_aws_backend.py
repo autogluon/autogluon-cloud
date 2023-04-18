@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Dict
 
 import boto3
-import time
 
 from ..cluster.ray_aws_cluster_config_generator import RayAWSClusterConfigGenerator
 from ..cluster.ray_aws_cluster_manager import RayAWSClusterManager
 from ..cluster.ray_cluster_config_generator import RayClusterConfigGenerator
 from ..cluster.ray_cluster_manager import RayClusterManager
-from .constant import RAY_AWS, TABULAR_RAY_AWS
-from .ray_backend import RayBackend
-
 from ..utils.iam import (
     add_role_to_instance_profile,
     attach_iam_policy,
@@ -32,6 +29,8 @@ from ..utils.ray_aws_iam import (
     RAY_AWS_TRUST_RELATIONSHIP,
     RAY_INSTANCE_PROFILE_NAME,
 )
+from .constant import RAY_AWS, TABULAR_RAY_AWS
+from .ray_backend import RayBackend
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +62,7 @@ class RayAWSBackend(RayBackend):
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
         return RayAWSClusterManager.generate_default_permission(**kwargs)
-    
+
     def _setup_role_and_permission(self):
         """
         AutoGluon distributed training requires access to s3 bucket and ecr repo.

@@ -209,7 +209,7 @@ class SagemakerBackend(Backend):
         instance_count: Union[int, str] = 1,
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
-        timeout: int = 24*60*60,
+        timeout: int = 24 * 60 * 60,
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,

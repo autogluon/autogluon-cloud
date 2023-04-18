@@ -182,7 +182,7 @@ class CloudPredictor(ABC):
         instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
-        timeout: int = 24*60*60,
+        timeout: int = 24 * 60 * 60,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
     ) -> CloudPredictor:

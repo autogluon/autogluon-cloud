@@ -120,7 +120,7 @@ class RayBackend(Backend):
         instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
-        timeout: int = 24*60*60,
+        timeout: int = 24 * 60 * 60,
         wait: bool = True,
         ephemeral_cluster: bool = True,
         custom_config: Optional[Union[str, Dict[str, Any]]] = None,
@@ -224,7 +224,7 @@ class RayBackend(Backend):
         if instance_type.startswith("ml."):
             # Remove the ml. prefix from SageMaker instance type
             instance_type = ".".join(instance_type.split(".")[1:])
-            
+
         self._setup_role_and_permission()
 
         config = self._generate_config(
@@ -408,7 +408,7 @@ class RayBackend(Backend):
         path = os.path.join(self.local_output_path, "utils")
         converter = FormatConverterFactory.get_converter(output_type)
         return converter.convert(data, path, filename)
-    
+
     def _setup_role_and_permission(self):
         raise NotImplementedError
 
