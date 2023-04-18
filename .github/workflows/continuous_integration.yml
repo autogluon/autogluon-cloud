@@ -64,6 +64,7 @@ jobs:
           chmod +x ./.github/workflow_scripts/cloud_lint_check.sh && ./.github/workflow_scripts/cloud_lint_check.sh
   test_general_cloud:
     strategy:
+      fail-fast: false
       matrix:
         AG_VERSION: ["source", "0.7.0"]
     needs: cloud_lint_check
@@ -95,6 +96,7 @@ jobs:
           ag_version: '${{ matrix.AG_VERSION }}'
   test_tabular_cloud:
     strategy:
+      fail-fast: false
       matrix:
         AG_VERSION: ["source", "0.7.0"]
     needs: cloud_lint_check
@@ -126,6 +128,7 @@ jobs:
           ag_version: '${{ matrix.AG_VERSION }}'
   test_text_cloud:
     strategy:
+      fail-fast: false
       matrix:
         AG_VERSION: ["source", "0.7.0"]
     needs: cloud_lint_check
@@ -157,6 +160,7 @@ jobs:
           ag_version: '${{ matrix.AG_VERSION }}'
   test_image_cloud:
     strategy:
+      fail-fast: false
       matrix:
         AG_VERSION: ["source", "0.7.0"]
     needs: cloud_lint_check
@@ -188,6 +192,7 @@ jobs:
           ag_version: '${{ matrix.AG_VERSION }}'
   test_multimodal_cloud:
     strategy:
+      fail-fast: false
       matrix:
         AG_VERSION: ["source", "0.7.0"]
     needs: cloud_lint_check
@@ -219,6 +224,7 @@ jobs:
           ag_version: '${{ matrix.AG_VERSION }}'
   test_timeseries_cloud:
     strategy:
+      fail-fast: false
       matrix:
         AG_VERSION: ["source", "0.7.0"]
     needs: cloud_lint_check
