@@ -13,7 +13,7 @@ def test_distributed_training(test_helper, framework_version):
         os.chdir(temp_dir)
         timestamp = test_helper.get_utc_timestamp_now()
         cp = TabularCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-distributed//{framework_version}/{timestamp}",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-distributed/{framework_version}/{timestamp}",
             local_output_path="test_tabular_distributed",
             backend="ray_aws",
         )
