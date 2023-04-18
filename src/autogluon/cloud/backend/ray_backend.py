@@ -242,7 +242,7 @@ class RayBackend(Backend):
             logger.log(20, "Lauching up ray cluster")
             cluster_manager.up()
             cluster_up = True
-            time.sleep(10)
+            time.sleep(60)
             cluster_manager.setup_connection()
             time.sleep(10)  # waiting for connection to setup
             if not job_name:

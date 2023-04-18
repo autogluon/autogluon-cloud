@@ -1,8 +1,10 @@
+import boto3
 import os
 import tempfile
 
 import pandas as pd
 
+from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.cloud import TabularCloudPredictor
 
 
@@ -31,3 +33,8 @@ def test_distributed_training(test_helper, framework_version):
         cp.fit(
             predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args, custom_image_uri=image_uri
         )
+        
+        model_artifact_path = cp.get_fit_job_output_path()
+        bucket, prefix = s3_path_to_bucket_prefix(model_artifact_path)
+        s3_client = boto3.client("s3")
+        s3_client.head_object(Bucket=bucket, Key=prefix)
