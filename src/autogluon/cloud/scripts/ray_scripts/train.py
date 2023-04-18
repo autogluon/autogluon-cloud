@@ -41,7 +41,7 @@ def upload_file(file_name: str, bucket: str, prefix: Optional[str] = None):
         S3 prefix. If not specified then will upload to the root of the bucket
     """
     object_name = os.path.basename(file_name)
-    if len(prefix) == 0:
+    if prefix is not None and len(prefix) == 0:
         prefix = None
     if prefix is not None:
         object_name = prefix + "/" + object_name
