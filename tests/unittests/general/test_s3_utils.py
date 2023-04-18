@@ -16,7 +16,7 @@ def test_upload_file():
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         file_name = "temp.txt"
-        with open(file_name, "w") as temp_file:
+        with open(file_name, "w") as _:
             # create an empty file
             pass
         upload_file(file_name=file_name, bucket=bucket_name)

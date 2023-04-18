@@ -114,7 +114,7 @@ def detach_policy(policy_arn: str):
 def delete_policy_versions(policy_arn: str):
     iam_client = boto3.client("iam")
     response = iam_client.list_policy_versions(PolicyArn=policy_arn)
-    version_ids = [version["VersionId"] for version in response["Versions"] if version["IsDefaultVersion"] == False]
+    version_ids = [version["VersionId"] for version in response["Versions"] if version["IsDefaultVersion"] is False]
     for version_id in version_ids:
         iam_client.delete_policy_version(PolicyArn=policy_arn, VersionId=version_id)
 

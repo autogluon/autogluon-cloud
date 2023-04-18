@@ -247,7 +247,7 @@ class CloudPredictor(ABC):
         Returns
         -------
         `CloudPredictor` object. Returns self.
-        """
+        """  # noqa: E501
         assert (
             not self.backend.is_fit
         ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"

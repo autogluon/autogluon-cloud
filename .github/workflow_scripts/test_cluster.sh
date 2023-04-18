@@ -1,5 +1,3 @@
-# Disable now because some weird issue appeared today (3/27/2023) on github to unblock release
-# TODO: Investigate and re-enable after release
 #!/bin/bash
 
 AG_VERSION="${1:-source}"

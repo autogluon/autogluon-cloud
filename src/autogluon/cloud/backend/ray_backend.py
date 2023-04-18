@@ -251,11 +251,11 @@ class RayBackend(Backend):
 
             predictor_init_args = json.dumps(predictor_init_args)
             predictor_fit_args = json.dumps(predictor_fit_args)
-            entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path ag_args.yaml --train_data {train_data} --model_output_path {self.get_fit_job_output_path()}"  # remove s3 once integrated with cloud predictor
+            entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path ag_args.yaml --train_data {train_data} --model_output_path {self.get_fit_job_output_path()}"  # noqa: E501
             if tune_data is not None:
                 entry_point_command += f" --tune_data {tune_data}"
             if leaderboard:
-                entry_point_command += f" --leaderboard"
+                entry_point_command += " --leaderboard"
             job.run(
                 entry_point=entry_point_command,
                 runtime_env={
