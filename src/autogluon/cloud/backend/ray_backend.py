@@ -238,6 +238,7 @@ class RayBackend(Backend):
         )
         cluster_manager = self._cluster_manager(config=config, cloud_output_bucket=self.cloud_output_path)
         cluster_up = False
+        job_submitted = False
         try:
             logger.log(20, "Lauching up ray cluster")
             cluster_manager.up()
@@ -256,6 +257,8 @@ class RayBackend(Backend):
                 entry_point_command += f" --tune_data {tune_data}"
             if leaderboard:
                 entry_point_command += " --leaderboard"
+            if not wait and ephemeral_cluster:
+                entry_point_command += f" --cluster_config_file {os.path.basename(config)}"
             job.run(
                 entry_point=entry_point_command,
                 runtime_env={
@@ -270,27 +273,28 @@ class RayBackend(Backend):
                 timeout=timeout,
                 wait=wait,
             )
-            if job.get_job_status() != "SUCCEEDED":
+            job_submitted = True
+            if wait and job.get_job_status() != "SUCCEEDED":
                 raise ValueError("Training job failed. Please check the log for reason.")
         except Exception as e:
             logger.warning("Exception occured. Will tear down the cluster if needed.")
             raise e
         finally:
-            if ephemeral_cluster:
-                if cluster_up:
-                    logger.log(20, "Tearing down cluster")
-                    try:
-                        cluster_manager.down()
-                    except Exception as down_e:
-                        logger.warning(
-                            "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
-                        )
-                        raise down_e
+            if wait:
+                if ephemeral_cluster:
+                    if cluster_up:
+                        self._tear_down_cluster(cluster_manager)
+                else:
+                    logger.log(
+                        20,
+                        "Cluster not being destroyed because `ephemeral_cluster` set to False. Please destory the cluster yourself.",
+                    )
             else:
-                logger.log(
-                    20,
-                    "Cluster not being destroyed because `ephemeral_cluster` set to False. Please destory the cluster yourself.",
-                )
+                if ephemeral_cluster and cluster_up:
+                    if job_submitted:
+                        logger.log(20, "Cluster will be destroyed after the job completes")
+                    else:
+                        self._tear_down_cluster(cluster_manager)
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
@@ -433,6 +437,16 @@ class RayBackend(Backend):
                 worker_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),
                 initialization_commands=initialization_commands,
             )
-            config = os.path.join(self.local_output_path, "utils", self._config_file_name)
+            config = os.path.join(self.local_output_path, "job", self._config_file_name)
             config_generator.save_config(save_path=config)
         return config
+
+    def _tear_down_cluster(self, cluster_manager: RayClusterManager):
+        logger.log(20, "Tearing down cluster")
+        try:
+            cluster_manager.down()
+        except Exception as down_e:
+            logger.warning(
+                "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
+            )
+            raise down_e

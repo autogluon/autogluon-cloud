@@ -27,6 +27,14 @@ def get_utc_timestamp_now():
     return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
 
+def tear_down_cluster(cluster_config_file):
+    import subprocess
+    print("Will tear down the cluster in 10 secs")
+    time.sleep(10)
+    cmd = f"ray stop --force; ray down {cluster_config_file} -y"
+    subprocess.Popen(cmd, shell=True, preexec_fn=os.setpgrp)  # Avoid being terminated because ray runtime is down
+
+
 def upload_file(file_name: str, bucket: str, prefix: Optional[str] = None):
     """
     Upload a file to an S3 bucket
@@ -58,6 +66,7 @@ if __name__ == "__main__":
     parser.add_argument("--tune_data", type=str, required=False)
     parser.add_argument("--model_output_path", type=str, required=True)
     parser.add_argument("--leaderboard", action="store_true")
+    parser.add_argument("--cluster_config_file", type=str, required=False)
     parser.set_defaults(leaderboard=False)
     args = parser.parse_args()
 
@@ -90,3 +99,7 @@ if __name__ == "__main__":
         lb.to_csv(leaderboard_file)
         upload_file(file_name=leaderboard_file, bucket=cloud_bucket, prefix=cloud_prefix)
     print("Training finished")
+
+    cluster_config_file = args.cluster_config_file
+    if cluster_config_file is not None:
+        tear_down_cluster(cluster_config_file)
