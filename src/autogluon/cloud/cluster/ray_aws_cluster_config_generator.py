@@ -5,6 +5,7 @@ from ..utils.utils import get_utc_timestamp_now
 from .cluster_config_generator import DEFAULT_CONFIG_LOCATION
 from .constants import (
     ARN,
+    AUTH,
     AVAILABLE_NODE_TYPES,
     BLOCK_DEVICE_MAPPINGS,
     CLUSTER_NAME,
@@ -14,11 +15,13 @@ from .constants import (
     IMAGE,
     INITIALIZATION_COMMANDS,
     INSTANCE_TYPE,
+    KEY_NAME,
     MAX_WORKERS,
     MIN_WORKERS,
     NODE_CONFIG,
     PROVIDER,
     REGION,
+    SSH_PRIVATE_KEY,
     VOLUME_SIZE,
 )
 from .ray_cluster_config_generator import RayClusterConfigGenerator
@@ -61,11 +64,12 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         worker_node_name: Optional[str] = "worker",
         volumes_size: Optional[int] = None,
         custom_image_uri: Optional[str] = None,
+        ssh_key_path: Optional[str] = None,
         head_instance_profile: Optional[str] = None,
         worker_instance_profile: Optional[str] = None,
         initialization_commands: Optional[List[str]] = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ):
         """
         Update current config with given parameters.
 
@@ -99,6 +103,10 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             If provided, will overwrite `docker.image`
             To learn more,
                 https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#docker-image
+        ssh_key_path: str, default = None
+            The path to the local ssh key
+            To learn more,
+                https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#auth-ssh-private-key
         head_instance_profile: Optional[str], default = None
             The instance profile arn to be attched to the head node. If not specified, a default one will be created with full EC2 and S3 permissions.
             To learn how to scope down the permission,
@@ -118,6 +126,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         self._update_instance_count(instance_count=instance_count, worker_node_name=worker_node_name)
         self._update_volume_size(volumes_size=volumes_size)
         self._update_custom_image(custom_image_uri=custom_image_uri)
+        self._update_ssh_key(ssh_key_path=ssh_key_path)
         self._update_instance_profile(node=head_node_name, instance_profile=head_instance_profile)
         self._update_instance_profile(node=worker_node_name, instance_profile=worker_instance_profile)
         self._update_initialization_commands(initialization_commands=initialization_commands)
@@ -185,6 +194,21 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             if DOCKER not in self.config:
                 self.config[DOCKER] = {}
             self.config[DOCKER].update({IMAGE: custom_image_uri})
+
+    def _update_ssh_key(self, ssh_key_path):
+        if ssh_key_path is not None:
+            if AUTH not in self.config:
+                self.config[AUTH] = {"ssh_user": "ubuntu"}
+            ssh_key_path = os.path.abspath(os.path.normpath(ssh_key_path))
+            self.config[AUTH].update({SSH_PRIVATE_KEY: ssh_key_path})
+            self._set_available_node_types()
+            key_name = os.path.basename(ssh_key_path).rsplit(".", 1)[0]
+            for node in self.config[AVAILABLE_NODE_TYPES]:
+                node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
+                assert (
+                    node_config is not None
+                ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+                self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG].update({KEY_NAME: key_name})
 
     def _update_instance_profile(self, node, instance_profile):
         if instance_profile is not None:

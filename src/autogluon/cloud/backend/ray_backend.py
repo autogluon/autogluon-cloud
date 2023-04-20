@@ -12,7 +12,7 @@ import pandas as pd
 import yaml
 from sagemaker import image_uris
 
-from autogluon.common.utils.s3_utils import s3_bucket_prefix_to_path
+from autogluon.common.utils.s3_utils import s3_bucket_prefix_to_path, s3_path_to_bucket_prefix
 
 from ..cluster.ray_cluster_config_generator import RayClusterConfigGenerator
 from ..cluster.ray_cluster_manager import RayClusterManager
@@ -24,7 +24,7 @@ from ..utils.constants import CLOUD_RESOURCE_PREFIX
 from ..utils.dlc_utils import parse_framework_version
 from ..utils.iam import get_instance_profile_arn
 from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
-from ..utils.s3_utils import s3_path_to_bucket_prefix, upload_file
+from ..utils.s3_utils import upload_file
 from ..utils.utils import get_utc_timestamp_now
 from .backend import Backend
 from .constant import RAY
@@ -194,7 +194,7 @@ class RayBackend(Backend):
             instance_count = num_bag_folds
         else:
             if (
-                instance_count > 1
+                int(instance_count) > 1
                 and "best_quality" not in presets
                 and "high_quality" not in presets
                 and "good_quality" not in presets
@@ -226,6 +226,12 @@ class RayBackend(Backend):
             instance_type = ".".join(instance_type.split(".")[1:])
 
         self._setup_role_and_permission()
+        key_name = None
+        key_local_path = None
+        if custom_config is None:
+            key_name = f"ag_ray_cluster_{get_utc_timestamp_now()}"
+            key_local_path = os.path.join(self.local_output_path, "utils")
+            key_local_path = self._setup_key(key_name=key_name, local_path=key_local_path)
 
         config = self._generate_config(
             config=custom_config,
@@ -234,15 +240,17 @@ class RayBackend(Backend):
             instance_count=instance_count,
             volumes_size=volume_size,
             custom_image_uri=image_uri,
+            ssh_key_path=key_local_path,
             initialization_commands=initialization_commands,
         )
         cluster_manager = self._cluster_manager(config=config, cloud_output_bucket=self.cloud_output_path)
         cluster_up = False
         job_submitted = False
         try:
-            logger.log(20, "Lauching up ray cluster")
+            logger.log(20, "Launching up ray cluster")
             cluster_manager.up()
             cluster_up = True
+            logger.log(20, "Waiting for 60s to give the cluster some buffer time")
             time.sleep(60)
             cluster_manager.setup_connection()
             time.sleep(10)  # waiting for connection to setup
@@ -283,18 +291,26 @@ class RayBackend(Backend):
             if wait:
                 if ephemeral_cluster:
                     if cluster_up:
-                        self._tear_down_cluster(cluster_manager)
+                        self._tear_down_cluster(
+                            cluster_manager,
+                            key_name=key_name,
+                            key_local_path=os.path.join(self.local_output_path, "utils"),
+                        )
                 else:
                     logger.log(
                         20,
-                        "Cluster not being destroyed because `ephemeral_cluster` set to False. Please destory the cluster yourself.",
+                        "Cluster not being destroyed because `ephemeral_cluster` set to False. Please destroy the cluster yourself.",
                     )
             else:
                 if ephemeral_cluster and cluster_up:
                     if job_submitted:
                         logger.log(20, "Cluster will be destroyed after the job completes")
                     else:
-                        self._tear_down_cluster(cluster_manager)
+                        self._tear_down_cluster(
+                            cluster_manager,
+                            key_name=key_name,
+                            key_local_path=os.path.join(self.local_output_path, "utils"),
+                        )
 
     def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to deploy call"""
@@ -354,9 +370,9 @@ class RayBackend(Backend):
         """Batch inference probability"""
         raise NotImplementedError
 
-    def _get_image_uri(self, framework_version: str, custom_image_uri: str, instance_type: str):
+    def _get_image_uri(self, framework_version: str, instance_type: str, custom_image_uri: Optional[str] = None):
         image_uri = custom_image_uri
-        if custom_image_uri:
+        if custom_image_uri is not None:
             framework_version, py_version = None, None
             logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
         else:
@@ -414,6 +430,40 @@ class RayBackend(Backend):
         return converter.convert(data, path, filename)
 
     def _setup_role_and_permission(self):
+        """
+        Setup necessary role and permission to upload utils and launch up cluster
+        """
+        raise NotImplementedError
+
+    def _setup_key(self, key_name: str, local_path: str) -> str:
+        """
+        Setup the ssh key required to connect to the cluster.
+
+        Parameters
+        ----------
+        key_name: str
+            Name of the key pair
+        local_path: str
+            Local path to store the private key
+
+        Return
+        ------
+        str,
+            Path to the local private key
+        """
+        raise NotImplementedError
+
+    def _cleanup_key(self, key_name: str, local_path: Optional[str] = None):
+        """
+        Cleanup the ssh key required to connect to the cluster.
+
+        Parameter
+        ---------
+        key_name: str
+            Name of the key pair
+        local_path: str, default = None
+            Local path to the stored private key
+        """
         raise NotImplementedError
 
     def _generate_config(
@@ -424,15 +474,19 @@ class RayBackend(Backend):
         instance_count: Optional[int] = None,
         volumes_size: Optional[int] = None,
         custom_image_uri: Optional[str] = None,
+        ssh_key_path: Optional[str] = None,
         initialization_commands: Optional[List[str]] = None,
     ):
-        config_generator = self._cluster_config_generator(config=config, cluster_name=cluster_name, region=self.region)
+        config_generator: RayClusterConfigGenerator = self._cluster_config_generator(
+            config=config, cluster_name=cluster_name, region=self.region
+        )
         if config is None:
             config_generator.update_config(
                 instance_type=instance_type,
                 instance_count=instance_count,
                 volumes_size=volumes_size,
                 custom_image_uri=custom_image_uri,
+                ssh_key_path=ssh_key_path,
                 head_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),
                 worker_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),
                 initialization_commands=initialization_commands,
@@ -441,10 +495,14 @@ class RayBackend(Backend):
             config_generator.save_config(save_path=config)
         return config
 
-    def _tear_down_cluster(self, cluster_manager: RayClusterManager):
+    def _tear_down_cluster(
+        self, cluster_manager: RayClusterManager, key_name: Optional[str], key_local_path: Optional[str]
+    ):
         logger.log(20, "Tearing down cluster")
         try:
             cluster_manager.down()
         except Exception as down_e:
             logger.warning("Failed to tear down the cluster. Please go to the console to terminate instanecs manually")
             raise down_e
+        if key_name is not None:
+            self._cleanup_key(key_name=key_name, local_path=key_local_path)

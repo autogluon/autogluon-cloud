@@ -6,6 +6,7 @@ import yaml
 
 from autogluon.cloud.cluster import ClusterConfigGenerator, RayAWSClusterConfigGenerator
 from autogluon.cloud.cluster.constants import (
+    AUTH,
     AVAILABLE_NODE_TYPES,
     BLOCK_DEVICE_MAPPINGS,
     DOCKER,
@@ -13,11 +14,13 @@ from autogluon.cloud.cluster.constants import (
     IMAGE,
     INITIALIZATION_COMMANDS,
     INSTANCE_TYPE,
+    KEY_NAME,
     MAX_WORKERS,
     MIN_WORKERS,
     NODE_CONFIG,
     PROVIDER,
     REGION,
+    SSH_PRIVATE_KEY,
     VOLUME_SIZE,
 )
 
@@ -57,6 +60,7 @@ def test_update_ray_aws_cluster_config(config):
             instance_count=2,
             volumes_size=2,
             custom_image_uri="bar",
+            ssh_key_path="dummy.pem",
             initialization_commands=["abc"],
         )
         node = config_generator.config[AVAILABLE_NODE_TYPES]["worker"]
@@ -65,6 +69,8 @@ def test_update_ray_aws_cluster_config(config):
         assert config_generator.config[MAX_WORKERS] == 1 and node[MIN_WORKERS] == 1
         assert node_config[BLOCK_DEVICE_MAPPINGS][0][EBS][VOLUME_SIZE] == 2
         assert config_generator.config[DOCKER][IMAGE] == "bar"
+        assert config_generator.config[AUTH][SSH_PRIVATE_KEY] == os.path.abspath("dummy.pem")
+        assert node_config[KEY_NAME] == "dummy"
         assert config_generator.config[INITIALIZATION_COMMANDS] == ["abc"]
         config = config_generator.config
         # Test save

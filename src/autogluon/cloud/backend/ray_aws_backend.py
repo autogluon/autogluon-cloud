@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 import boto3
 
@@ -10,6 +10,7 @@ from ..cluster.ray_aws_cluster_config_generator import RayAWSClusterConfigGenera
 from ..cluster.ray_aws_cluster_manager import RayAWSClusterManager
 from ..cluster.ray_cluster_config_generator import RayClusterConfigGenerator
 from ..cluster.ray_cluster_manager import RayClusterManager
+from ..utils.ec2 import create_key_pair, delete_key_pair
 from ..utils.iam import (
     add_role_to_instance_profile,
     attach_iam_policy,
@@ -87,6 +88,12 @@ class RayAWSBackend(RayBackend):
         if instance_profile_arn is not None:
             add_role_to_instance_profile(instance_profile_name=RAY_INSTANCE_PROFILE_NAME, role_name=RAY_AWS_ROLE_NAME)
         time.sleep(5)  # Leave sometime to allow resource to propagate
+
+    def _setup_key(self, key_name: str, local_path: str) -> str:
+        return create_key_pair(key_name=key_name, local_path=local_path)
+
+    def _cleanup_key(self, key_name: str, local_path: Optional[str]):
+        delete_key_pair(key_name=key_name, local_path=local_path)
 
 
 class TabularRayAWSBackend(RayAWSBackend):

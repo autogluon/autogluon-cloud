@@ -51,7 +51,12 @@ RAY_AWS_CLOUD_POLICY = {
         {
             "Effect": "Allow",
             "Action": ["ec2:CreateKeyPair"],
-            "Resource": [f"arn:aws:ec2:*:{POLICY_ACCOUNT_PLACE_HOLDER}:key-pair/*"],
+            "Resource": [f"arn:aws:ec2:*:{POLICY_ACCOUNT_PLACE_HOLDER}:key-pair/ag_ray_cluster*"],
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["ec2:DeleteKeyPair"],
+            "Resource": [f"arn:aws:ec2:*:{POLICY_ACCOUNT_PLACE_HOLDER}:key-pair/ag_ray_cluster*"],
         },
         {
             "Effect": "Allow",
@@ -59,8 +64,6 @@ RAY_AWS_CLOUD_POLICY = {
                 "iam:GetInstanceProfile",
                 "iam:CreateInstanceProfile",
                 "iam:CreateRole",
-                "iam:CreatePolicy",
-                "iam:DeletePolicy",
                 "iam:GetRole",
                 "iam:AttachRolePolicy",
                 "iam:DetachRolePolicy",
@@ -68,6 +71,14 @@ RAY_AWS_CLOUD_POLICY = {
                 "iam:PassRole",
             ],
             "Resource": ["*"],
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
+            ],
+            "Resource": [f"arn:aws:iam::{POLICY_ACCOUNT_PLACE_HOLDER}:policy/AGRayClusterPolicy*"],
         },
         {
             "Effect": "Allow",
