@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import math
 import time
@@ -79,7 +80,7 @@ class RayJob(RemoteJob):
     def run(
         self,
         entry_point: str,
-        runtime_env: Dict[str, Any] = None,
+        runtime_env: Optional[Dict[str, Any]] = None,
         job_name: Optional[str] = None,
         wait: bool = True,
         timeout: int = 24 * 60 * 60,
@@ -120,14 +121,11 @@ class RayJob(RemoteJob):
         logger.log(20, f"Submitted job {job_name} to the cluster")
         self._job_name = job_name
         if wait:
-            logger.warning("We don't support log streaming currently. Logs will be avaialbe when the job is finished")
             self._wait_until_status(
                 job_name=job_name,
                 status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED},
                 timeout=timeout,
             )
-            logs = self.client.get_job_logs(job_id=job_name)
-            logger.log(20, logs)
 
     def get_job_status(self) -> Optional[str]:
         """
@@ -146,26 +144,33 @@ class RayJob(RemoteJob):
         """
         Get the output path of the job generated artifacts if any.
         """
-        output_path = (
-            self._output_path + "/" + "model.zip"
-            if not self._output_path.endswith("/")
-            else self._output_path + "model.zip"
-        )
-        return output_path
+        if self._output_path is not None:
+            output_path = (
+                self._output_path + "/" + "model.zip"
+                if not self._output_path.endswith("/")
+                else self._output_path + "model.zip"
+            )
+            return output_path
+        return None
 
     def _wait_until_status(self, job_name, status_to_wait_for, timeout, log_frequency=10):
         start = time.time()
         finished = False
+        asyncio.run(self._stream_log(job_name))
         while time.time() - start <= timeout:
             status = self.client.get_job_status(job_name)
-            logger.log(20, f"status: {status}")
             if status in status_to_wait_for:
                 finished = True
                 break
             time.sleep(log_frequency)
+
         if not finished:
             logger.log(20, f"timeout: {timeout} secs reached. Will stop the job")
             self.client.stop_job(job_id=job_name)
+
+    async def _stream_log(self, job_name):
+        async for lines in self.client.tail_job_logs(job_name):
+            logger.log(20, lines.strip())
 
 
 class RayFitJob(RayJob):

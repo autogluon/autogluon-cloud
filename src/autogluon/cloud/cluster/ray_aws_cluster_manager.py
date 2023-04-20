@@ -1,31 +1,14 @@
 import json
 import logging
 import os
-import time
 from typing import Dict
 
-import boto3
-
-from ..utils.iam import (
-    add_role_to_instance_profile,
-    attach_iam_policy,
-    create_iam_policy,
-    create_iam_role,
-    create_instance_profile,
-    delete_iam_policy,
-    get_policy,
-    replace_iam_policy_place_holder,
-    replace_trust_relationship_place_holder,
-)
+from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
 from ..utils.ray_aws_iam import (
-    ECR_READ_ONLY,
     RAY_AWS_CLOUD_POLICY,
     RAY_AWS_IAM_POLICY_FILE_NAME,
-    RAY_AWS_POLICY_NAME,
-    RAY_AWS_ROLE_NAME,
     RAY_AWS_TRUST_RELATIONSHIP,
     RAY_AWS_TRUST_RELATIONSHIP_FILE_NAME,
-    RAY_INSTANCE_PROFILE_NAME,
 )
 from .ray_cluster_manager import RayClusterManager
 
