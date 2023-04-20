@@ -29,6 +29,7 @@ def get_utc_timestamp_now():
 
 def tear_down_cluster(cluster_config_file):
     import subprocess
+
     print("Will tear down the cluster in 10 secs")
     time.sleep(10)
     cmd = f"ray stop --force; ray down {cluster_config_file} -y"

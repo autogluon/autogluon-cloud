@@ -446,7 +446,5 @@ class RayBackend(Backend):
         try:
             cluster_manager.down()
         except Exception as down_e:
-            logger.warning(
-                "Failed to tear down the cluster. Please go to the console to terminate instanecs manually"
-            )
+            logger.warning("Failed to tear down the cluster. Please go to the console to terminate instanecs manually")
             raise down_e
