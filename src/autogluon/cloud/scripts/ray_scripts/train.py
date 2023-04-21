@@ -27,7 +27,18 @@ def get_utc_timestamp_now():
     return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
 
-def tear_down_cluster(cluster_config_file):
+def upload_log_file(job_id: str):
+    from ray.job_submission import JobSubmissionClient
+
+    client = JobSubmissionClient("http://127.0.0.1:8265")
+    logs = client.get_job_logs(job_id=job_id)
+    log_file = "training.log"
+    with open(log_file, "w") as f:
+        f.write(logs)
+    upload_file(file_name=log_file, bucket=cloud_bucket, prefix=cloud_prefix)
+
+
+def tear_down_cluster(cluster_config_file: str):
     import subprocess
 
     print("Will tear down the cluster in 10 secs")
@@ -66,41 +77,48 @@ if __name__ == "__main__":
     parser.add_argument("--train_data", type=str, required=True)
     parser.add_argument("--tune_data", type=str, required=False)
     parser.add_argument("--model_output_path", type=str, required=True)
+    parser.add_argument("--ray_job_id", type=str, required=True)
     parser.add_argument("--leaderboard", action="store_true")
     parser.add_argument("--cluster_config_file", type=str, required=False)
     parser.set_defaults(leaderboard=False)
     args = parser.parse_args()
+    
+    try:
 
-    wait_for_nodes_to_be_ready()
-    train_data = TabularDataset(args.train_data)
-    tune_data = None
-    if args.tune_data is not None:
-        tune_data = TabularDataset(args.tune_data)
-    with open(args.ag_args_path) as f:
-        ag_args = yaml.safe_load(f)
-    predictor_init_args = ag_args["predictor_init_args"]
-    predictor_fit_args = ag_args["predictor_fit_args"]
-    save_path = f"ag_distributed_training_{get_utc_timestamp_now()}"
-    predictor_init_args["path"] = save_path
+        wait_for_nodes_to_be_ready()
+        train_data = TabularDataset(args.train_data)
+        tune_data = None
+        if args.tune_data is not None:
+            tune_data = TabularDataset(args.tune_data)
+        with open(args.ag_args_path) as f:
+            ag_args = yaml.safe_load(f)
+        predictor_init_args = ag_args["predictor_init_args"]
+        predictor_fit_args = ag_args["predictor_fit_args"]
+        save_path = f"ag_distributed_training_{get_utc_timestamp_now()}"
+        predictor_init_args["path"] = save_path
 
-    print("Start training TabularPredictor")
-    predictor = TabularPredictor(**predictor_init_args).fit(
-        train_data=train_data, tuning_data=tune_data, **predictor_fit_args
-    )
-    print("Compressing the model artifacts")
-    model_artifact = shutil.make_archive("model", "zip", save_path)
-    model_output_path = os.path.dirname(args.model_output_path)
-    cloud_bucket, cloud_prefix = s3_path_to_bucket_prefix(model_output_path)
-    print(f"Uploading model artifact to {model_output_path}")
-    upload_file(file_name=model_artifact, bucket=cloud_bucket, prefix=cloud_prefix)
+        print("Start training TabularPredictor")
+        predictor = TabularPredictor(**predictor_init_args).fit(
+            train_data=train_data, tuning_data=tune_data, **predictor_fit_args
+        )
+        print("Compressing the model artifacts")
+        model_artifact = shutil.make_archive("model", "zip", save_path)
+        model_output_path = os.path.dirname(args.model_output_path)
+        cloud_bucket, cloud_prefix = s3_path_to_bucket_prefix(model_output_path)
+        print(f"Uploading model artifact to {model_output_path}")
+        upload_file(file_name=model_artifact, bucket=cloud_bucket, prefix=cloud_prefix)
 
-    if args.leaderboard:
-        lb = predictor.leaderboard(silent=False)
-        leaderboard_file = "leaderboard.csv"
-        lb.to_csv(leaderboard_file)
-        upload_file(file_name=leaderboard_file, bucket=cloud_bucket, prefix=cloud_prefix)
-    print("Training finished")
+        if args.leaderboard:
+            lb = predictor.leaderboard(silent=False)
+            leaderboard_file = "leaderboard.csv"
+            lb.to_csv(leaderboard_file)
+            upload_file(file_name=leaderboard_file, bucket=cloud_bucket, prefix=cloud_prefix)
+        print("Training finished")
+    except Exception as e:
+        raise e
+    finally:
+        upload_log_file(job_id=args.ray_job_id)
 
-    cluster_config_file = args.cluster_config_file
-    if cluster_config_file is not None:
-        tear_down_cluster(cluster_config_file)
+        cluster_config_file = args.cluster_config_file
+        if cluster_config_file is not None:
+            tear_down_cluster(cluster_config_file)
