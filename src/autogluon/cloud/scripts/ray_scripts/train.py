@@ -82,9 +82,8 @@ if __name__ == "__main__":
     parser.add_argument("--cluster_config_file", type=str, required=False)
     parser.set_defaults(leaderboard=False)
     args = parser.parse_args()
-    
-    try:
 
+    try:
         wait_for_nodes_to_be_ready()
         train_data = TabularDataset(args.train_data)
         tune_data = None
