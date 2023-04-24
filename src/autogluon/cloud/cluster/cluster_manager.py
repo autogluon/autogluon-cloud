@@ -3,7 +3,7 @@ from typing import Dict
 
 
 class ClusterManager(ABC):
-    def __init__(self, config: str) -> None:
+    def __init__(self, config: str, **kwargs) -> None:
         """
         Parameters
         ----------

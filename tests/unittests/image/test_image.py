@@ -33,6 +33,7 @@ def test_multimodal_image_only(test_helper, framework_version="source"):
             test_data,
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
+                volume_size=100,
                 image_column=image_column,
                 framework_version=framework_version,
                 custom_image_uri=training_custom_image_uri,

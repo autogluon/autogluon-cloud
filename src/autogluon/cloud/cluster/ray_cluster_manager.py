@@ -89,7 +89,7 @@ class RayClusterManager(ClusterManager):
         """
         cmd = f"ray dashboard -p {port} {self.config}"
         if not block:
-            cmd = "nohup " + cmd + "&>/dev/null &"
+            cmd = "nohup " + cmd + " >/dev/null 2>&1 &"
         result = subprocess.run(cmd, shell=True, check=True)
         if result.returncode != 0:
             error_msg = "Failed to setup the dashboard."
@@ -106,5 +106,7 @@ class RayClusterManager(ClusterManager):
         """
         Execute the command on the head node of the cluster
         """
+        if ray_exec_args is None:
+            ray_exec_args = []
         cmd = ["ray", "exec", *ray_exec_args, self.config, command]
         subprocess.run(cmd, check=True)

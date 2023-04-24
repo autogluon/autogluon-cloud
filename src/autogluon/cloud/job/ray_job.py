@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import math
 import time
@@ -25,13 +26,20 @@ class RayJob(RemoteJob):
             output_path: Optional[str]. Default None
                 Remote output_path to store the job artifacts, if any.
         """
-        self.client = JobSubmissionClient(address)
+        self.client = None
         self._job_name = None
-        self._output_path = None
+        self._output_path = output_path
+        self._address = address
 
     @property
     def job_name(self):
         return self._job_name
+
+    @property
+    def completed(self):
+        if not self.job_name:
+            return False
+        return self.get_job_status() in ["STOPPED", "SUCCEEDED", "FAILED"]
 
     @classmethod
     def attach(cls, job_name: str, **kwargs):
@@ -44,6 +52,7 @@ class RayJob(RemoteJob):
             Name of the job to be attached.
         """
         obj = cls(**kwargs)
+        obj.client = JobSubmissionClient(obj._address)
         obj._wait_until_status(
             job_name=job_name,
             status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED},
@@ -71,10 +80,10 @@ class RayJob(RemoteJob):
     def run(
         self,
         entry_point: str,
-        runtime_env: Dict[str, Any] = None,
+        runtime_env: Optional[Dict[str, Any]] = None,
         job_name: Optional[str] = None,
         wait: bool = True,
-        timeout: int = 3600,
+        timeout: int = 24 * 60 * 60,
         ray_submit_job_args: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
@@ -104,20 +113,19 @@ class RayJob(RemoteJob):
             job_name = f"ag-ray-{get_utc_timestamp_now()}"
         if ray_submit_job_args is None:
             ray_submit_job_args = {}
+        if self.client is None:
+            self.client = JobSubmissionClient(self._address)
         self.client.submit_job(
             entrypoint=entry_point, runtime_env=runtime_env, submission_id=job_name, **ray_submit_job_args
         )
         logger.log(20, f"Submitted job {job_name} to the cluster")
         self._job_name = job_name
         if wait:
-            logger.warning("We don't support log streaming currently. Logs will be avaialbe when the job is finished")
             self._wait_until_status(
                 job_name=job_name,
                 status_to_wait_for={JobStatus.SUCCEEDED, JobStatus.STOPPED, JobStatus.FAILED},
                 timeout=timeout,
             )
-            logs = self.client.get_job_logs(job_id=job_name)
-            logger.log(20, logs)
 
     def get_job_status(self) -> Optional[str]:
         """
@@ -136,18 +144,34 @@ class RayJob(RemoteJob):
         """
         Get the output path of the job generated artifacts if any.
         """
-        return self._output_path
+        if self._output_path is not None:
+            output_path = (
+                self._output_path + "/" + "model.zip"
+                if not self._output_path.endswith("/")
+                else self._output_path + "model.zip"
+            )
+            return output_path
+        return None
 
     def _wait_until_status(self, job_name, status_to_wait_for, timeout, log_frequency=10):
         start = time.time()
         finished = False
+        asyncio.run(self._stream_log(job_name))
         while time.time() - start <= timeout:
             status = self.client.get_job_status(job_name)
-            logger.log(20, f"status: {status}")
             if status in status_to_wait_for:
                 finished = True
                 break
             time.sleep(log_frequency)
+
         if not finished:
             logger.log(20, f"timeout: {timeout} secs reached. Will stop the job")
             self.client.stop_job(job_id=job_name)
+
+    async def _stream_log(self, job_name):
+        async for lines in self.client.tail_job_logs(job_name):
+            logger.log(20, lines.strip())
+
+
+class RayFitJob(RayJob):
+    pass

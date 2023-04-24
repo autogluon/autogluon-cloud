@@ -4,6 +4,11 @@ cluster_name: ag_ray_aws_default
 # The maximum number of workers nodes to launch in addition to the head
 max_workers: 1
 
+docker:
+    # The image uri will be dynamically replaced by cloud predictor
+    image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/autogluon-training:0.7.0-cpu-py39-ubuntu20.04"
+    container_name: "ag_dlc"
+
 # Cloud-provider specific configuration.
 provider:
     type: aws
@@ -35,3 +40,7 @@ available_node_types:
             VolumeSize: 256
 
 head_node_type: head
+
+initialization_commands:
+  # To get access to DLC image
+  - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com

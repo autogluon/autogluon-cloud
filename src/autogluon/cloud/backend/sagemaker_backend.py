@@ -25,7 +25,8 @@ from ..utils.ag_sagemaker import (
     AutoGluonRepackInferenceModel,
 )
 from ..utils.aws_utils import setup_sagemaker_session
-from ..utils.constants import SAGEMAKER_RESOURCE_PREFIX, VALID_ACCEPT
+from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
+from ..utils.dlc_utils import parse_framework_version
 from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
 from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.sagemaker_iam import (
@@ -34,7 +35,6 @@ from ..utils.sagemaker_iam import (
     SAGEMAKER_TRUST_RELATIONSHIP,
     SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME,
 )
-from ..utils.sagemaker_utils import parse_framework_version
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
@@ -206,9 +206,10 @@ class SagemakerBackend(Backend):
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
+        instance_count: Union[int, str] = 1,
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
+        timeout: int = 24 * 60 * 60,
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
@@ -244,6 +245,8 @@ class SagemakerBackend(Backend):
         volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training (default: 100).
             Must be large enough to store training data if File Mode is used (which is the default).
+        timeout: int, default = 24*60*60
+            Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
@@ -268,7 +271,15 @@ class SagemakerBackend(Backend):
             logger.log(20, f"Training with framework_version=={framework_version}")
 
         if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+            job_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
+
+        if instance_count == "auto":
+            instance_count = 1
+        if instance_count > 1:
+            logger.warning(
+                "We don't support distributed training with sagemaker backend yet. Will change instance_count to be 1"
+            )
+            instance_count = 1
 
         if autogluon_sagemaker_estimator_kwargs is None:
             autogluon_sagemaker_estimator_kwargs = {}
@@ -280,10 +291,18 @@ class SagemakerBackend(Backend):
         ):
             autogluon_sagemaker_estimator_kwargs["disable_profiler"] = True
             autogluon_sagemaker_estimator_kwargs["debugger_hook_config"] = False
+        max_run = autogluon_sagemaker_estimator_kwargs.get("max_run", None)
+        if max_run is None:
+            autogluon_sagemaker_estimator_kwargs["max_run"] = timeout
+        else:
+            logger.warning(f"Both `max_run`: {max_run} and `timeout`: {timeout} are specified. Will ignore timeout")
+
         output_path = self.cloud_output_path + "/model"
         code_location = self.cloud_output_path + "/code"
 
-        self._train_script_path = ScriptManager.get_train_script(self.predictor_type, framework_version)
+        self._train_script_path = ScriptManager.get_train_script(
+            backend_type=self.name, framework_version=framework_version
+        )
         entry_point = self._train_script_path
         user_entry_point = autogluon_sagemaker_estimator_kwargs.pop("entry_point", None)
         if user_entry_point:
@@ -309,7 +328,7 @@ class SagemakerBackend(Backend):
             config=config,
             image_column=image_column,
             serving_script=ScriptManager.get_serve_script(
-                self.predictor_type, framework_version
+                backend_type=self.name, framework_version=framework_version
             ),  # Training and Inference should have the same framework_version
         )
         if fit_kwargs is None:
@@ -400,7 +419,7 @@ class SagemakerBackend(Backend):
         predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
 
         if not endpoint_name:
-            endpoint_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+            endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
         if custom_image_uri:
             framework_version, py_version = None, None
             logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
@@ -410,7 +429,9 @@ class SagemakerBackend(Backend):
             )
             logger.log(20, f"Deploying with framework_version=={framework_version}")
 
-        self._serve_script_path = ScriptManager.get_serve_script(self.predictor_type, framework_version)
+        self._serve_script_path = ScriptManager.get_serve_script(
+            backend_type=self.name, framework_version=framework_version
+        )
         entry_point = self._serve_script_path
         if model_kwargs is None:
             model_kwargs = {}
@@ -1131,7 +1152,7 @@ class SagemakerBackend(Backend):
         predictor_path = self._upload_predictor(predictor_path, cloud_key_prefix + "/predictor")
 
         if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(SAGEMAKER_RESOURCE_PREFIX)
+            job_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 
         if test_data_image_column is not None:
             logger.warning("Batch inference with image modality could be slow because of some technical details.")
@@ -1145,7 +1166,9 @@ class SagemakerBackend(Backend):
             )
         test_input = self._upload_batch_predict_data(test_data, cloud_bucket, cloud_key_prefix)
 
-        self._serve_script_path = ScriptManager.get_serve_script(self.predictor_type, framework_version)
+        self._serve_script_path = ScriptManager.get_serve_script(
+            backend_type=self.name, framework_version=framework_version
+        )
         entry_point = self._serve_script_path
         if model_kwargs is None:
             model_kwargs = {}
