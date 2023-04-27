@@ -26,6 +26,7 @@ from ..utils.iam import get_instance_profile_arn
 from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
 from ..utils.s3_utils import upload_file
 from ..utils.utils import get_utc_timestamp_now
+from ..utils.ec2 import get_latest_ami
 from .backend import Backend
 from .constant import RAY
 
@@ -232,6 +233,8 @@ class RayBackend(Backend):
             key_name = f"ag_ray_cluster_{get_utc_timestamp_now()}"
             key_local_path = os.path.join(self.local_output_path, "utils")
             key_local_path = self._setup_key(key_name=key_name, local_path=key_local_path)
+            
+        ami = get_latest_ami()
 
         config = self._generate_config(
             config=custom_config,
@@ -239,6 +242,7 @@ class RayBackend(Backend):
             instance_type=instance_type,
             instance_count=instance_count,
             volumes_size=volume_size,
+            ami=ami,
             custom_image_uri=image_uri,
             ssh_key_path=key_local_path,
             initialization_commands=initialization_commands,
@@ -473,6 +477,7 @@ class RayBackend(Backend):
         instance_type: Optional[str] = None,
         instance_count: Optional[int] = None,
         volumes_size: Optional[int] = None,
+        ami: Optional[str] = None,
         custom_image_uri: Optional[str] = None,
         ssh_key_path: Optional[str] = None,
         initialization_commands: Optional[List[str]] = None,
@@ -485,6 +490,7 @@ class RayBackend(Backend):
                 instance_type=instance_type,
                 instance_count=instance_count,
                 volumes_size=volumes_size,
+                ami=ami,
                 custom_image_uri=custom_image_uri,
                 ssh_key_path=ssh_key_path,
                 head_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),

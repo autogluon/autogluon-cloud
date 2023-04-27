@@ -22,6 +22,7 @@ from autogluon.cloud.cluster.constants import (
     REGION,
     SSH_PRIVATE_KEY,
     VOLUME_SIZE,
+    IMAGE_ID
 )
 
 
@@ -59,6 +60,7 @@ def test_update_ray_aws_cluster_config(config):
             instance_type="foo",
             instance_count=2,
             volumes_size=2,
+            ami="dummy_ami",
             custom_image_uri="bar",
             ssh_key_path="dummy.pem",
             initialization_commands=["abc"],
@@ -70,6 +72,7 @@ def test_update_ray_aws_cluster_config(config):
         assert node_config[BLOCK_DEVICE_MAPPINGS][0][EBS][VOLUME_SIZE] == 2
         assert config_generator.config[DOCKER][IMAGE] == "bar"
         assert config_generator.config[AUTH][SSH_PRIVATE_KEY] == os.path.abspath("dummy.pem")
+        assert node_config[IMAGE_ID] == "dummy_ami"
         assert node_config[KEY_NAME] == "dummy"
         assert config_generator.config[INITIALIZATION_COMMANDS] == ["abc"]
         config = config_generator.config

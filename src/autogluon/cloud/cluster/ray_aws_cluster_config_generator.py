@@ -23,6 +23,7 @@ from .constants import (
     REGION,
     SSH_PRIVATE_KEY,
     VOLUME_SIZE,
+    IMAGE_ID
 )
 from .ray_cluster_config_generator import RayClusterConfigGenerator
 
@@ -63,6 +64,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         head_node_name: Optional[str] = "head",
         worker_node_name: Optional[str] = "worker",
         volumes_size: Optional[int] = None,
+        ami: Optional[str] = None,
         custom_image_uri: Optional[str] = None,
         ssh_key_path: Optional[str] = None,
         head_instance_profile: Optional[str] = None,
@@ -98,6 +100,8 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             If provided, will overwrite `available_node_types.node_config.BlockDeviceMappings.Ebs.VolmueSize`
             To learn more,
                 https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#available-node-types
+        ami: Optional[int], default = None
+            AMI to be used by the nodes in the cluster. The AMI must have docker installed.
         custom_image_uri: str, default = None
             Custom image to be used by the cluster container. The image MUST have ray[default] and AG installed.
             If provided, will overwrite `docker.image`
@@ -125,6 +129,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         self._update_instance_type(instance_type=instance_type)
         self._update_instance_count(instance_count=instance_count, worker_node_name=worker_node_name)
         self._update_volume_size(volumes_size=volumes_size)
+        self._update_ami(ami=ami)
         self._update_custom_image(custom_image_uri=custom_image_uri)
         self._update_ssh_key(ssh_key_path=ssh_key_path)
         self._update_instance_profile(node=head_node_name, instance_profile=head_instance_profile)
@@ -146,6 +151,14 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         if provider is None:
             provider = default_config[PROVIDER]
         self.config.update({PROVIDER: provider})
+        
+    def __update_node_config(self, content: Dict[str, Any]):
+        for node in self.config[AVAILABLE_NODE_TYPES]:
+            node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
+            assert (
+                node_config is not None
+            ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+            self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG].update(content)
 
     def _update_cluster_name(self, cluster_name):
         self.config.update({CLUSTER_NAME: cluster_name})
@@ -157,12 +170,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
     def _update_instance_type(self, instance_type):
         if instance_type is not None:
             self._set_available_node_types()
-            for node in self.config[AVAILABLE_NODE_TYPES]:
-                node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
-                assert (
-                    node_config is not None
-                ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
-                self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG].update({INSTANCE_TYPE: instance_type})
+            self.__update_node_config(content={INSTANCE_TYPE: instance_type})
 
     def _update_instance_count(self, instance_count, worker_node_name):
         if instance_count is not None:
@@ -188,6 +196,11 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
                     block_mappings = [{"DeviceName": "/dev/sda1", EBS: {VOLUME_SIZE: volumes_size}}]
                 else:
                     block_mappings[0][EBS].update({VOLUME_SIZE: volumes_size})
+                    
+    def _update_ami(self, ami):
+        if ami is not None:
+            self._set_available_node_types()
+            self.__update_node_config(content={IMAGE_ID: ami})
 
     def _update_custom_image(self, custom_image_uri):
         if custom_image_uri is not None:
@@ -203,12 +216,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             self.config[AUTH].update({SSH_PRIVATE_KEY: ssh_key_path})
             self._set_available_node_types()
             key_name = os.path.basename(ssh_key_path).rsplit(".", 1)[0]
-            for node in self.config[AVAILABLE_NODE_TYPES]:
-                node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
-                assert (
-                    node_config is not None
-                ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
-                self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG].update({KEY_NAME: key_name})
+            self.__update_node_config(content={KEY_NAME: key_name})
 
     def _update_instance_profile(self, node, instance_profile):
         if instance_profile is not None:
