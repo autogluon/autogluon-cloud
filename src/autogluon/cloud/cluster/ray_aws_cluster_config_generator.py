@@ -13,6 +13,7 @@ from .constants import (
     EBS,
     IAM_INSTANCE_PROFILE,
     IMAGE,
+    IMAGE_ID,
     INITIALIZATION_COMMANDS,
     INSTANCE_TYPE,
     KEY_NAME,
@@ -23,7 +24,6 @@ from .constants import (
     REGION,
     SSH_PRIVATE_KEY,
     VOLUME_SIZE,
-    IMAGE_ID
 )
 from .ray_cluster_config_generator import RayClusterConfigGenerator
 
@@ -151,7 +151,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         if provider is None:
             provider = default_config[PROVIDER]
         self.config.update({PROVIDER: provider})
-        
+
     def __update_node_config(self, content: Dict[str, Any]):
         for node in self.config[AVAILABLE_NODE_TYPES]:
             node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
@@ -196,7 +196,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
                     block_mappings = [{"DeviceName": "/dev/sda1", EBS: {VOLUME_SIZE: volumes_size}}]
                 else:
                     block_mappings[0][EBS].update({VOLUME_SIZE: volumes_size})
-                    
+
     def _update_ami(self, ami):
         if ami is not None:
             self._set_available_node_types()

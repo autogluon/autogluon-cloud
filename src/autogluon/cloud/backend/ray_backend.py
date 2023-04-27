@@ -22,11 +22,11 @@ from ..job.ray_job import RayFitJob
 from ..scripts import ScriptManager
 from ..utils.constants import CLOUD_RESOURCE_PREFIX
 from ..utils.dlc_utils import parse_framework_version
+from ..utils.ec2 import get_latest_ami
 from ..utils.iam import get_instance_profile_arn
 from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
 from ..utils.s3_utils import upload_file
 from ..utils.utils import get_utc_timestamp_now
-from ..utils.ec2 import get_latest_ami
 from .backend import Backend
 from .constant import RAY
 
@@ -233,7 +233,7 @@ class RayBackend(Backend):
             key_name = f"ag_ray_cluster_{get_utc_timestamp_now()}"
             key_local_path = os.path.join(self.local_output_path, "utils")
             key_local_path = self._setup_key(key_name=key_name, local_path=key_local_path)
-            
+
         ami = get_latest_ami()
 
         config = self._generate_config(

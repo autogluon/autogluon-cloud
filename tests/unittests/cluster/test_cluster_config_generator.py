@@ -12,6 +12,7 @@ from autogluon.cloud.cluster.constants import (
     DOCKER,
     EBS,
     IMAGE,
+    IMAGE_ID,
     INITIALIZATION_COMMANDS,
     INSTANCE_TYPE,
     KEY_NAME,
@@ -22,7 +23,6 @@ from autogluon.cloud.cluster.constants import (
     REGION,
     SSH_PRIVATE_KEY,
     VOLUME_SIZE,
-    IMAGE_ID
 )
 
 

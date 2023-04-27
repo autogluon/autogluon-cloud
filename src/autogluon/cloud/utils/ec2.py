@@ -1,6 +1,6 @@
 import os
 from functools import partial
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
@@ -59,17 +59,17 @@ def delete_key_pair(key_name: str, local_path: Optional[str]):
         local_path = os.path.join(local_path, f"{key_name}.pem")
         if os.path.exists(local_path):
             os.remove(local_path)
-            
-            
+
+
 def get_latest_ami(ami_name: str = "Deep Learning AMI GPU PyTorch*Ubuntu*") -> str:
     """
     Get the latest ami id
-    
+
     Parameter
     ---------
     ami_name: str, default = Deep Learning AMI GPU PyTorch*Ubuntu*
         Name of the ami. Could be regex.
-    
+
     Return
     ------
     str,
@@ -85,7 +85,7 @@ def get_latest_ami(ami_name: str = "Deep Learning AMI GPU PyTorch*Ubuntu*") -> s
                 latest = image
                 continue
 
-            if parser.parse(image['CreationDate']) > parser.parse(latest['CreationDate']):
+            if parser.parse(image["CreationDate"]) > parser.parse(latest["CreationDate"]):
                 latest = image
 
         return latest
@@ -93,23 +93,11 @@ def get_latest_ami(ami_name: str = "Deep Learning AMI GPU PyTorch*Ubuntu*") -> s
     ec2 = boto3.client("ec2")
 
     filters = [
-        {
-        "Name": "name",
-        "Values": [ami_name] 
-        },
-        {
-            'Name': 'owner-alias',
-            'Values': ['amazon']
-        },
-        {
-            'Name': 'architecture',
-            'Values': ['x86_64']
-        },
-        {
-            'Name': 'state',
-            'Values': ['available']
-        },
+        {"Name": "name", "Values": [ami_name]},
+        {"Name": "owner-alias", "Values": ["amazon"]},
+        {"Name": "architecture", "Values": ["x86_64"]},
+        {"Name": "state", "Values": ["available"]},
     ]
-    response = ec2.describe_images(Owners=['amazon'], Filters=filters)
-    source_image = newest_image(response['Images'])
-    return source_image['ImageId']
+    response = ec2.describe_images(Owners=["amazon"], Filters=filters)
+    source_image = newest_image(response["Images"])
+    return source_image["ImageId"]
