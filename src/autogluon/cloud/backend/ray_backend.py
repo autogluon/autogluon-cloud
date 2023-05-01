@@ -277,7 +277,8 @@ class RayBackend(Backend):
                     "working_dir": job_path,
                     "env_vars": {
                         "AG_DISTRIBUTED_MODE": "1",
-                        "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/utils/",
+                        "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/model_sync/",
+                        "AG_UTIL_PATH": f"{self.cloud_output_path}/utils/",
                         "AG_NUM_NODES": str(instance_count),
                     },
                 },
@@ -490,7 +491,6 @@ class RayBackend(Backend):
                 instance_type=instance_type,
                 instance_count=instance_count,
                 volumes_size=volumes_size,
-                ami=ami,
                 custom_image_uri=custom_image_uri,
                 ssh_key_path=ssh_key_path,
                 head_instance_profile=get_instance_profile_arn(RAY_INSTANCE_PROFILE_NAME),

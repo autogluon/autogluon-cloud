@@ -27,7 +27,7 @@ def get_utc_timestamp_now():
     return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
 
-def upload_log_file(job_id: str):
+def upload_log_file(job_id: str, model_output_path: str):
     from ray.job_submission import JobSubmissionClient
 
     client = JobSubmissionClient("http://127.0.0.1:8265")
@@ -35,6 +35,7 @@ def upload_log_file(job_id: str):
     log_file = "training.log"
     with open(log_file, "w") as f:
         f.write(logs)
+    cloud_bucket, cloud_prefix = s3_path_to_bucket_prefix(model_output_path)
     upload_file(file_name=log_file, bucket=cloud_bucket, prefix=cloud_prefix)
 
 
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     except Exception as e:
         raise e
     finally:
-        upload_log_file(job_id=args.ray_job_id)
+        upload_log_file(job_id=args.ray_job_id, model_output_path=os.path.dirname(args.model_output_path))
 
         cluster_config_file = args.cluster_config_file
         if cluster_config_file is not None:
