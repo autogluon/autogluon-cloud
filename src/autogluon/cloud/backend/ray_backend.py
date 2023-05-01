@@ -22,6 +22,7 @@ from ..job.ray_job import RayFitJob
 from ..scripts import ScriptManager
 from ..utils.constants import CLOUD_RESOURCE_PREFIX
 from ..utils.dlc_utils import parse_framework_version
+from ..utils.ec2 import get_latest_ami
 from ..utils.iam import get_instance_profile_arn
 from ..utils.ray_aws_iam import RAY_INSTANCE_PROFILE_NAME
 from ..utils.s3_utils import upload_file
@@ -233,12 +234,15 @@ class RayBackend(Backend):
             key_local_path = os.path.join(self.local_output_path, "utils")
             key_local_path = self._setup_key(key_name=key_name, local_path=key_local_path)
 
+        ami = get_latest_ami()
+
         config = self._generate_config(
             config=custom_config,
             cluster_name=cluster_name,
             instance_type=instance_type,
             instance_count=instance_count,
             volumes_size=volume_size,
+            ami=ami,
             custom_image_uri=image_uri,
             ssh_key_path=key_local_path,
             initialization_commands=initialization_commands,
@@ -273,7 +277,8 @@ class RayBackend(Backend):
                     "working_dir": job_path,
                     "env_vars": {
                         "AG_DISTRIBUTED_MODE": "1",
-                        "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/utils/",
+                        "AG_MODEL_SYNC_PATH": f"{self.cloud_output_path}/model_sync/",
+                        "AG_UTIL_PATH": f"{self.cloud_output_path}/utils/",
                         "AG_NUM_NODES": str(instance_count),
                     },
                 },
@@ -473,6 +478,7 @@ class RayBackend(Backend):
         instance_type: Optional[str] = None,
         instance_count: Optional[int] = None,
         volumes_size: Optional[int] = None,
+        ami: Optional[str] = None,
         custom_image_uri: Optional[str] = None,
         ssh_key_path: Optional[str] = None,
         initialization_commands: Optional[List[str]] = None,

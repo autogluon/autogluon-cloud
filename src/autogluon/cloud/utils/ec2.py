@@ -1,6 +1,6 @@
 import os
 from functools import partial
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
@@ -59,3 +59,45 @@ def delete_key_pair(key_name: str, local_path: Optional[str]):
         local_path = os.path.join(local_path, f"{key_name}.pem")
         if os.path.exists(local_path):
             os.remove(local_path)
+
+
+def get_latest_ami(ami_name: str = "Deep Learning AMI GPU PyTorch*Ubuntu*") -> str:
+    """
+    Get the latest ami id
+
+    Parameter
+    ---------
+    ami_name: str, default = Deep Learning AMI GPU PyTorch*Ubuntu*
+        Name of the ami. Could be regex.
+
+    Return
+    ------
+    str,
+        The latest ami id of the ami name being specified
+    """
+    from dateutil import parser
+
+    def newest_image(list_of_images: List[Dict[str, Any]]):
+        latest = None
+
+        for image in list_of_images:
+            if not latest:
+                latest = image
+                continue
+
+            if parser.parse(image["CreationDate"]) > parser.parse(latest["CreationDate"]):
+                latest = image
+
+        return latest
+
+    ec2 = boto3.client("ec2")
+
+    filters = [
+        {"Name": "name", "Values": [ami_name]},
+        {"Name": "owner-alias", "Values": ["amazon"]},
+        {"Name": "architecture", "Values": ["x86_64"]},
+        {"Name": "state", "Values": ["available"]},
+    ]
+    response = ec2.describe_images(Owners=["amazon"], Filters=filters)
+    source_image = newest_image(response["Images"])
+    return source_image["ImageId"]
