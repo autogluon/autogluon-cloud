@@ -216,7 +216,9 @@ class RayBackend(Backend):
             framework_version=framework_version, custom_image_uri=custom_image_uri, instance_type=instance_type
         )
         ag_args_path = os.path.join(self.local_output_path, "job", "ag_args.pkl")
-        self.prepare_args(path=ag_args_path, predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
+        self.prepare_args(
+            path=ag_args_path, predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
+        )
         train_script = ScriptManager.get_train_script(backend_type=self.name, framework_version=framework_version)
         job_path = os.path.join(self.local_output_path, "job")
         shutil.copy(train_script, job_path)
@@ -252,11 +254,11 @@ class RayBackend(Backend):
         cluster_up = False
         job_submitted = False
         try:
-            # logger.log(20, "Launching up ray cluster")
-            # cluster_manager.up()
-            # cluster_up = True
-            # logger.log(20, "Waiting for 60s to give the cluster some buffer time")
-            # time.sleep(60)
+            logger.log(20, "Launching up ray cluster")
+            cluster_manager.up()
+            cluster_up = True
+            logger.log(20, "Waiting for 60s to give the cluster some buffer time")
+            time.sleep(60)
             cluster_manager.setup_connection()
             time.sleep(10)  # waiting for connection to setup
             if job_name is None:

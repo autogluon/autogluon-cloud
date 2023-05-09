@@ -1,5 +1,6 @@
 import argparse
 import os
+import pickle
 import shutil
 import time
 from datetime import datetime, timezone
@@ -7,7 +8,6 @@ from typing import Optional
 
 import boto3
 import ray
-import pickle
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.tabular import TabularDataset, TabularPredictor

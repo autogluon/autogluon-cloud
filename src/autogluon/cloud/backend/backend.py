@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import os
+import pickle
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
-import os
-import pickle
 import pandas as pd
 
 from ..endpoint.endpoint import Endpoint
@@ -69,12 +69,12 @@ class Backend(ABC):
         Get general info of the training job.
         """
         raise NotImplementedError
-    
+
     def prepare_args(self, path: str, **kwargs):
         """
         prepare parameter args required to be passed to remote AG, i.e. init args and fit args
         The args will be saved as a pickle object
-        
+
         Parameters
         ----------
         path: str
@@ -84,7 +84,7 @@ class Backend(ABC):
         config = self._construct_ag_args(**kwargs)
         with open(path, "wb") as f:
             pickle.dump(config, f)
-    
+
     def _construct_ag_args(**kwargs):
         raise NotImplementedError
 

@@ -1000,7 +1000,9 @@ class SagemakerBackend(Backend):
             )
             logger.log(20, "Tune data uploaded successfully")
 
-        ag_args_input = self.sagemaker_session.upload_data(path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix)
+        ag_args_input = self.sagemaker_session.upload_data(
+            path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix
+        )
 
         serving_input = self.sagemaker_session.upload_data(
             path=serving_script, bucket=cloud_bucket, key_prefix=util_key_prefix
