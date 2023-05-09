@@ -7,7 +7,7 @@ from typing import Optional
 
 import boto3
 import ray
-import yaml
+import pickle
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.tabular import TabularDataset, TabularPredictor
@@ -90,8 +90,8 @@ if __name__ == "__main__":
         tune_data = None
         if args.tune_data is not None:
             tune_data = TabularDataset(args.tune_data)
-        with open(args.ag_args_path) as f:
-            ag_args = yaml.safe_load(f)
+        with open(args.ag_args_path, "rb") as f:
+            ag_args = pickle.load(f)
         predictor_init_args = ag_args["predictor_init_args"]
         predictor_fit_args = ag_args["predictor_fit_args"]
         save_path = f"ag_distributed_training_{get_utc_timestamp_now()}"

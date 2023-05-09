@@ -215,7 +215,8 @@ class RayBackend(Backend):
         image_uri = self._get_image_uri(
             framework_version=framework_version, custom_image_uri=custom_image_uri, instance_type=instance_type
         )
-        self._construct_ag_args(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
+        ag_args_path = os.path.join(self.local_output_path, "job", "ag_args.pkl")
+        self.prepare_args(path=ag_args_path, predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
         train_script = ScriptManager.get_train_script(backend_type=self.name, framework_version=framework_version)
         job_path = os.path.join(self.local_output_path, "job")
         shutil.copy(train_script, job_path)
@@ -251,20 +252,18 @@ class RayBackend(Backend):
         cluster_up = False
         job_submitted = False
         try:
-            logger.log(20, "Launching up ray cluster")
-            cluster_manager.up()
-            cluster_up = True
-            logger.log(20, "Waiting for 60s to give the cluster some buffer time")
-            time.sleep(60)
+            # logger.log(20, "Launching up ray cluster")
+            # cluster_manager.up()
+            # cluster_up = True
+            # logger.log(20, "Waiting for 60s to give the cluster some buffer time")
+            # time.sleep(60)
             cluster_manager.setup_connection()
             time.sleep(10)  # waiting for connection to setup
             if job_name is None:
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
 
-            predictor_init_args = json.dumps(predictor_init_args)
-            predictor_fit_args = json.dumps(predictor_fit_args)
-            entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path ag_args.yaml --train_data {train_data} --model_output_path {self.get_fit_job_output_path()} --ray_job_id {job_name}"  # noqa: E501
+            entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path {os.path.basename(ag_args_path)} --train_data {train_data} --model_output_path {self.get_fit_job_output_path()} --ray_job_id {job_name}"  # noqa: E501
             if tune_data is not None:
                 entry_point_command += f" --tune_data {tune_data}"
             if leaderboard:
@@ -396,16 +395,12 @@ class RayBackend(Backend):
         return image_uri
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, **kwargs):
-        assert self.predictor_type is not None
         config = dict(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             **kwargs,
         )
-        path = os.path.join(self.local_output_path, "job", "ag_args.yaml")
-        with open(path, "w") as f:
-            yaml.dump(config, f)
-        return path
+        return config
 
     def _upload_data(
         self, train_data: Union[str, pd.DataFrame], tune_data: Optional[Union[str, pd.DataFrame]] = None

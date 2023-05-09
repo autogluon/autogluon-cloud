@@ -6,6 +6,7 @@ import pandas as pd
 
 from autogluon.cloud import TabularCloudPredictor
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
+from autogluon.common import space
 
 
 def test_distributed_training(test_helper, framework_version):
@@ -26,7 +27,9 @@ def test_distributed_training(test_helper, framework_version):
         predictor_fit_args = {
             "train_data": train_data,
             "hyperparameters": {
-                "GBM": {},
+                "GBM": {
+                    'num_leaves': space.Int(lower=26, upper=66, default=36)
+                },
             },
             "num_bag_folds": 2,
             "num_bag_sets": 1,

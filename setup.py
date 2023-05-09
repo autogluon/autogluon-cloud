@@ -124,7 +124,10 @@ install_requires = [
 
 extras_require = dict()
 
-test_requirements = ["tox", "pytest", "pytest-cov", "moto[all]"]
+all_requires = ["autogluon>=0.7,<1.0"]  # To allow user to pass ag objects
+extras_require['all'] = all_requires
+
+test_requirements = ["tox", "pytest", "pytest-cov", "moto[all]", "autogluon.common>=0.7.0b,<1.0"]  # Install pre-release of common for testing
 
 test_requirements = list(set(test_requirements))
 extras_require["tests"] = test_requirements
