@@ -31,6 +31,11 @@ def test_distributed_training(test_helper, framework_version):
             },
             "num_bag_folds": 2,
             "num_bag_sets": 1,
+            "hyperparameter_tune_kwargs": {  # HPO is not performed unless hyperparameter_tune_kwargs is specified
+                "num_trials": 2,
+                "scheduler": "local",
+                "searcher": "auto",
+            },
         }
 
         image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)

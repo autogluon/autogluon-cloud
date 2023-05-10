@@ -2,6 +2,7 @@ import os
 import tempfile
 
 from autogluon.cloud import TabularCloudPredictor
+from autogluon.common.features.feature_metadata import FeatureMetadata
 
 
 def test_tabular_tabular_text_image(test_helper, framework_version):
@@ -16,6 +17,9 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
         test_helper.extract_images(images)
         train_data = test_helper.replace_image_abspath(train_data, image_column)
         test_data = test_helper.replace_image_abspath(test_data, image_column)
+        feature_metadata = FeatureMetadata.from_df(train_data)
+        feature_metadata = feature_metadata.add_special_types({"Images": ["image_path"]})
+
         time_limit = 600
 
         predictor_init_args = dict(
@@ -31,6 +35,7 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
                 text_model: {"presets": "medium_quality_faster_train"},
                 image_model: {},
             },
+            feature_metadata=feature_metadata,
         )
         cloud_predictor = TabularCloudPredictor(
             cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-tabular-text-image/{framework_version}/{timestamp}",
