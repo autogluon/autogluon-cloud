@@ -8,10 +8,10 @@ import pandas as pd
 import shutil
 from pprint import pprint
 
-import yaml
+import pickle
 
 from autogluon.common.loaders import load_pd
-from autogluon.tabular import TabularPredictor, TabularDataset, FeatureMetadata
+from autogluon.tabular import TabularPredictor, TabularDataset
 
 
 def get_input_path(path):
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tune_images", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TUNE_IMAGES")
     )
-    parser.add_argument("--ag_config", type=str, default=get_env_if_present("SM_CHANNEL_CONFIG"))
+    parser.add_argument("--ag_args", type=str, default=get_env_if_present("SM_CHANNEL_AG_ARGS"))
     parser.add_argument("--serving_script", type=str, default=get_env_if_present("SM_CHANNEL_SERVING"))
 
     args, _ = parser.parse_known_args()
@@ -91,30 +91,28 @@ if __name__ == "__main__":
     # See SageMaker-specific environment variables: https://sagemaker.readthedocs.io/en/stable/overview.html#prepare-a-training-script
     os.makedirs(args.output_data_dir, mode=0o777, exist_ok=True)
 
-    config_file = get_input_path(args.ag_config)
-    with open(config_file) as f:
-        config = yaml.safe_load(f)  # AutoGluon-specific config
+    ag_args_file = get_input_path(args.ag_args)
+    with open(ag_args_file, "rb") as f:
+        ag_args = pickle.load(f)  # AutoGluon-specific args
 
     if args.n_gpus:
-        config["num_gpus"] = int(args.n_gpus)
+        ag_args["num_gpus"] = int(args.n_gpus)
 
     print("Running training job with the config:")
-    pprint(config)
+    pprint(ag_args)
 
     # ---------------------------------------------------------------- Training
     save_path = os.path.normpath(args.model_dir)
-    predictor_type = config["predictor_type"]
-    predictor_init_args = config["predictor_init_args"]
+    predictor_type = ag_args["predictor_type"]
+    predictor_init_args = ag_args["predictor_init_args"]
     predictor_init_args["path"] = save_path
-    predictor_fit_args = config["predictor_fit_args"]
+    predictor_fit_args = ag_args["predictor_fit_args"]
     valid_predictor_types = ["tabular", "multimodal", "timeseries"]
     assert (
         predictor_type in valid_predictor_types
     ), f"predictor_type {predictor_type} not supported. Valid options are {valid_predictor_types}"
     if predictor_type == "tabular":
         predictor_cls = TabularPredictor
-        if "feature_meatadata" in predictor_fit_args:
-            predictor_fit_args["feature_meatadata"] = FeatureMetadata(**predictor_fit_args["feature_meatadata"])
     elif predictor_type == "multimodal":
         from autogluon.multimodal import MultiModalPredictor
 
@@ -127,11 +125,12 @@ if __name__ == "__main__":
     train_file = get_input_path(args.train_dir)
     training_data = prepare_data(train_file, predictor_type, predictor_init_args)
 
-    if predictor_type == "tabular" and "image_column" in config:
+    if predictor_type == "tabular" and "image_column" in ag_args:
         feature_metadata = predictor_fit_args.get("feature_metadata", None)
-        if feature_metadata is None:
-            feature_metadata = FeatureMetadata.from_df(training_data)
-        feature_metadata = feature_metadata.add_special_types({config["image_column"]: ["image_path"]})
+        assert (
+            feature_metadata is not None
+        ), f"Detected image_column: {ag_args['image_column']} while feature metadata is not included"
+        feature_metadata = feature_metadata.add_special_types({ag_args["image_column"]: ["image_path"]})
         predictor_fit_args["feature_metadata"] = feature_metadata
 
     tuning_data = None
@@ -143,7 +142,7 @@ if __name__ == "__main__":
         train_image_compressed_file = get_input_path(args.train_images)
         train_images_dir = "train_images"
         shutil.unpack_archive(train_image_compressed_file, train_images_dir)
-        image_column = config["image_column"]
+        image_column = ag_args["image_column"]
         training_data[image_column] = training_data[image_column].apply(
             lambda path: os.path.join(train_images_dir, path)
         )
@@ -152,7 +151,7 @@ if __name__ == "__main__":
         tune_image_compressed_file = get_input_path(args.tune_images)
         tune_images_dir = "tune_images"
         shutil.unpack_archive(tune_image_compressed_file, tune_images_dir)
-        image_column = config["image_column"]
+        image_column = ag_args["image_column"]
         tuning_data[image_column] = tuning_data[image_column].apply(lambda path: os.path.join(tune_images_dir, path))
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
@@ -163,7 +162,7 @@ if __name__ == "__main__":
         predictor.save(path=save_path, standalone=True)
 
     if predictor_cls == TabularPredictor:
-        if config.get("leaderboard", False):
+        if ag_args.get("leaderboard", False):
             lb = predictor.leaderboard(silent=False)
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
 

@@ -5,6 +5,7 @@ import boto3
 import pandas as pd
 
 from autogluon.cloud import TabularCloudPredictor
+from autogluon.common import space
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 
@@ -26,10 +27,15 @@ def test_distributed_training(test_helper, framework_version):
         predictor_fit_args = {
             "train_data": train_data,
             "hyperparameters": {
-                "GBM": {},
+                "GBM": {"num_leaves": space.Int(lower=26, upper=66, default=36)},
             },
             "num_bag_folds": 2,
             "num_bag_sets": 1,
+            "hyperparameter_tune_kwargs": {  # HPO is not performed unless hyperparameter_tune_kwargs is specified
+                "num_trials": 2,
+                "scheduler": "local",
+                "searcher": "auto",
+            },
         }
 
         image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)

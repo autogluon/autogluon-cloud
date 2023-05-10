@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import sagemaker
-import yaml
 from botocore.exceptions import ClientError
 from sagemaker import Predictor
 
@@ -314,18 +313,19 @@ class SagemakerBackend(Backend):
             # Avoid user passing in source_dir without specifying entry point
             autogluon_sagemaker_estimator_kwargs.pop("source_dir", None)
 
-        config_args = dict(
+        ag_args = dict(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             leaderboard=leaderboard,
         )
         if image_column is not None:
-            config_args["image_column"] = image_column
-        config = self._construct_config(**config_args)
+            ag_args["image_column"] = image_column
+        ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
+        self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
             train_data=train_data,
             tune_data=tune_data,
-            config=config,
+            ag_args=ag_args_path,
             image_column=image_column,
             serving_script=ScriptManager.get_serve_script(
                 backend_type=self.name, framework_version=framework_version
@@ -928,8 +928,7 @@ class SagemakerBackend(Backend):
 
         return results_save_path
 
-    def _construct_config(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
-        assert self.predictor_type is not None
+    def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(
             predictor_type=self.predictor_type,
             predictor_init_args=predictor_init_args,
@@ -937,10 +936,7 @@ class SagemakerBackend(Backend):
             leaderboard=leaderboard,
             **kwargs,
         )
-        path = os.path.join(self.local_output_path, "utils", "config.yaml")
-        with open(path, "w") as f:
-            yaml.dump(config, f)
-        return path
+        return config
 
     def _prepare_data(self, data, filename, output_type="csv"):
         path = os.path.join(self.local_output_path, "utils")
@@ -958,7 +954,7 @@ class SagemakerBackend(Backend):
         self,
         train_data,
         tune_data,
-        config,
+        ag_args,
         serving_script,
         image_column=None,
     ):
@@ -1003,7 +999,9 @@ class SagemakerBackend(Backend):
             )
             logger.log(20, "Tune data uploaded successfully")
 
-        config_input = self.sagemaker_session.upload_data(path=config, bucket=cloud_bucket, key_prefix=util_key_prefix)
+        ag_args_input = self.sagemaker_session.upload_data(
+            path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix
+        )
 
         serving_input = self.sagemaker_session.upload_data(
             path=serving_script, bucket=cloud_bucket, key_prefix=util_key_prefix
@@ -1015,7 +1013,7 @@ class SagemakerBackend(Backend):
         tune_images_input = self._upload_fit_image_artifact(
             image_dir_path=common_tune_data_path, bucket=cloud_bucket, key_prefix=util_key_prefix
         )
-        inputs = dict(train=train_input, config=config_input, serving=serving_input)
+        inputs = dict(train=train_input, ag_args=ag_args_input, serving=serving_input)
         if tune_input is not None:
             inputs["tune"] = tune_input
         if train_images_input is not None:
