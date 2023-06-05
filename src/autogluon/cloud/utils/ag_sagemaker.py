@@ -10,7 +10,7 @@ from sagemaker.serializers import CSVSerializer
 
 from .deserializers import PandasDeserializer
 from .dlc_utils import retrieve_latest_framework_version
-from .serializers import AutoGluonSerializer, MultiModalSerializer, ParquetSerializer
+from .serializers import AutoGluonSerializer, MultiModalSerializer
 
 
 # Estimator documentation: https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#estimators
