@@ -34,6 +34,7 @@ from ..utils.sagemaker_iam import (
     SAGEMAKER_TRUST_RELATIONSHIP,
     SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME,
 )
+from ..utils.serializers import AutoGluonSerializationWrapper
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
@@ -555,6 +556,7 @@ class SagemakerBackend(Backend):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
+        inference_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
@@ -572,6 +574,8 @@ class SagemakerBackend(Backend):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        inference_kwargs: Optional[Dict[str, Any]], default = None
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
@@ -580,7 +584,7 @@ class SagemakerBackend(Backend):
         """
         self._validate_predict_real_time_args(accept)
         test_data = self._load_predict_real_time_test_data(test_data, test_data_image_column=test_data_image_column)
-        pred, _ = self._predict_real_time(test_data=test_data, accept=accept)
+        pred, _ = self._predict_real_time(test_data=test_data, accept=accept, inference_kwargs=inference_kwargs)
 
         return pred
 
@@ -589,6 +593,7 @@ class SagemakerBackend(Backend):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
+        inference_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
@@ -607,6 +612,8 @@ class SagemakerBackend(Backend):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        inference_kwargs: Optional[Dict[str, Any]], default = None
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
@@ -615,7 +622,7 @@ class SagemakerBackend(Backend):
         """
         self._validate_predict_real_time_args(accept)
         test_data = self._load_predict_real_time_test_data(test_data, test_data_image_column=test_data_image_column)
-        pred, proba = self._predict_real_time(test_data=test_data, accept=accept)
+        pred, proba = self._predict_real_time(test_data=test_data, accept=accept, inference_kwargs=inference_kwargs)
 
         if proba is None:
             return pred
@@ -1076,8 +1083,9 @@ class SagemakerBackend(Backend):
 
         return test_data
 
-    def _predict_real_time(self, test_data, accept, split_pred_proba=True, **initial_args):
+    def _predict_real_time(self, test_data, accept, split_pred_proba=True, inference_kwargs=None, **initial_args):
         try:
+            test_data = AutoGluonSerializationWrapper(data=test_data, inference_kwargs=inference_kwargs)
             prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
             pred, pred_proba = None, None
             pred = prediction

@@ -1,6 +1,16 @@
+import pickle
+from dataclasses import dataclass
+from typing import Any, Dict
+
 import numpy as np
 import pandas as pd
 from sagemaker.serializers import NumpySerializer, SimpleBaseSerializer
+
+
+@dataclass
+class AutoGluonSerializationWrapper:
+    data: pd.DataFrame
+    inference_kwargs: Dict[str, Any]
 
 
 class ParquetSerializer(SimpleBaseSerializer):
@@ -33,6 +43,35 @@ class ParquetSerializer(SimpleBaseSerializer):
             return data.read()
 
         raise ValueError(f"{data} format is not supported. Please provide a DataFrame, parquet file, or buffer.")
+
+
+class AutoGluonSerializer(SimpleBaseSerializer):
+    """Serialize data to a buffer using the .parquet format."""
+
+    def __init__(self, content_type="application/x-autogluon"):
+        """Initialize a ``ParquetSerializer`` instance.
+
+        Args:
+            content_type (str): The MIME type to signal to the inference endpoint when sending
+                request data (default: "application/x-parquet").
+        """
+        super(AutoGluonSerializer, self).__init__(content_type=content_type)
+
+    def serialize(self, data: AutoGluonSerializationWrapper):
+        """Serialize data to a buffer using the .parquet format.
+
+        Args:
+            data (object): Data to be serialized. Can be a Pandas Dataframe,
+                file, or buffer.
+
+        Returns:
+            io.BytesIO: A buffer containing data serialized in the .parquet format.
+        """
+        if isinstance(data, AutoGluonSerializationWrapper):
+            package = {"data": data.data.to_parquet(), "inference_kwargs": data.inference_kwargs}
+            return pickle.dumps(package)
+
+        raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
 
 
 class MultiModalSerializer(SimpleBaseSerializer):

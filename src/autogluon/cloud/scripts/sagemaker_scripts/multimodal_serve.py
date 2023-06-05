@@ -2,6 +2,7 @@
 import base64
 import copy
 import os
+import pickle
 from io import BytesIO, StringIO
 
 import numpy as np
@@ -32,6 +33,7 @@ def model_fn(model_dir):
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
     image_bytearrays = None
+    inference_kwargs = None
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
@@ -55,6 +57,12 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         for bytes in data:
             im_bytes = base64.b85decode(bytes)
             image_bytearrays.append(im_bytes)
+
+    elif input_content_type == "application/x-autogluon":
+        buf = bytes(request_body)
+        payload = pickle.loads(buf)
+        data = pd.read_parquet(BytesIO(payload["data"]))
+        inference_kwargs = payload["inference_kwargs"]
 
     elif input_content_type == "application/x-image":
         image_bytearrays = []
@@ -93,13 +101,13 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
             data[image_column] = [base64.b85decode(bytes) for bytes in data[image_column]]
 
     if model.problem_type == BINARY or model.problem_type == MULTICLASS:
-        pred_proba = model.predict_proba(data, as_pandas=True)
+        pred_proba = model.predict_proba(data, as_pandas=True, **inference_kwargs)
         pred = get_pred_from_proba_df(pred_proba, problem_type=model.problem_type)
         pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
         pred.name = model.label
         prediction = pd.concat([pred, pred_proba], axis=1)
     else:
-        prediction = model.predict(data, as_pandas=True)
+        prediction = model.predict(data, as_pandas=True, **inference_kwargs)
     if isinstance(prediction, pd.Series):
         prediction = prediction.to_frame()
 

@@ -146,6 +146,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
+        inference_kwargs: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ) -> pd.DataFrame:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -170,6 +172,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        inference_kwargs: Optional[Dict[str, Any]], default = None
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
@@ -184,7 +188,9 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             target=target,
             static_features=static_features,
         )
-        pred, _ = self._predict_real_time(test_data=test_data, accept=accept, split_pred_proba=False)
+        pred, _ = self._predict_real_time(
+            test_data=test_data, accept=accept, split_pred_proba=False, inference_kwargs=inference_kwargs
+        )
         return pred
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:

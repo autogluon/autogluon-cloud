@@ -1,5 +1,6 @@
 # flake8: noqa
 import os
+import pickle
 import shutil
 from io import BytesIO, StringIO
 
@@ -44,6 +45,7 @@ def prepare_timeseries_dataframe(df, predictor):
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
+    inference_kwargs = None
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
@@ -60,11 +62,17 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         buf = StringIO(request_body)
         data = pd.read_json(buf, orient="records", lines=True)
 
+    elif input_content_type == "application/x-autogluon":
+        buf = bytes(request_body)
+        payload = pickle.loads(buf)
+        data = pd.read_parquet(BytesIO(payload["data"]))
+        inference_kwargs = payload["inference_kwargs"]
+
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
 
     data = prepare_timeseries_dataframe(data, model)
-    prediction = model.predict(data)
+    prediction = model.predict(data, **inference_kwargs)
     prediction = pd.DataFrame(prediction)
 
     if "application/x-parquet" in output_content_type:

@@ -1,6 +1,6 @@
 import copy
 import os
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import pandas as pd
 from sagemaker import Predictor
@@ -48,6 +48,7 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
+        inference_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> pd.Series:
         """
@@ -74,6 +75,8 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        inference_kwargs: Optional[Dict[str, Any]], default = None
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
@@ -86,7 +89,9 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         )
         # Providing content type here because sagemaker serializer doesn't support change content type dynamically.
         # Pass to `endpoint.predict()` call as `initial_args` instead
-        pred, _ = self._predict_real_time(test_data=test_data, accept=accept, ContentType=content_type)
+        pred, _ = self._predict_real_time(
+            test_data=test_data, accept=accept, inference_kwargs=inference_kwargs, ContentType=content_type
+        )
 
         return pred
 
@@ -95,6 +100,8 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
+        inference_kwargs: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -120,6 +127,8 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        inference_kwargs: Optional[Dict[str, Any]], default = None
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
@@ -132,7 +141,9 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         )
         # Providing content type here because sagemaker serializer doesn't support change content type dynamically.
         # Pass to `endpoint.predict()` call as `initial_args` instead
-        pred, proba = self._predict_real_time(test_data=test_data, accept=accept, ContentType=content_type)
+        pred, proba = self._predict_real_time(
+            test_data=test_data, accept=accept, inference_kwargs=inference_kwargs, ContentType=content_type
+        )
 
         if proba is None:
             return pred
