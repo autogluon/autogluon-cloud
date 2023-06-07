@@ -33,13 +33,13 @@ class MultiModalSagemakerBackend(SagemakerBackend):
                 test_data = load_pd.load(test_data)
         if isinstance(test_data, list):
             test_data = np.array([read_image_bytes_and_encode(image) for image in test_data], dtype="object")
-            content_type = "application/x-npy"
+            content_type = "application/x-autogluon-npy"
         if isinstance(test_data, pd.DataFrame):
             if test_data_image_column is not None:
                 test_data = convert_image_path_to_encoded_bytes_in_dataframe(
                     dataframe=test_data, image_column=test_data_image_column
                 )
-            content_type = "application/x-parquet"
+            content_type = "application/x-autogluon-parquet"
 
         return test_data, content_type
 

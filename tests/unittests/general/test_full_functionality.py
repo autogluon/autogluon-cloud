@@ -48,5 +48,5 @@ def test_full_functionality(test_helper, framework_version):
             fit_kwargs=dict(framework_version=framework_version, custom_image_uri=training_custom_image_uri),
             deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
             predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
-            predict_real_time_kwargs=dict(model="LightGBM"),
+            inference_kwargs=dict(model="LightGBM"),
         )

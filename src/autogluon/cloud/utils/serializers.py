@@ -46,29 +46,29 @@ class ParquetSerializer(SimpleBaseSerializer):
 
 
 class AutoGluonSerializer(SimpleBaseSerializer):
-    """Serialize data to a buffer using the .parquet format."""
+    """Serialize data to a buffer with data itself and optional AutoGluon inference arguments."""
 
     def __init__(self, content_type="application/x-autogluon"):
-        """Initialize a ``ParquetSerializer`` instance.
+        """Initialize a ``AutoGluonSerializer`` instance.
 
         Args:
             content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/x-parquet").
+                request data (default: "application/x-autogluon").
         """
         super(AutoGluonSerializer, self).__init__(content_type=content_type)
+        self.parquet_serializer = ParquetSerializer()
 
     def serialize(self, data: AutoGluonSerializationWrapper):
         """Serialize data to a buffer using the .parquet format.
 
         Args:
-            data (object): Data to be serialized. Can be a Pandas Dataframe,
-                file, or buffer.
+            data (object): Data to be serialized. An AutoGluonSerializationWrapper object
 
         Returns:
-            io.BytesIO: A buffer containing data serialized in the .parquet format.
+            bytese: Bytes containing both data and inference args
         """
         if isinstance(data, AutoGluonSerializationWrapper):
-            package = {"data": data.data.to_parquet(), "inference_kwargs": data.inference_kwargs}
+            package = {"data": self.parquet_serializer.serialize(data.data), "inference_kwargs": data.inference_kwargs}
             return pickle.dumps(package)
 
         raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
@@ -79,14 +79,15 @@ class MultiModalSerializer(SimpleBaseSerializer):
     Serializer for multi-modal use case.
     When passed in a dataframe, the serializer will serialize the data to be parquet format.
     When passed in a numpy array, the serializer will serialize the data to be numpy format.
+    Both allow passing optional inference arguments along with the data
     """
 
-    def __init__(self, content_type="application/x-parquet"):
+    def __init__(self, content_type="application/x-autogluon-parquet"):
         """Initialize a ``MultiModalSerializer`` instance.
 
         Args:
             content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/x-parquet").
+                request data (default: "application/x-autogluon-parquet").
                 To BE NOTICED, this content_type will not used by MultiModalSerializer
                 as it doesn't support dynamic updating. Instead, we pass expected content_type to
                 `initial_args` of `predict()` call to endpoints.
@@ -99,19 +100,23 @@ class MultiModalSerializer(SimpleBaseSerializer):
         """Serialize data to a buffer using the .parquet format or numpy format.
 
         Args:
-            data (object): Data to be serialized. Can be a Pandas Dataframe,
-                or numpy array
+            data (object): Data to be serialized.
+                An AutoGluonSerializationWrapper, which its data can be a Pandas Dataframe,
+                or a numpy array
 
         Returns:
-            io.BytesIO: A buffer containing data serialized in the .parquet or .npy format.
+            bytese: Bytes containing both data and inference args
         """
-        if isinstance(data, pd.DataFrame):
-            return self.parquet_serializer.serialize(data)
+        if isinstance(data, AutoGluonSerializationWrapper):
+            if isinstance(data.data, pd.DataFrame):
+                return self.parquet_serializer.serialize(data)
 
-        if isinstance(data, np.ndarray):
-            return self.numpy_serializer.serialize(data)
+            if isinstance(data.data, np.ndarray):
+                return self.numpy_serializer.serialize(data)
 
-        raise ValueError(f"{data} format is not supported. Please provide a DataFrame, or numpy array.")
+            raise ValueError(f"{data} format is not supported. Please provide a `DataFrame, or numpy array.` being wrapped by `AutoGluonSerializationWrapper`")
+        
+        raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")
 
 
 class JsonLineSerializer(SimpleBaseSerializer):

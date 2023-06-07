@@ -135,6 +135,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
+        **kwargs
     ) -> pd.DataFrame:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -159,6 +160,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        kwargs:
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------

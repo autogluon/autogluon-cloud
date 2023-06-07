@@ -39,7 +39,7 @@ def model_fn(model_dir):
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
-    inference_kwargs = None
+    inference_kwargs = {}
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)

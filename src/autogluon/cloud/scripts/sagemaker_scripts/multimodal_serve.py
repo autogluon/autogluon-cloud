@@ -33,7 +33,7 @@ def model_fn(model_dir):
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
     image_bytearrays = None
-    inference_kwargs = None
+    inference_kwargs = {}
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
@@ -58,10 +58,20 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
             im_bytes = base64.b85decode(bytes)
             image_bytearrays.append(im_bytes)
 
-    elif input_content_type == "application/x-autogluon":
+    elif input_content_type == "application/x-autogluon-parquet":
         buf = bytes(request_body)
         payload = pickle.loads(buf)
         data = pd.read_parquet(BytesIO(payload["data"]))
+        inference_kwargs = payload["inference_kwargs"]
+        
+    elif input_content_type == "application/x-autogluon-npy":
+        buf = bytes(request_body)
+        payload = pickle.loads(buf)
+        data = np.load(BytesIO(payload["data"]), allow_pickle=True)
+        image_bytearrays = []
+        for bytes in data:
+            im_bytes = base64.b85decode(bytes)
+            image_bytearrays.append(im_bytes)
         inference_kwargs = payload["inference_kwargs"]
 
     elif input_content_type == "application/x-image":
