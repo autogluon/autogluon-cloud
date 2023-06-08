@@ -63,7 +63,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         payload = pickle.loads(buf)
         data = pd.read_parquet(BytesIO(payload["data"]))
         inference_kwargs = payload["inference_kwargs"]
-        
+
     elif input_content_type == "application/x-autogluon-npy":
         buf = bytes(request_body)
         payload = pickle.loads(buf)

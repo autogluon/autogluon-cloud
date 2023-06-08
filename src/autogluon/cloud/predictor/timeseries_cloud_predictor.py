@@ -135,7 +135,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
-        **kwargs
+        **kwargs,
     ) -> pd.DataFrame:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.

@@ -114,8 +114,10 @@ class MultiModalSerializer(SimpleBaseSerializer):
             if isinstance(data.data, np.ndarray):
                 return self.numpy_serializer.serialize(data)
 
-            raise ValueError(f"{data} format is not supported. Please provide a `DataFrame, or numpy array.` being wrapped by `AutoGluonSerializationWrapper`")
-        
+            raise ValueError(
+                f"{data} format is not supported. Please provide a `DataFrame, or numpy array.` being wrapped by `AutoGluonSerializationWrapper`"
+            )
+
         raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")
 
 
