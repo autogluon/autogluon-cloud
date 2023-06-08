@@ -109,12 +109,18 @@ class MultiModalSerializer(SimpleBaseSerializer):
         """
         if isinstance(data, AutoGluonSerializationWrapper):
             if isinstance(data.data, pd.DataFrame):
-                package = {"data": self.parquet_serializer.serialize(data.data), "inference_kwargs": data.inference_kwargs}
+                package = {
+                    "data": self.parquet_serializer.serialize(data.data),
+                    "inference_kwargs": data.inference_kwargs,
+                }
                 return pickle.dumps(package)
 
             if isinstance(data.data, np.ndarray):
-                
-                package = {"data": self.numpy_serializer.serialize(data.data), "inference_kwargs": data.inference_kwargs}
+
+                package = {
+                    "data": self.numpy_serializer.serialize(data.data),
+                    "inference_kwargs": data.inference_kwargs,
+                }
                 return pickle.dumps(package)
 
             raise ValueError(
