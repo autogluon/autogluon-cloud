@@ -116,7 +116,6 @@ class MultiModalSerializer(SimpleBaseSerializer):
                 return pickle.dumps(package)
 
             if isinstance(data.data, np.ndarray):
-
                 package = {
                     "data": self.numpy_serializer.serialize(data.data),
                     "inference_kwargs": data.inference_kwargs,
