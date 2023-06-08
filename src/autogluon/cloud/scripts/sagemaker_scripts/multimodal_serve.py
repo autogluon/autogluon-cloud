@@ -73,6 +73,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
             im_bytes = base64.b85decode(bytes)
             image_bytearrays.append(im_bytes)
         inference_kwargs = payload["inference_kwargs"]
+        if inference_kwargs is None:
+            inference_kwargs = {}
 
     elif input_content_type == "application/x-image":
         image_bytearrays = []

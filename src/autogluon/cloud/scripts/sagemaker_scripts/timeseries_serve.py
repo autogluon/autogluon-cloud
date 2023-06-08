@@ -67,6 +67,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         payload = pickle.loads(buf)
         data = pd.read_parquet(BytesIO(payload["data"]))
         inference_kwargs = payload["inference_kwargs"]
+        if inference_kwargs is None:
+            inference_kwargs = {}
 
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
