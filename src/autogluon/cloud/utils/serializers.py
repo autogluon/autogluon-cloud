@@ -109,10 +109,13 @@ class MultiModalSerializer(SimpleBaseSerializer):
         """
         if isinstance(data, AutoGluonSerializationWrapper):
             if isinstance(data.data, pd.DataFrame):
-                return self.parquet_serializer.serialize(data)
+                package = {"data": self.parquet_serializer.serialize(data.data), "inference_kwargs": data.inference_kwargs}
+                return pickle.dumps(package)
 
             if isinstance(data.data, np.ndarray):
-                return self.numpy_serializer.serialize(data)
+                
+                package = {"data": self.numpy_serializer.serialize(data.data), "inference_kwargs": data.inference_kwargs}
+                return pickle.dumps(package)
 
             raise ValueError(
                 f"{data} format is not supported. Please provide a `DataFrame, or numpy array.` being wrapped by `AutoGluonSerializationWrapper`"
