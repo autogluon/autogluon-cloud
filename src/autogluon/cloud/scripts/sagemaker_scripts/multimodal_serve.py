@@ -54,8 +54,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         buf = BytesIO(request_body)
         data = np.load(buf, allow_pickle=True)
         image_bytearrays = []
-        for bytes in data:
-            im_bytes = base64.b85decode(bytes)
+        for _bytes in data:
+            im_bytes = base64.b85decode(_bytes)
             image_bytearrays.append(im_bytes)
 
     elif input_content_type == "application/x-autogluon-parquet":
@@ -69,8 +69,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         payload = pickle.loads(buf)
         data = np.load(BytesIO(payload["data"]), allow_pickle=True)
         image_bytearrays = []
-        for bytes in data:
-            im_bytes = base64.b85decode(bytes)
+        for _bytes in data:
+            im_bytes = base64.b85decode(_bytes)
             image_bytearrays.append(im_bytes)
         inference_kwargs = payload["inference_kwargs"]
         if inference_kwargs is None:
@@ -110,7 +110,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
                 break
         if image_column is not None:
             print(f"Detected image column {image_column}")
-            data[image_column] = [base64.b85decode(bytes) for bytes in data[image_column]]
+            data[image_column] = [base64.b85decode(_bytes) for _bytes in data[image_column]]
 
     if model.problem_type == BINARY or model.problem_type == MULTICLASS:
         pred_proba = model.predict_proba(data, as_pandas=True, **inference_kwargs)
