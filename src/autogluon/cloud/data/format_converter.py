@@ -64,7 +64,7 @@ class FormatConverter(ABC):
         str
             Path to the converted file. If the file does not need conversion, will return the original path.
         """
-        if type(data) == str:
+        if isinstance(data, str):
             data = os.path.expanduser(data)
             if os.path.isfile(data):
                 if self._need_conversion(data):
