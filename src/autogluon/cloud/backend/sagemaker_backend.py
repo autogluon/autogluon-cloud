@@ -524,7 +524,7 @@ class SagemakerBackend(Backend):
         assert (
             self.endpoint is None
         ), "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
-        if type(endpoint) == str:
+        if isinstance(endpoint, str):
             endpoint = self._realtime_predictor_cls(
                 endpoint_name=endpoint,
                 sagemaker_session=self.sagemaker_session,
