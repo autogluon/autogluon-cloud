@@ -431,9 +431,11 @@ class SagemakerBackend(Backend):
                 framework_version, "inference", minimum_version="0.6.0"
             )
             logger.log(20, f"Deploying with framework_version=={framework_version}")
-            
+
         if volume_size and instance_type.startswith(("ml.p", "ml.g")):
-            logger.warning(f"SageMaker backend doesn't support providing custom volume_size. Specified {volume_size} GB. Will ignore.")
+            logger.warning(
+                f"SageMaker backend doesn't support providing custom volume_size. Specified {volume_size} GB. Will ignore."
+            )
             volume_size = None
 
         self._serve_script_path = ScriptManager.get_serve_script(
