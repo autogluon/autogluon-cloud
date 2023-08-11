@@ -180,7 +180,7 @@ class CloudPredictor(ABC):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = "auto",
-        volume_size: int = 256,
+        volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
@@ -213,8 +213,8 @@ class CloudPredictor(ABC):
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
             If not specified, will decide by the backend
-        volumes_size: int, default = 256
-            Size in GB of the EBS volume to use for storing input data during training (default: 256).
+        volumes_size: int, default = 100
+            Size in GB of the EBS volume to use for storing input data during training (default: 100).
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
@@ -363,6 +363,7 @@ class CloudPredictor(ABC):
         instance_type: str = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
+        volume_size: int = 100,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
     ) -> None:
@@ -387,6 +388,12 @@ class CloudPredictor(ABC):
             Instance to be deployed for the endpoint
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint
+        custom_image_uri: Optional[str], default = None,
+            Custom image to use to deploy endpoint with.
+            If not specified, with use official DLC image: https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
+        volumes_size: int, default = 100
+            Size in GB of the EBS volume to use for the endpoint (default: 100).
+            SageMaker GPU instance endpoint currently doesn't support specifying volumes_size. Will ignore in such cases.
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
@@ -410,6 +417,7 @@ class CloudPredictor(ABC):
             instance_type=instance_type,
             initial_instance_count=initial_instance_count,
             custom_image_uri=custom_image_uri,
+            volume_size=volume_size,
             wait=wait,
             **backend_kwargs,
         )

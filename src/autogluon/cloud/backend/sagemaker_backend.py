@@ -397,6 +397,9 @@ class SagemakerBackend(Backend):
             Instance to be deployed for the endpoint
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint
+        custom_image_uri: Optional[str], default = None,
+            Custom image to use to deploy endpoint with.
+            If not specified, with use official DLC image: https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
         volume_size: int, default = 100
            The size, in GB, of the ML storage volume attached to individual inference instance associated with the production variant.
            Currenly only Amazon EBS gp2 storage volumes are supported.
@@ -428,6 +431,10 @@ class SagemakerBackend(Backend):
                 framework_version, "inference", minimum_version="0.6.0"
             )
             logger.log(20, f"Deploying with framework_version=={framework_version}")
+            
+        if volume_size and instance_type.startswith(("p", "g")):
+            volume_size = None
+            logger.warning(f"SageMaker backend doesn't support providing custom volume_size. Specified {volume_size} GB. Will ignore.")
 
         self._serve_script_path = ScriptManager.get_serve_script(
             backend_type=self.name, framework_version=framework_version
