@@ -390,7 +390,8 @@ class CloudPredictor(ABC):
             Initial number of instances to be deployed for the endpoint
         custom_image_uri: Optional[str], default = None,
             Custom image to use to deploy endpoint with.
-            If not specified, with use official DLC image: https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
+            If not specified, with use official DLC image:
+            https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
         volumes_size: int, default = 100
             Size in GB of the EBS volume to use for the endpoint (default: 100).
             SageMaker GPU instance endpoint currently doesn't support specifying volumes_size. Will ignore in such cases.
