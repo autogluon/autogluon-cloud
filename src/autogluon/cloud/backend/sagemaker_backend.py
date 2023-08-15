@@ -206,7 +206,7 @@ class SagemakerBackend(Backend):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = 1,
-        volume_size: int = 100,
+        volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
@@ -241,8 +241,8 @@ class SagemakerBackend(Backend):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
-        volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training (default: 100).
+        volume_size: int, default = 256
+            Size in GB of the EBS volume to use for storing input data during training (default: 256).
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
@@ -369,7 +369,7 @@ class SagemakerBackend(Backend):
         instance_type: str = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
-        volume_size: int = 100,
+        volume_size: Optional[int] = None,
         wait: bool = True,
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
@@ -401,7 +401,7 @@ class SagemakerBackend(Backend):
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
             https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
-        volume_size: int, default = 100
+        volume_size: int, default = None
            The size, in GB, of the ML storage volume attached to individual inference instance associated with the production variant.
            Currenly only Amazon EBS gp2 storage volumes are supported.
         wait: Bool, default = True,
