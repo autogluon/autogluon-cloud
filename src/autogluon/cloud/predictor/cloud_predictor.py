@@ -180,7 +180,7 @@ class CloudPredictor(ABC):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = "auto",
-        volume_size: int = 100,
+        volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
@@ -213,8 +213,8 @@ class CloudPredictor(ABC):
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
             If not specified, will decide by the backend
-        volumes_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training (default: 100).
+        volumes_size: int, default = 256
+            Size in GB of the EBS volume to use for storing input data during training (default: 256).
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
