@@ -206,7 +206,7 @@ class SagemakerBackend(Backend):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = 1,
-        volume_size: int = 100,
+        volume_size: int = 256,
         custom_image_uri: Optional[str] = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
@@ -241,8 +241,8 @@ class SagemakerBackend(Backend):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
-        volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training (default: 100).
+        volume_size: int, default = 256
+            Size in GB of the EBS volume to use for storing input data during training (default: 256).
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
@@ -369,7 +369,7 @@ class SagemakerBackend(Backend):
         instance_type: str = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
-        volume_size: int = 100,
+        volume_size: Optional[int] = None,
         wait: bool = True,
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
@@ -397,7 +397,11 @@ class SagemakerBackend(Backend):
             Instance to be deployed for the endpoint
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint
-        volume_size: int, default = 100
+        custom_image_uri: Optional[str], default = None,
+            Custom image to use to deploy endpoint with.
+            If not specified, with use official DLC image:
+            https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
+        volume_size: int, default = None
            The size, in GB, of the ML storage volume attached to individual inference instance associated with the production variant.
            Currenly only Amazon EBS gp2 storage volumes are supported.
         wait: Bool, default = True,
@@ -428,6 +432,12 @@ class SagemakerBackend(Backend):
                 framework_version, "inference", minimum_version="0.6.0"
             )
             logger.log(20, f"Deploying with framework_version=={framework_version}")
+
+        if volume_size and instance_type.startswith(("ml.p", "ml.g")):
+            logger.warning(
+                f"SageMaker backend doesn't support providing custom volume_size. Specified {volume_size} GB. Will ignore."
+            )
+            volume_size = None
 
         self._serve_script_path = ScriptManager.get_serve_script(
             backend_type=self.name, framework_version=framework_version
