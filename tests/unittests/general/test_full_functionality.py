@@ -1,6 +1,8 @@
 import os
 import tempfile
 
+import pytest
+
 from autogluon.cloud import TabularCloudPredictor
 
 
@@ -24,6 +26,9 @@ def test_full_functionality(test_helper, framework_version):
             tuning_data=tune_data,
             time_limit=time_limit,
         )
+        dummy_cloud_predictor = TabularCloudPredictor()
+        with pytest.raises(ValueError):
+            dummy_cloud_predictor.fit(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
         cloud_predictor = TabularCloudPredictor(
             cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular/{framework_version}/{timestamp}",
             local_output_path="test_tabular_cloud_predictor",

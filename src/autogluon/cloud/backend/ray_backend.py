@@ -46,13 +46,11 @@ class RayBackend(Backend):
     def _config_file_name(self) -> str:
         return "ag_ray_cluster_config.yaml"
 
-    def initialize(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
+    def initialize(self, **kwargs) -> None:
         """Initialize the backend."""
-        self.local_output_path = local_output_path
-        self.cloud_output_path = cloud_output_path
-        self.predictor_type = predictor_type
+        super().initialize(**kwargs)
         self.region = None
-        self._fit_job = RayFitJob(output_path=cloud_output_path + "/model")
+        self._fit_job = RayFitJob()
         os.makedirs(os.path.join(self.local_output_path, "job"), exist_ok=True)
 
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:
@@ -262,6 +260,7 @@ class RayBackend(Backend):
             if job_name is None:
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
+            self._fit_job = job
 
             entry_point_command = f"python3 {os.path.basename(train_script)} --ag_args_path {os.path.basename(ag_args_path)} --train_data {train_data} --model_output_path {self.get_fit_job_output_path()} --ray_job_id {job_name}"  # noqa: E501
             if tune_data is not None:
