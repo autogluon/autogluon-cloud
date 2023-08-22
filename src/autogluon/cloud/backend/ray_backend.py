@@ -218,7 +218,6 @@ class RayBackend(Backend):
         train_script = ScriptManager.get_train_script(backend_type=self.name, framework_version=framework_version)
         job_path = os.path.join(self.local_output_path, "job")
         shutil.copy(train_script, job_path)
-        self.cloud_output_path = self.cloud_output_path
         train_data, tune_data = self._upload_data(train_data=train_data, tune_data=tune_data)
 
         if instance_type.startswith("ml."):
