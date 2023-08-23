@@ -278,7 +278,7 @@ class RayBackend(Backend):
                         "AG_UTIL_PATH": f"{self.cloud_output_path}/utils/",
                         "AG_NUM_NODES": str(instance_count),
                         # TODO: update syncing logic in tabular https://github.com/ray-project/ray/pull/37142
-                        "RAY_AIR_REENABLE_DEPRECATED_SYNC_TO_HEAD_NODE": 1,
+                        "RAY_AIR_REENABLE_DEPRECATED_SYNC_TO_HEAD_NODE": "1",
                     },
                 },
                 job_name=job_name,
