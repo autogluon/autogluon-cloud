@@ -187,6 +187,7 @@ class RayBackend(Backend):
         tune_data = predictor_fit_args.pop("tuning_data", None)
         presets = predictor_fit_args.pop("presets", [])
         num_bag_folds = predictor_fit_args.get("num_bag_folds", None)
+        hyperparameter_tune_kwargs = predictor_fit_args.get("hyperparameter_tune_kwargs", None)
 
         if instance_count == "auto":
             instance_count = num_bag_folds
@@ -197,9 +198,10 @@ class RayBackend(Backend):
                 and "high_quality" not in presets
                 and "good_quality" not in presets
                 and num_bag_folds is None
+                and hyperparameter_tune_kwargs is None
             ):
                 logger.warning(
-                    f"Tabular Predictor will be trained without bagging hence not distributed, but you specified instance count > 1: {instance_count}."
+                    f"Tabular Predictor will be trained without bagging nor HPO hence not distributed, but you specified instance count > 1: {instance_count}."
                 )
                 logger.warning("Will deploy cluster with 1 instance only to save costs")
                 instance_count = 1
