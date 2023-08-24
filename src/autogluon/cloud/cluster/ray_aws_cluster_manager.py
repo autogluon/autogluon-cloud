@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Dict
+from typing import Dict, Optional
 
 from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
 from ..utils.ray_aws_iam import (
@@ -21,7 +21,7 @@ class RayAWSClusterManager(RayClusterManager):
         self.cloud_output_bucket = cloud_output_bucket
 
     @staticmethod
-    def generate_default_permission(account_id: str, cloud_output_bucket: str, output_path: str) -> Dict[str, str]:
+    def generate_default_permission(account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None) -> Dict[str, str]:
         """
         Generate trust relationship and iam policy required to manage cluster
         Users can use the generated files to create an IAM role for themselves.

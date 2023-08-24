@@ -20,7 +20,7 @@ class BackendFactory:
     @staticmethod
     def get_backend_cls(backend: str) -> Backend.__class__:
         assert backend in BackendFactory.__name_to_backend, f"{backend} not supported"
-        return BackendFactory.__name_to_backend[Backend]
+        return BackendFactory.__name_to_backend[backend]
 
     @staticmethod
     def get_backend(backend: str, **init_args) -> Backend:
