@@ -30,28 +30,28 @@ class CloudPredictor(ABC):
 
     def __init__(
         self,
-        cloud_output_path: str,
         local_output_path: Optional[str] = None,
+        cloud_output_path: Optional[str] = None,
         backend: str = SAGEMAKER,
         verbosity: int = 2,
     ) -> None:
         """
         Parameters
         ----------
-        cloud_output_path: str
+        local_output_path: Optional[str], default = None
+            Path to directory where downloaded trained predictor, batch transform results, and intermediate outputs should be saved
+            If unspecified, a time-stamped folder called "AutogluonCloudPredictor/ag-[TIMESTAMP]"
+            will be created in the working directory to store all downloaded trained predictor, batch transform results, and intermediate outputs.
+            Note: To call `fit()` twice and save all results of each fit,
+            you must specify different `local_output_path` locations or don't specify `local_output_path` at all.
+            Otherwise files from first `fit()` will be overwritten by second `fit()`.
+        cloud_output_path: Optional[str], default = None
             Path to s3 location where intermediate artifacts will be uploaded and trained models should be saved.
             This has to be provided because s3 buckets are unique globally, so it is hard to create one for you.
             If you only provided the bucket but not the subfolder, a time-stamped folder called "YOUR_BUCKET/ag-[TIMESTAMP]" will be created.
             If you provided both the bucket and the subfolder, then we will use that instead.
             Note: To call `fit()` twice and save all results of each fit,
             you must either specify different `cloud_output_path` locations or only provide the bucket but not the subfolder.
-            Otherwise files from first `fit()` will be overwritten by second `fit()`.
-        local_output_path: str
-            Path to directory where downloaded trained predictor, batch transform results, and intermediate outputs should be saved
-            If unspecified, a time-stamped folder called "AutogluonCloudPredictor/ag-[TIMESTAMP]"
-            will be created in the working directory to store all downloaded trained predictor, batch transform results, and intermediate outputs.
-            Note: To call `fit()` twice and save all results of each fit,
-            you must specify different `local_output_path` locations or don't specify `local_output_path` at all.
             Otherwise files from first `fit()` will be overwritten by second `fit()`.
         backend: str, default = "sagemaker"
             The backend to use. Valid options are: "sagemaker" and "ray_aws".
@@ -154,6 +154,8 @@ class CloudPredictor(ABC):
         return os.path.abspath(path)
 
     def _setup_cloud_output_path(self, path):
+        if not path:
+            return path
         if path.endswith("/"):
             path = path[:-1]
         path_cleaned = path

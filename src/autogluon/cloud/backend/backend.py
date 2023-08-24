@@ -15,10 +15,19 @@ class Backend(ABC):
     def __init__(self, **kwargs) -> None:
         self.initialize(**kwargs)
 
-    @abstractmethod
-    def initialize(self, **kwargs) -> None:
+    @property
+    def cloud_output_path(self) -> str:
+        if not self._cloud_output_path:
+            raise ValueError(f"cloud_output_path is needed. Please pass it during init of {self.__class__.__name__}")
+        return self._cloud_output_path
+
+    def initialize(
+        self, local_output_path: str, predictor_type: str, cloud_output_path: Optional[str] = None, **kwargs
+    ) -> None:
         """Initialize the backend."""
-        raise NotImplementedError
+        self.local_output_path = local_output_path
+        self._cloud_output_path = cloud_output_path
+        self.predictor_type = predictor_type
 
     @abstractmethod
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:

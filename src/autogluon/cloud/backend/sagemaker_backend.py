@@ -62,8 +62,9 @@ class SagemakerBackend(Backend):
         """Class used for realtime endpoint"""
         return AutoGluonRealtimePredictor
 
-    def initialize(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
+    def initialize(self, **kwargs) -> None:
         """Initialize the backend."""
+        super().initialize(**kwargs)
         try:
             self.role_arn = sagemaker.get_execution_role()
         except ClientError as e:
@@ -77,9 +78,6 @@ class SagemakerBackend(Backend):
                 "IMPORTANT: Please review the generated trust relationship and IAM policy before you create an IAM role with them",
             )
             raise e
-        self.local_output_path = local_output_path
-        self.cloud_output_path = cloud_output_path
-        self.predictor_type = predictor_type
         self.sagemaker_session = setup_sagemaker_session()
         self.endpoint = None
         self._region = self.sagemaker_session.boto_region_name
