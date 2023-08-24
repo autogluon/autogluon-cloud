@@ -74,7 +74,7 @@ It should look similar to this: `INFO:sagemaker:Creating training-job with name:
 Alternatively, you can go to the SageMaker console and find the ongoing training job and its corresponding job name.
 
 ```python
-another_cloud_predictor = TabularCloudPredictor(cloud_output_path='YOUR_S3_BUCKET_PATH')
+another_cloud_predictor = TabularCloudPredictor()
 another_cloud_predictor.attach_job(job_name="JOB_NAME")
 ```
 
@@ -256,69 +256,3 @@ local_predictor = cloud_predictor.to_local_predictor(
 ```
 
 `to_local_predictor()` would underneath downlod the tarball, expand it to your local disk and load it as a corresponding AutoGluon predictor.
-
-## Training/Inference with Image Modality
-If your training and inference tasks involve image modality, your data would contain a column representing the path to the image file, i.e.
-
-```python
-   feature_1                     image   label
-0          1   image/train/train_1.png       0
-1          2   image/train/train_1.png       1
-```
-
-### Preparing the Image Column
-Currently, AutoGluon only supports one image per row.
-If your dataset contains one or more images per row, we first need to preprocess the image column to only contain the first image of each row.
-
-For example, if your images are seperated with `;`, you can preprocess it via:
-
-```python
-# image_col is the column name containing the image path. In the example above, it would be `image`
-train_data[image_col] = train_data[image_col].apply(lambda ele: ele.split(';')[0])
-test_data[image_col] = test_data[image_col].apply(lambda ele: ele.split(';')[0])
-```
-
-Now we update the path to an absolute path.
-
-For example, if your directory is similar to this:
-
-```bash
-.
-└── current_working_directory/
-    ├── train.csv
-    ├── test.csv
-    └── images/
-        ├── train/
-        │   └── train_1.png
-        └── test/
-            └── test_1.png
-```
-
-You can replace your image column to absolute paths via:
-
-```python
-train_data[image_col] = train_data[image_col].apply(lambda path: os.path.abspath(path))
-test_data[image_col] = test_data[image_col].apply(lambda path: os.path.abspath(path))
-```
-
-### Perform Training/Inference with Image Modality
-Provide argument `image_column` as the column name containing image paths to `CloudPredictor` fit/inference APIs.
-In the example above, `image_column` would be `image`
-
-```python
-cloud_predictor.fit(..., image_column="IMAGE_COLUMN_NAME")
-cloud_predictor.predict_real_time(..., image_column="IMAGE_COLUMN_NAME")
-cloud_predictor.predict(..., image_column="IMAGE_COLUMN_NAME")
-```
-
-## Supported Docker Containers
-`autogluon.cloud` supports AutoGluon Deep Learning Containers version 0.6.0 and newer.
-
-### Use Custom Containers
-Though not recommended, `autogluon.cloud` supports using your custom containers by specifying `custom_image_uri`.
-
-```python
-cloud_predictor.fit(..., custom_image_uri="CUSTOM_IMAGE_URI")
-cloud_predictor.predict_real_time(..., custom_image_uri="CUSTOM_IMAGE_URI")
-cloud_predictor.predict(..., custom_image_uri="CUSTOM_IMAGE_URI")
-```
