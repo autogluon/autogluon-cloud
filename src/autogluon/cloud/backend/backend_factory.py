@@ -1,6 +1,6 @@
 from .backend import Backend
 from .multimodal_sagemaker_backend import MultiModalSagemakerBackend
-from .ray_aws_backend import TabularRayAWSBackend
+from .ray_aws_backend import RayAWSBackend, TabularRayAWSBackend
 from .sagemaker_backend import SagemakerBackend
 from .tabular_sagemaker_backend import TabularSagemakerBackend
 from .timeseries_sagemaker_backend import TimeSeriesSagemakerBackend
@@ -12,9 +12,15 @@ class BackendFactory:
         TabularSagemakerBackend,
         MultiModalSagemakerBackend,
         TimeSeriesSagemakerBackend,
+        RayAWSBackend,
         TabularRayAWSBackend,
     ]
     __name_to_backend = {cls.name: cls for cls in __supported_backend}
+
+    @staticmethod
+    def get_backend_cls(backend: str) -> Backend.__class__:
+        assert backend in BackendFactory.__name_to_backend, f"{backend} not supported"
+        return BackendFactory.__name_to_backend[backend]
 
     @staticmethod
     def get_backend(backend: str, **init_args) -> Backend:

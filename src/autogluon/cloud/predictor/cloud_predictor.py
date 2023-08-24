@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class CloudPredictor(ABC):
     predictor_file_name = "CloudPredictor.pkl"
+    backend_map = {}
 
     def __init__(
         self,
@@ -84,14 +85,6 @@ class CloudPredictor(ABC):
         raise NotImplementedError
 
     @property
-    @abstractmethod
-    def backend_map(self) -> Dict:
-        """
-        Map between general backend to module specific backend
-        """
-        raise NotImplementedError
-
-    @property
     def is_fit(self) -> bool:
         """
         Whether this CloudPredictor is fitted already
@@ -107,7 +100,8 @@ class CloudPredictor(ABC):
             return self.backend.endpoint.endpoint_name
         return None
 
-    def generate_default_permission(self, **kwargs) -> Dict[str, str]:
+    @staticmethod
+    def generate_default_permission(backend: str = SAGEMAKER, **kwargs) -> Dict[str, str]:
         """
         Generate required permission file in json format for CloudPredictor with your choice of backend.
         Users can use the generated files to create an entity for themselves.
@@ -122,7 +116,7 @@ class CloudPredictor(ABC):
         ------
         A dict containing the trust relationship and IAM policy files paths
         """
-        return self.backend.generate_default_permission(**kwargs)
+        return BackendFactory.get_backend_cls(backend=backend).generate_default_permission(**kwargs)
 
     def info(self) -> Dict[str, Any]:
         """

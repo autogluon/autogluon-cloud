@@ -53,7 +53,8 @@ class RayBackend(Backend):
         self._fit_job = RayFitJob()
         os.makedirs(os.path.join(self.local_output_path, "job"), exist_ok=True)
 
-    def generate_default_permission(self, **kwargs) -> Dict[str, str]:
+    @staticmethod
+    def generate_default_permission(**kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
         return RayClusterManager.generate_default_permission(**kwargs)
 
