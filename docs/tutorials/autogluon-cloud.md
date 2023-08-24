@@ -29,7 +29,8 @@ To help you to setup the necessary permissions, you can generate trust relations
 ```python
 from autogluon.cloud import TabularCloudPredictor  # Can be other CloudPredictor as well
 
-TabularCloudPredictor.generate_trust_relationship_and_iam_policy_file(
+TabularCloudPredictor.generate_default_permission(
+    backend="BACKNED_YOU_WANT"  # We currently support sagemaker and ray_aws
     account_id="YOUR_ACCOUNT_ID",  # The AWS account ID you plan to use for CloudPredictor.
     cloud_output_bucket="S3_BUCKET"  # S3 bucket name where intermediate artifacts will be uploaded and trained models should be saved. You need to create this bucket beforehand.
 )
