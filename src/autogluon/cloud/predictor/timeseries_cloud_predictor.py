@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class TimeSeriesCloudPredictor(CloudPredictor):
     predictor_file_name = "TimeSeriesCloudPredictor.pkl"
+    backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
 
     @property
     def predictor_type(self):
@@ -20,13 +21,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Type of the underneath AutoGluon Predictor
         """
         return "timeseries"
-
-    @property
-    def backend_map(self) -> Dict:
-        """
-        Map between general backend to module specific backend
-        """
-        return {SAGEMAKER: TIMESERIES_SAGEMAKER}
 
     def _get_local_predictor_cls(self):
         from autogluon.timeseries import TimeSeriesPredictor

@@ -60,7 +60,8 @@ class RayAWSBackend(RayBackend):
             self.region is not None
         ), "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
 
-    def generate_default_permission(self, **kwargs) -> Dict[str, str]:
+    @staticmethod
+    def generate_default_permission(**kwargs) -> Dict[str, str]:
         """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
         return RayAWSClusterManager.generate_default_permission(**kwargs)
 

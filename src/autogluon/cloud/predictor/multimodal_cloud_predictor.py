@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 class MultiModalCloudPredictor(CloudPredictor):
     predictor_file_name = "MultiModalCloudPredictor.pkl"
+    backend_map = {SAGEMAKER: MULTIMODL_SAGEMAKER}
 
     @property
     def predictor_type(self) -> str:
@@ -16,13 +17,6 @@ class MultiModalCloudPredictor(CloudPredictor):
         Type of the underneath AutoGluon Predictor
         """
         return "multimodal"
-
-    @property
-    def backend_map(self) -> Dict:
-        """
-        Map between general backend to module specific backend
-        """
-        return {SAGEMAKER: MULTIMODL_SAGEMAKER}
 
     def _get_local_predictor_cls(self):
         from autogluon.multimodal import MultiModalPredictor

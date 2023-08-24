@@ -84,8 +84,9 @@ class SagemakerBackend(Backend):
         self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
         self._batch_transform_jobs = MostRecentInsertedOrderedDict()
 
+    @staticmethod
     def generate_default_permission(
-        self, account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
+        account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
     ) -> Dict[str, str]:
         """
         Generate required trust relationship and IAM policy file in json format for CloudPredictor with SageMaker backend.
