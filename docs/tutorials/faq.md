@@ -11,7 +11,7 @@ cloud_predictor.fit(..., framework_version="0.6")
 It is always recommended to use the latest version as it has more features and up-to-date security patches.
 
 
-## How to Build a Cloud Compatible Custom container
+## How to Build a Cloud Compatible Custom Container
 If the official DLC doesn't meet your requirement, and you would like to build your own container.
 
 You can either build on top of our [DLC](https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-training-containers)
@@ -31,7 +31,21 @@ You would likely need to grant ECR access permissions to this image to the IAM r
 ## Run into Permission Issues
 You can try to get the necessary IAM permission and trust relationship through
 ```python
-TabularPredictor.generate_default_permission(
-    backend=
+from autogluon.cloud import TabularCloudPredictor  # Can be other CloudPredictor as well
+
+TabularCloudPredictor.generate_default_permission(
+    backend="BACKNED_YOU_WANT"  # We currently support sagemaker and ray_aws
+    account_id="YOUR_ACCOUNT_ID",  # The AWS account ID you plan to use for CloudPredictor.
+    cloud_output_bucket="S3_BUCKET"  # S3 bucket name where intermediate artifacts will be uploaded and trained models should be saved. You need to create this bucket beforehand.
 )
 ```
+
+The util function above would give you two json files describing the trust replationship and the iam policy.
+**Make sure you review those files and make necessary changes according to your use case before applying them.**
+
+We recommend you to create an IAM Role for your IAM User to delegate as IAM Role doesn't have permanent long-term credentials and is used to directly interact with AWS services.
+Refer to this [tutorial](https://aws.amazon.com/premiumsupport/knowledge-center/iam-assume-role-cli/) to
+
+1. create the IAM Role with the trust relationship and iam policy you generated above
+2. setup the credential
+3. assume the role

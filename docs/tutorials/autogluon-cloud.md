@@ -148,6 +148,24 @@ One key inside would be `endpoint`, and it will tell you the name of the endpoin
 }
 ```
 
+### Invoke the Endpoint without AutoGluon Cloud
+The endpoint being deployed is a normal Sagemaker Endpoint, and you can invoke it through other methods. For example, to invoke an endpoint with boto3 directly
+
+```python
+import boto3
+
+client = boto3.client('sagemaker-runtime')
+response = client.invoke_endpoint(
+    EndpointName=ENDPOINT_NAME,
+    ContentType='text/csv',
+    Accept='application/json',
+    Body=test_data.to_csv()
+)
+
+#: Print the model endpoint's output.
+print(response['Body'].read().decode())
+```
+
 ## Batch Inference
 When minimizing latency isn't a concern, then the batch inference functionality may be easier, more scalable, and cheaper as compute is automatically terminated after the batch inference job is complete.
 
