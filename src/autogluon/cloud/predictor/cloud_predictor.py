@@ -18,7 +18,7 @@ from autogluon.common.utils.utils import setup_outputdir
 
 from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
-from ..backend.constant import SAGEMAKER, RAY_AWS
+from ..backend.constant import RAY_AWS, SAGEMAKER
 from ..endpoint.endpoint import Endpoint
 from ..utils.utils import unzip_file
 

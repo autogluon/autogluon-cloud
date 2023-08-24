@@ -16,7 +16,7 @@ class BackendFactory:
         TabularRayAWSBackend,
     ]
     __name_to_backend = {cls.name: cls for cls in __supported_backend}
-    
+
     @staticmethod
     def get_backend_cls(backend: str) -> Backend.__class__:
         assert backend in BackendFactory.__name_to_backend, f"{backend} not supported"
