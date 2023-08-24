@@ -1,5 +1,4 @@
 import logging
-from typing import Dict
 
 from ..backend.constant import MULTIMODL_SAGEMAKER, SAGEMAKER
 from .cloud_predictor import CloudPredictor

@@ -1,5 +1,4 @@
 import logging
-from typing import Dict
 
 from ..backend.constant import RAY_AWS, SAGEMAKER, TABULAR_RAY_AWS, TABULAR_SAGEMAKER
 from .cloud_predictor import CloudPredictor
