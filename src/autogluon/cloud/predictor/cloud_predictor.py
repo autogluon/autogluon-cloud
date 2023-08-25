@@ -303,13 +303,16 @@ class CloudPredictor(ABC):
         """
         return self.backend.get_fit_job_output_path()
 
-    def download_trained_predictor(self, save_path: Optional[str] = None) -> str:
+    def download_trained_predictor(self, predictor_path: Optional[str] = None, save_path: Optional[str] = None) -> str:
         """
         Download the trained predictor from the cloud.
 
         Parameters
         ----------
-        save_path: str
+        predictor_path: Optional[str], default = None
+            The s3 predictor path you want to download from.
+            If None, CloudPredictor will try to find the predictor that's being trained by it and will raise an error if there's none.
+        save_path: Optional[str], default = None
             Path to save the model.
             If None, CloudPredictor will create a folder 'AutogluonModels' for the model under `local_output_path`.
 
@@ -318,10 +321,13 @@ class CloudPredictor(ABC):
         save_path: str
             Path to the saved model.
         """
-        path = self.backend.get_fit_job_output_path()
+        path = predictor_path
+        if not path:
+            path = self.backend.get_fit_job_output_path()
         assert (
             path is not None
         ), "No fit job associated with this CloudPredictor. Either attach to a fit job with `attach_job()` or start one with `fit()`"
+        assert is_s3_url(path), "Please provide a valid s3 path to the predictor tarball."
         if not save_path:
             save_path = self.local_output_path
         save_path = self._download_predictor(path, save_path)
@@ -330,13 +336,16 @@ class CloudPredictor(ABC):
     def _get_local_predictor_cls(self):
         raise NotImplementedError
 
-    def to_local_predictor(self, save_path: Optional[str] = None, **kwargs):
+    def to_local_predictor(self, predictor_path: Optional[str] = None, save_path: Optional[str] = None, **kwargs):
         """
         Convert the Cloud trained predictor to a local AutoGluon Predictor.
 
         Parameters
         ----------
-        save_path: str
+        predictor_path: Optional[str], default = None
+            The s3 predictor path you want to download from.
+            If None, CloudPredictor will try to find the predictor that's being trained by it and will raise an error if there's none.
+        save_path: Optional[str], default = None
             Path to save the model.
             If None, CloudPredictor will create a folder for the model.
         kwargs:
@@ -348,7 +357,7 @@ class CloudPredictor(ABC):
             TabularPredictor or MultiModalPredictor based on `predictor_type`
         """
         predictor_cls = self._get_local_predictor_cls()
-        local_model_path = self.download_trained_predictor(save_path)
+        local_model_path = self.download_trained_predictor(predictor_path=predictor_path, save_path=save_path)
         return predictor_cls.load(local_model_path, **kwargs)
 
     def deploy(
