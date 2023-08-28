@@ -19,7 +19,7 @@ cloud_predictor.fit(predictor_init_args=predictor_init_args, predictor_fit_args=
 ```
 
 ## How to Control Number of Instances in the Cluster
-You can control how many instances are created in the cluster by passing `instance_count` to `fit()`.
+The default number of instances being launched will be introduced in the following section. You can control how many instances are created in the cluster by passing `instance_count` to `fit()`.
 ```python
 cloud_predictor.fit(..., instance_count=4)
 ```

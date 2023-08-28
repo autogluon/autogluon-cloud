@@ -26,7 +26,7 @@ cloud_predictor.predict_real_time(..., custom_image_uri="CUSTOM_IMAGE_URI")
 cloud_predictor.predict(..., custom_image_uri="CUSTOM_IMAGE_URI")
 ```
 
-You would likely need to grant ECR access permissions to this image to the IAM role interacting with cloud module.
+If this custom image lives under a certain ECR, you would need to grant access permission to the IAM role used by the Cloud module.
 
 ## Run into Permission Issues
 You can try to get the necessary IAM permission and trust relationship through
