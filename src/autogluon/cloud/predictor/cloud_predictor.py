@@ -454,6 +454,7 @@ class CloudPredictor(ABC):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
+        **kwargs,
     ) -> pd.Series:
         """
         Predict with the deployed endpoint. A deployed endpoint is required.
@@ -471,14 +472,17 @@ class CloudPredictor(ABC):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        kwargs:
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
         Pandas.Series
         Predict results in Series
         """
+        self._validate_inference_kwargs(inference_kwargs=kwargs)
         return self.backend.predict_real_time(
-            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
+            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept, inference_kwargs=kwargs
         )
 
     def predict_proba_real_time(
@@ -486,6 +490,7 @@ class CloudPredictor(ABC):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
+        **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict probability with the deployed endpoint. A deployed endpoint is required.
@@ -504,12 +509,15 @@ class CloudPredictor(ABC):
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
+        kwargs:
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
         Pandas.DataFrame or Pandas.Series
             Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
         """
+        self._validate_inference_kwargs(inference_kwargs=kwargs)
         return self.backend.predict_proba_real_time(
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
         )
@@ -782,3 +790,7 @@ class CloudPredictor(ABC):
         predictor: CloudPredictor = load_pkl.load(path=os.path.join(path, cls.predictor_file_name))
         # TODO: Version compatibility check
         return predictor
+
+    def _validate_inference_kwargs(self, inference_kwargs):
+        if inference_kwargs.pop("as_pandas", True) is not True:
+            logger.warning("as_pandas must be true for real time prediction.")

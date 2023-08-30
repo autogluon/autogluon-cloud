@@ -62,15 +62,19 @@ class CloudTestHelper:
         return data
 
     @staticmethod
-    def test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs):
+    def test_endpoint(cloud_predictor, test_data, inference_kwargs=None, **predict_real_time_kwargs):
+        if inference_kwargs is None:
+            inference_kwargs = {}
         try:
             if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
-                pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+                pred = cloud_predictor.predict_real_time(test_data, **inference_kwargs, **predict_real_time_kwargs)
                 assert isinstance(pred, pd.DataFrame)
             else:
-                pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+                pred = cloud_predictor.predict_real_time(test_data, **inference_kwargs, **predict_real_time_kwargs)
                 assert isinstance(pred, pd.Series)
-                pred_proba = cloud_predictor.predict_proba_real_time(test_data, **predict_real_time_kwargs)
+                pred_proba = cloud_predictor.predict_proba_real_time(
+                    test_data, **inference_kwargs, **predict_real_time_kwargs
+                )
                 assert isinstance(pred_proba, pd.DataFrame)
         except Exception as e:
             cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
@@ -135,6 +139,7 @@ class CloudTestHelper:
         fit_kwargs=None,
         deploy_kwargs=None,
         predict_real_time_kwargs=None,
+        inference_kwargs=None,
         predict_kwargs=None,
     ):
         if fit_kwargs is None:
@@ -158,7 +163,9 @@ class CloudTestHelper:
         if predict_real_time_kwargs is None:
             predict_real_time_kwargs = dict()
         cloud_predictor.deploy(**deploy_kwargs)
-        CloudTestHelper.test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs)
+        CloudTestHelper.test_endpoint(
+            cloud_predictor, test_data, inference_kwargs=inference_kwargs, **predict_real_time_kwargs
+        )
         detached_endpoint = cloud_predictor.detach_endpoint()
         cloud_predictor.attach_endpoint(detached_endpoint)
         CloudTestHelper.test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs)

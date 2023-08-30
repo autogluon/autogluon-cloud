@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import os
+import pickle
 from io import BytesIO, StringIO
 
 import pandas as pd
@@ -38,6 +39,7 @@ def model_fn(model_dir):
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
+    inference_kwargs = {}
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
@@ -53,6 +55,14 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     elif input_content_type == "application/jsonl":
         buf = StringIO(request_body)
         data = pd.read_json(buf, orient="records", lines=True)
+
+    elif input_content_type == "application/x-autogluon":
+        buf = bytes(request_body)
+        payload = pickle.loads(buf)
+        data = pd.read_parquet(BytesIO(payload["data"]))
+        inference_kwargs = payload["inference_kwargs"]
+        if inference_kwargs is None:
+            inference_kwargs = {}
 
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
@@ -70,13 +80,13 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         data[image_column] = [_save_image_and_update_dataframe_column(bytes) for bytes in data[image_column]]
 
     if model.problem_type not in [REGRESSION, QUANTILE]:
-        pred_proba = model.predict_proba(data, as_pandas=True)
+        pred_proba = model.predict_proba(data, as_pandas=True, **inference_kwargs)
         pred = get_pred_from_proba_df(pred_proba, problem_type=model.problem_type)
         pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
         pred.name = model.label
         prediction = pd.concat([pred, pred_proba], axis=1)
     else:
-        prediction = model.predict(data, as_pandas=True)
+        prediction = model.predict(data, as_pandas=True, **inference_kwargs)
     if isinstance(prediction, pd.Series):
         prediction = prediction.to_frame()
 

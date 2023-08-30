@@ -2,6 +2,7 @@
 import base64
 import copy
 import os
+import pickle
 from io import BytesIO, StringIO
 
 import numpy as np
@@ -32,6 +33,7 @@ def model_fn(model_dir):
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
     image_bytearrays = None
+    inference_kwargs = {}
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
@@ -52,9 +54,29 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         buf = BytesIO(request_body)
         data = np.load(buf, allow_pickle=True)
         image_bytearrays = []
-        for bytes in data:
-            im_bytes = base64.b85decode(bytes)
+        for _bytes in data:
+            im_bytes = base64.b85decode(_bytes)
             image_bytearrays.append(im_bytes)
+
+    elif input_content_type == "application/x-autogluon-parquet":
+        buf = bytes(request_body)
+        payload = pickle.loads(buf)
+        data = pd.read_parquet(BytesIO(payload["data"]))
+        inference_kwargs = payload["inference_kwargs"]
+        if inference_kwargs is None:
+            inference_kwargs = {}
+
+    elif input_content_type == "application/x-autogluon-npy":
+        buf = bytes(request_body)
+        payload = pickle.loads(buf)
+        data = np.load(BytesIO(payload["data"]), allow_pickle=True)
+        image_bytearrays = []
+        for _bytes in data:
+            im_bytes = base64.b85decode(_bytes)
+            image_bytearrays.append(im_bytes)
+        inference_kwargs = payload["inference_kwargs"]
+        if inference_kwargs is None:
+            inference_kwargs = {}
 
     elif input_content_type == "application/x-image":
         image_bytearrays = []
@@ -90,16 +112,16 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
                 break
         if image_column is not None:
             print(f"Detected image column {image_column}")
-            data[image_column] = [base64.b85decode(bytes) for bytes in data[image_column]]
+            data[image_column] = [base64.b85decode(_bytes) for _bytes in data[image_column]]
 
     if model.problem_type == BINARY or model.problem_type == MULTICLASS:
-        pred_proba = model.predict_proba(data, as_pandas=True)
+        pred_proba = model.predict_proba(data, as_pandas=True, **inference_kwargs)
         pred = get_pred_from_proba_df(pred_proba, problem_type=model.problem_type)
         pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
         pred.name = model.label
         prediction = pd.concat([pred, pred_proba], axis=1)
     else:
-        prediction = model.predict(data, as_pandas=True)
+        prediction = model.predict(data, as_pandas=True, **inference_kwargs)
     if isinstance(prediction, pd.Series):
         prediction = prediction.to_frame()
 

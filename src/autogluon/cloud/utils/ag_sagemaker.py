@@ -10,7 +10,7 @@ from sagemaker.serializers import CSVSerializer
 
 from .deserializers import PandasDeserializer
 from .dlc_utils import retrieve_latest_framework_version
-from .serializers import MultiModalSerializer, ParquetSerializer
+from .serializers import AutoGluonSerializer, MultiModalSerializer
 
 
 # Estimator documentation: https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#estimators
@@ -230,7 +230,7 @@ class AutoGluonNonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
 # Predictor documentation: https://sagemaker.readthedocs.io/en/stable/api/inference/predictors.html
 class AutoGluonRealtimePredictor(Predictor):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, serializer=ParquetSerializer(), deserializer=PandasDeserializer(), **kwargs)
+        super().__init__(*args, serializer=AutoGluonSerializer(), deserializer=PandasDeserializer(), **kwargs)
 
 
 class AutoGluonMultiModalRealtimePredictor(Predictor):
