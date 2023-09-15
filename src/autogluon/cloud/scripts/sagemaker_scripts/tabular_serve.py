@@ -33,7 +33,7 @@ def model_fn(model_dir):
     """loads model from previously saved artifact"""
     model = TabularPredictor.load(model_dir)
     model.persist_models()
-    globals()["column_names"] = model.feature_metadata_in.get_features()
+    globals()["column_names"] = model.original_features
 
     return model
 
@@ -66,7 +66,22 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
 
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
-    # TODO: handle no header case when predictor supports retrieving original training columns
+
+    test_columns = sorted(list(data.columns))
+    train_columns = sorted(column_names)
+    if test_columns != train_columns:
+        num_cols = len(data.columns)
+
+        if num_cols != len(column_names):
+            raise Exception(
+                f"Invalid data format. Input data has {num_cols} while the model expects {len(column_names)}"
+            )
+
+        else:
+            new_row = pd.DataFrame(data.columns).transpose()
+            old_rows = pd.DataFrame(data.values)
+            data = pd.concat([new_row, old_rows]).reset_index(drop=True)
+            data.columns = column_names
 
     # find image column
     image_column = None
