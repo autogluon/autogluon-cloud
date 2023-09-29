@@ -117,7 +117,7 @@ install_requires = [
     # otherwise cloud module needs to be released to support new container
     "sagemaker>=2.126.0,<3.0",
     "pyarrow>=11.0,<11.1",
-    "PyYAML>=3.10,<5.4",  # awscli only support this version range
+    "PyYAML~=6.0",
     "Pillow>=9.3.0,<10.0",  # unlikely to introduce breaking changes in minor releases
     "ray[default]>=2.3.0,<2.4.0",
 ]
