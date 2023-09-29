@@ -46,7 +46,7 @@ GitHub provides additional document on [forking a repository](https://help.githu
 
 - Using a fresh virtualenv, install the package via `pip3 install -e .`.
 
-- Use Python 3.7, 3.8 or 3.9 for development, as these are the versions autogluon.cloud supports.
+- Use Python versions consistent with what the package supports as defined in `setup.py` (3.8 - 3.11).
 
 - All code should adhere to the [PEP8 style](https://www.python.org/dev/peps/pep-0008/).
 
