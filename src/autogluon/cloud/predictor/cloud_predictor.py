@@ -134,6 +134,7 @@ class CloudPredictor(ABC):
         )
         return info
     
+    
     def leaderboard(self) -> pd.DataFrame:
         """
         Return leaderboard result if possible
@@ -152,7 +153,8 @@ class CloudPredictor(ABC):
             df = pd.read_csv(leaderboard)
             return df
         except:
-            return None 
+            empty = pd.DataFrame()
+            return empty
 
     def _setup_local_output_path(self, path):
         if path is None:
