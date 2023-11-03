@@ -134,21 +134,21 @@ class CloudPredictor(ABC):
         )
         return info
     
-    def leaderboard(self)-> pd.DataFrame:
+    def leaderboard(self) -> pd.DataFrame:
         """
         Return leaderboard result if possible
         """
         info = self.backend.get_fit_job_info()
-        cloud_output_path=self.cloud_output_path
-        path = os.path.join(cloud_output_path, "model", info['name'], "output/output.tar.gz")
+        cloud_output_path = self.cloud_output_path
+        path = os.path.join(cloud_output_path, "model", info["name"], "output/output.tar.gz")
         assert is_s3_url(path), "Please provide a valid s3 path to the leaderboard result."
         bucket, key = s3_path_to_bucket_prefix(path)
         s3 = boto3.client("s3")
         try:
-            wholefile = s3.get_object(Bucket=bucket, Key= key)['Body'].read()
+            wholefile = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
             fileobj = io.BytesIO(wholefile)
             tarf = tarfile.open(fileobj=fileobj)
-            leaderboard = tarf.extractfile('leaderboard.csv')
+            leaderboard = tarf.extractfile("leaderboard.csv")
             df = pd.read_csv(leaderboard)
             return df
         except:
