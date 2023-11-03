@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import io
 import logging
 import os
-import io
 import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -133,12 +133,8 @@ class CloudPredictor(ABC):
             endpoint=self.endpoint_name,
         )
         return info
-    
-    
+
     def leaderboard(self) -> pd.DataFrame:
-        """
-        Return leaderboard result if possible
-        """
         info = self.backend.get_fit_job_info()
         cloud_output_path = self.cloud_output_path
         path = os.path.join(cloud_output_path, "model", info["name"], "output/output.tar.gz")
@@ -152,7 +148,7 @@ class CloudPredictor(ABC):
             leaderboard = tarf.extractfile("leaderboard.csv")
             df = pd.read_csv(leaderboard)
             return df
-        except:
+        except Exception:
             empty = pd.DataFrame()
             return empty
 
