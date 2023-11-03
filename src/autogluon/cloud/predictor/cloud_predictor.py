@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+import io
+import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, Union
@@ -131,6 +133,26 @@ class CloudPredictor(ABC):
             endpoint=self.endpoint_name,
         )
         return info
+    
+    def leaderboard(self)-> pd.DataFrame:
+        """
+        Return leaderboard result if possible
+        """
+        info = self.backend.get_fit_job_info()
+        cloud_output_path=self.cloud_output_path
+        path = os.path.join(cloud_output_path, "model", info['name'], "output/output.tar.gz")
+        assert is_s3_url(path), "Please provide a valid s3 path to the leaderboard result."
+        bucket, key = s3_path_to_bucket_prefix(path)
+        s3 = boto3.client("s3")
+        try:
+            wholefile = s3.get_object(Bucket=bucket, Key= key)['Body'].read()
+            fileobj = io.BytesIO(wholefile)
+            tarf = tarfile.open(fileobj=fileobj)
+            leaderboard = tarf.extractfile('leaderboard.csv')
+            df = pd.read_csv(leaderboard)
+            return df
+        except:
+            return None 
 
     def _setup_local_output_path(self, path):
         if path is None:
