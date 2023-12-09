@@ -5,7 +5,7 @@ from setuptools import setup
 AUTOGLUON = "autogluon"
 CLOUD = "cloud"
 
-PYTHON_REQUIRES = ">=3.8, <3.11"
+PYTHON_REQUIRES = ">=3.8, <3.12"
 
 
 def create_version_file(*, version):
@@ -107,19 +107,19 @@ version = update_version(version, use_file_if_exists=False, create_file=True)
 
 install_requires = [
     # common module provides utils with stable api across minor version
-    "autogluon.common>=0.7,<1.0",
+    "autogluon.common>=0.7,<1.1",
     # <2 because unlikely to introduce breaking changes in minor releases. >=1.10 because 1.10 is 3 years old, no need to support older
     "boto3>=1.10,<2.0",
     "numpy>=1.21,<1.27",
     "packaging>=23.0,<24.0",
-    "pandas>=1.4.1,<1.6",
+    "pandas>=2.0.0,<2.2.0",
     # updated sagemaker is required to fetch latest container info, so we don't want to cap the version too strict
     # otherwise cloud module needs to be released to support new container
     "sagemaker>=2.126.0,<3.0",
     "pyarrow>=11.0,<11.1",
     "PyYAML~=6.0",
     "Pillow>=9.3.0,<10.0",  # unlikely to introduce breaking changes in minor releases
-    "ray[default]>=2.3.0,<2.4.0",
+    "ray[default]>=2.6.3,<2.7",
 ]
 
 extras_require = dict()
