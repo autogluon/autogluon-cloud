@@ -131,8 +131,8 @@ test_requirements = [
     "tox",
     "pytest",
     "pytest-cov",
-    "moto[all]",
-    "autogluon.common>=0.7.0b,<1.0",
+    "moto",
+    "autogluon.common>=0.7.0b,<1.1",
 ]  # Install pre-release of common for testing
 
 test_requirements = list(set(test_requirements))
