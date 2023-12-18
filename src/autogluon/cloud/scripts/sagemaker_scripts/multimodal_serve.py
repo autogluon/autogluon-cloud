@@ -25,7 +25,7 @@ def model_fn(model_dir):
     model = MultiModalPredictor.load(model_dir)
 
     # Check for _learner class which is available post 1.0.0 version of AutoGluon
-    if hasattr(model, '_learner') and hasattr(model._learner, '_label_column'):
+    if hasattr(model, "_learner") and hasattr(model._learner, "_label_column"):
         label_column = model._learner._label_column
         column_types = copy.copy(model._learner._column_types)
     else:
