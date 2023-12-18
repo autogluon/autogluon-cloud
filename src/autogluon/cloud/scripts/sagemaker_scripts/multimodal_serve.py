@@ -21,10 +21,17 @@ def _cleanup_images():
 
 
 def model_fn(model_dir):
-    """loads model from previously saved artifact"""
+    """Loads model from previously saved artifact"""
     model = MultiModalPredictor.load(model_dir)
-    label_column = model._label_column
-    column_types = copy.copy(model._column_types)
+
+    # Check for _learner class which is available post 1.0.0 version of AutoGluon
+    if hasattr(model, '_learner') and hasattr(model._learner, '_label_column'):
+        label_column = model._learner._label_column
+        column_types = copy.copy(model._learner._column_types)
+    else:
+        # Fallback for older versions
+        label_column = model._label_column
+        column_types = copy.copy(model._column_types)
     column_types.pop(label_column)
     globals()["column_names"] = list(column_types.keys())
 
