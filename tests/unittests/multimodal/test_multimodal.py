@@ -49,4 +49,10 @@ def test_multimodal_tabular_text_image(test_helper, framework_version):
             ),
         )
         local_predictor = cloud_predictor.to_local_predictor()
-        assert len(local_predictor._df_preprocessor.image_feature_names) > 0
+        # Check for _learner class which is available post 1.0.0 version of AutoGluon
+        if hasattr(local_predictor, "_learner") and hasattr(local_predictor._learner, "_df_preprocessor"):
+            df_preprocessor = local_predictor._learner._df_preprocessor
+        else:
+            # Fallback for older versions
+            df_preprocessor = local_predictor._df_preprocessor
+        assert len(df_preprocessor.image_feature_names) > 0
