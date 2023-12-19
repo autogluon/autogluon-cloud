@@ -113,7 +113,13 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
                 data.columns = column_names
         # find image column
         image_column = None
-        for column_name, column_type in model._column_types.items():
+        # Check for _learner class which is available post 1.0.0 version of AutoGluon
+        if hasattr(model, "_learner") and hasattr(model._learner, "_column_types"):
+            column_types = model._learner._column_types
+        else:
+            # Fallback for older versions
+            column_types = model._column_types
+        for column_name, column_type in column_types.items():
             if column_type in ("image_path", "image", "image_bytearray"):
                 image_column = column_name
                 break
