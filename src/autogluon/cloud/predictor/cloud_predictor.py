@@ -331,6 +331,8 @@ class CloudPredictor(ABC):
         if not save_path:
             save_path = self.local_output_path
         save_path = self._download_predictor(path, save_path)
+        if not save_path.endswith("/"):
+            save_path += "/"
         return save_path
 
     def _get_local_predictor_cls(self):
