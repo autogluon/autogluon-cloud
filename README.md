@@ -12,17 +12,21 @@ AutoGluon-Cloud aims to provide user tools to train, fine-tune and deploy [AutoG
 
 Currently, AutoGluon-Cloud supports [AWS SageMaker](https://aws.amazon.com/sagemaker/) as the cloud backend.
 
+## Installation
+```bash
+pip install -U pip
+pip install -U setuptools wheel
+pip install autogluon.cloud
+```
+
 ## Example
 ```python
-# First install package from terminal:
-# pip install -U pip
-# pip install -U setuptools wheel
-# pip install autogluon.cloud==0.2.0  # You don't need to install autogluon itself locally
 
 from autogluon.cloud import TabularCloudPredictor
 import pandas as pd
 train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv")
 test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv")
+test_data.drop(columns=['class'], inplace=True)
 predictor_init_args = {"label": "class"}  # init args you would pass to AG TabularPredictor
 predictor_fit_args = {"train_data": train_data, "time_limit": 120}  # fit args you would pass to AG TabularPredictor
 cloud_predictor = TabularCloudPredictor(cloud_output_path='YOUR_S3_BUCKET_PATH')
