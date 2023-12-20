@@ -40,7 +40,7 @@ class SagemakerEndpoint(Endpoint):
         logger.log(20, "Endpoint model deleted")
 
     def _delete_endpoint(self, delete_endpoint_config=True):
-        self._endpoint is not None, "There is no endpoint deployed yet"
+        assert self._endpoint is not None, "There is no endpoint deployed yet"
         logger.log(20, "Deleteing endpoint")
         self._endpoint.delete_endpoint(delete_endpoint_config=delete_endpoint_config)
         logger.log(20, "Endpoint deleted")
