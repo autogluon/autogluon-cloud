@@ -51,6 +51,7 @@ from autogluon.cloud import TabularCloudPredictor
 
 train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv")
 test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv")
+test_data.drop(columns=["class"], inplace=True)
 predictor_init_args = {
     "label": "class"
 }  # init args you would pass to AG TabularPredictor
@@ -79,8 +80,9 @@ result = cloud_predictor.predict(test_data)
 import pandas as pd
 from autogluon.cloud import MultiModalCloudPredictor
 
-train_data = pd.read_csv("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/train.parquet")
-test_data = pd.read_csv("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/dev.parquet")
+train_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/train.parquet")
+test_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/dev.parquet")
+test_data.drop(columns=["label"], inplace=True)
 predictor_init_args = {
     "label": "label"
 }  # init args you would pass to AG MultiModalPredictor
