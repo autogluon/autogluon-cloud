@@ -46,32 +46,41 @@ Make sure you review the trust relationship and IAM policy files, and make neces
 We recommend you to create an IAM Role for your IAM User to delegate as IAM Role doesn't have permanent long-term credentials and is used to directly interact with AWS services. Here is how this can be done using the AWS CLI.
 
 ```{note}
-Make sure to replace `AUTOGLUON-ROLE-NAME` and `AUTOGLUON-POLICY-NAME` with your desired role and policy name.
+Make sure to replace `AUTOGLUON-ROLE-NAME` with your desired role name, `AUTOGLUON-POLICY-NAME` with your desired policy name, and `222222222222` with your AWS account number.
 ```
 
 1. Create the IAM role.
     ```bash
     aws iam create-role --role-name AUTOGLUON-ROLE-NAME --assume-role-policy-document file://ag_cloud_sagemaker_trust_relationship.json
     ```
-    This method will return the **role ARN** that looks similar to `arn:aws:iam::123456789012:role/AUTOGLUON-ROLE-NAME`. Keep it for further reference.
+    This method will return the **role ARN** that looks similar to `arn:aws:iam::222222222222:role/AUTOGLUON-ROLE-NAME`. Keep it for further reference.
 
 2. Create the IAM policy.
     ```bash
     aws iam create-policy --policy-name AUTOGLUON-POLICY-NAME --policy-document file://ag_cloud_sagemaker_iam_policy.json
     ```
-    This method will return the **policy ARN** that looks similar to `arn:aws:iam::123456789012:policy/AUTOGLUON-POLICY-NAME`. Keep it for further reference.
+    This method will return the **policy ARN** that looks similar to `arn:aws:iam::222222222222:policy/AUTOGLUON-POLICY-NAME`. Keep it for further reference.
 
 3. Attach the IAM policy to the role.
     ```bash
-    aws iam attach-role-policy --role-name AUTOGLUON-ROLE-NAME --policy-arn "arn:aws:iam::123456789012:policy/AUTOGLUON-POLICY-NAME"
+    aws iam attach-role-policy --role-name AUTOGLUON-ROLE-NAME --policy-arn "arn:aws:iam::222222222222:policy/AUTOGLUON-POLICY-NAME"
     ```
 
-4. Assume the role. In Python, this can be done as follows
+4. Assume the IAM role using AWS CLI or boto3. 
+
+    <details><summary>AWS CLI</summary>
+
+    See section "Assume the IAM role" in this [tutorial](https://repost.aws/knowledge-center/iam-assume-role-cli).
+
+    </details>
+
+    <details><summary>Python/boto3</summary>
+
     ```python
     import boto3
     session = boto3.Session()
     response = session.client("sts").assume_role(
-        RoleArn="arn:aws:iam::123456789012:role/AUTOGLUON-ROLE-NAME",
+        RoleArn="arn:aws:iam::222222222222:role/AUTOGLUON-ROLE-NAME",
         RoleSessionName="AutoGluonCloudSession",
     )
     credentials = response['Credentials']
@@ -82,6 +91,9 @@ Make sure to replace `AUTOGLUON-ROLE-NAME` and `AUTOGLUON-POLICY-NAME` with your
     )
     ```
     Now when you use `autogluon.cloud` in the same Python script / Jupyter notebook, the correct IAM role will be used.
+
+    </details>
+
 
 
 For more details on setting up IAM roles and policies, refer to this [tutorial](https://aws.amazon.com/premiumsupport/knowledge-center/iam-assume-role-cli/).
