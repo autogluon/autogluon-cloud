@@ -54,11 +54,11 @@ test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.cs
 test_data.drop(columns=["class"], inplace=True)
 predictor_init_args = {
     "label": "class"
-}  # init args you would pass to AG TabularPredictor
+}  # args used when creating TabularPredictor()
 predictor_fit_args = {
     "train_data": train_data,
     "time_limit": 120
-}  # fit args you would pass to AG TabularPredictor
+}  # args passed to TabularPredictor.fit()
 cloud_predictor = TabularCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
     predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
@@ -85,10 +85,10 @@ test_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/
 test_data.drop(columns=["label"], inplace=True)
 predictor_init_args = {
     "label": "label"
-}  # init args you would pass to AG MultiModalPredictor
+}  # args used when creating MultiModalPredictor()
 predictor_fit_args = {
     "train_data": train_data
-}  # fit args you would pass to AG MultiModalPredictor
+}  # args passed to MultiModalPredictor.fit()
 cloud_predictor = MultiModalCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
     predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
@@ -117,11 +117,11 @@ target="target"
 
 predictor_init_args = {
     "target": target
-}  # init args you would pass to AG TimeSeriesCloudPredictor
+}  # args used when creating TimeSeriesPredictor()
 predictor_fit_args = {
     "train_data": data,
     "time_limit": 120
-}  # fit args you would pass to AG TimeSeriesCloudPredictor
+}  # args passed to TimeSeriesPredictor.fit()
 cloud_predictor = TimeSeriesCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
     predictor_init_args=predictor_init_args,
@@ -158,7 +158,7 @@ result = cloud_predictor.predict(
 pip install -U pip
 pip install -U setuptools wheel
 pip install --pre autogluon.cloud  # You don't need to install autogluon itself locally
-pip install --upgrade sagemaker  # This is required to ensure the information about newly released containers is available.
+pip install -U sagemaker  # This is required to ensure the information about newly released containers is available.
 ```
 
 ```{toctree}
