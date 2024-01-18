@@ -15,6 +15,23 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     predictor_file_name = "TimeSeriesCloudPredictor.pkl"
     backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
 
+    def __init__(
+        self,
+        local_output_path: Optional[str] = None,
+        cloud_output_path: Optional[str] = None,
+        backend: str = SAGEMAKER,
+        verbosity: int = 2,
+    ) -> None:
+        super().__init__(
+            local_output_path=local_output_path,
+            cloud_output_path=cloud_output_path,
+            backend=backend,
+            verbosity=verbosity,
+        )
+        self.target_column: Optional[str] = None
+        self.id_column: Optional[str] = None
+        self.timestamp_column: Optional[str] = None
+
     @property
     def predictor_type(self):
         """
@@ -33,8 +50,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         *,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
-        id_column: str,
-        timestamp_column: str,
+        id_column: str = "item_id",
+        timestamp_column: str = "timestamp",
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
@@ -56,10 +73,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Init args for the predictor
         predictor_fit_args: dict
             Fit args for the predictor
-        id_column: str
-            Name of the 'item_id' column
-        timestamp_column: str
-            Name of the 'timestamp' column
+        id_column: str, default = "item_id"
+            Name of the item ID column
+        timestamp_column: str, default = "timestamp"
+            Name of the timestamp column
         static_features: Optional[pd.DataFrame]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
@@ -102,6 +119,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         if backend_kwargs is None:
             backend_kwargs = {}
+
+        self.target_column = predictor_init_args.get("target", "target")
+        self.id_column = id_column
+        self.timestamp_column = timestamp_column
+
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
@@ -124,9 +146,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     def predict_real_time(
         self,
         test_data: Union[str, pd.DataFrame],
-        id_column: str,
-        timestamp_column: str,
-        target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
         **kwargs,
@@ -141,16 +160,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         test_data: Union(str, pandas.DataFrame)
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
-        id_column: str
-            Name of the 'item_id' column
-        timestamp_column: str
-            Name of the 'timestamp' column
         static_features: Optional[pd.DataFrame]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.predictor.html#timeseriesdataframe
-        target: str
-            Name of column that contains the target values to forecast
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
@@ -164,9 +177,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         return self.backend.predict_real_time(
             test_data=test_data,
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-            target=target,
+            id_column=self.id_column,
+            timestamp_column=self.timestamp_column,
+            target=self.target_column,
             static_features=static_features,
             accept=accept,
         )
@@ -177,9 +190,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     def predict(
         self,
         test_data: Union[str, pd.DataFrame],
-        id_column: str,
-        timestamp_column: str,
-        target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         predictor_path: Optional[str] = None,
         framework_version: str = "latest",
@@ -203,10 +213,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         test_data: str
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
-        id_column: str
-            Name of the 'item_id' column
-        timestamp_column: str
-            Name of the 'timestamp' column
         static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
@@ -262,9 +268,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
         return self.backend.predict(
             test_data=test_data,
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-            target=target,
+            id_column=self.id_column,
+            timestamp_column=self.timestamp_column,
+            target=self.target_column,
             static_features=static_features,
             predictor_path=predictor_path,
             framework_version=framework_version,
