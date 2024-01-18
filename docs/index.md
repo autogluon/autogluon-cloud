@@ -110,7 +110,7 @@ result = cloud_predictor.predict(test_data)
 import pandas as pd
 from autogluon.cloud import TimeSeriesCloudPredictor
 
-data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/cloud/timeseries_train.csv")
+data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv")
 
 predictor_init_args = {
     "target": "target",
