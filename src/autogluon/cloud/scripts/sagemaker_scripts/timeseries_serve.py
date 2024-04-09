@@ -20,10 +20,10 @@ def model_fn(model_dir):
         # model already copied
         pass
     model = TimeSeriesPredictor.load(tmp_model_dir)
-    
+
     if hasattr(model, "persist"):  # timeseries added persist in v1.1
         model.persist()
-    
+
     print("MODEL LOADED")
     return model
 
