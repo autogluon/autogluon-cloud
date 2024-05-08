@@ -1,5 +1,5 @@
 import boto3
-from moto import mock_iam
+from moto import mock_aws
 
 from autogluon.cloud.utils.iam import (
     add_role_to_instance_profile,
@@ -12,7 +12,7 @@ from autogluon.cloud.utils.iam import (
 )
 
 
-@mock_iam
+@mock_aws
 def test_iam_utils():
     iam_client = boto3.client("iam")
     dummy_role = "dummy_role"
