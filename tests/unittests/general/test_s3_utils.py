@@ -2,12 +2,12 @@ import os
 import tempfile
 
 import boto3
-from moto import mock_s3
+from moto import mock_aws
 
 from autogluon.cloud.utils.s3_utils import upload_file
 
 
-@mock_s3
+@mock_aws
 def test_upload_file():
     s3 = boto3.client("s3")
     # We need to create the bucket since this is all in Moto's 'virtual' AWS account
