@@ -558,7 +558,6 @@ class SagemakerBackend(Backend):
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
         inference_kwargs: Optional[Dict[str, Any]] = None,
-        **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -595,7 +594,6 @@ class SagemakerBackend(Backend):
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
         inference_kwargs: Optional[Dict[str, Any]] = None,
-        **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
