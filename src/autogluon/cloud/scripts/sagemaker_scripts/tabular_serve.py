@@ -16,6 +16,8 @@ from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.tabular import TabularPredictor
 
 image_dir = os.path.join("/tmp", "ag_images")
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def _save_image_and_update_dataframe_column(bytes):
@@ -34,9 +36,14 @@ def _save_image_and_update_dataframe_column(bytes):
 
 def model_fn(model_dir):
     """loads model from previously saved artifact"""
-    model = TabularPredictor.load(model_dir)
-    model.persist_models()
-    globals()["column_names"] = model.original_features
+    logger.info("Loading the model")
+    try:
+        model = TabularPredictor.load(model_dir)
+        model.persist_models()
+        globals()["column_names"] = model.original_features
+    except Exception as e:
+        logger.error(f"Error loading the model: {str(e)}")
+        raise e
 
     return model
 
