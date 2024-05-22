@@ -541,7 +541,7 @@ class CloudPredictor(ABC):
         """
         self._validate_inference_kwargs(inference_kwargs=kwargs)
         return self.backend.predict_proba_real_time(
-            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
+            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept, inference_kwargs=kwargs
         )
 
     def predict(
