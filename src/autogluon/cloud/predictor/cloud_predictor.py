@@ -556,6 +556,7 @@ class CloudPredictor(ABC):
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
+        **kwargs,
     ) -> Optional[pd.Series]:
         """
         Batch inference.
@@ -632,6 +633,7 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
+            inference_kwargs=kwargs,
             **backend_kwargs,
         )
 
@@ -648,6 +650,7 @@ class CloudPredictor(ABC):
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
+        **kwargs,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Batch inference
@@ -730,6 +733,7 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
+            inference_kwargs=kwargs,
             **backend_kwargs,
         )
 
