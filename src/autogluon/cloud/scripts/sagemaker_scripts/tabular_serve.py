@@ -1,8 +1,11 @@
 # flake8: noqa
 import base64
 import hashlib
+import json
+import logging
 import os
 import pickle
+import sys
 from io import BytesIO, StringIO
 
 import pandas as pd
@@ -39,7 +42,10 @@ def model_fn(model_dir):
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
-    inference_kwargs = {}
+    inference_kwargs = os.environ.get("inference_kwargs", {})
+    if inference_kwargs:
+        inference_kwargs = json.loads(inference_kwargs)
+
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
