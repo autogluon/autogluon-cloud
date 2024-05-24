@@ -3,6 +3,7 @@ import logging
 from abc import abstractmethod
 from typing import Optional
 
+import pandas as pd
 import sagemaker
 
 from ..utils.ag_sagemaker import (
@@ -11,6 +12,7 @@ from ..utils.ag_sagemaker import (
     AutoGluonSagemakerEstimator,
 )
 from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, MODEL_ARTIFACT_NAME
+from ..utils.utils import serialize_kwargs
 from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
@@ -267,7 +269,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         else:
             model_cls = AutoGluonNonRepackInferenceModel
         logger.log(20, "Creating inference model...")
-        inference_kwargs_str = json.dumps(inference_kwargs) if inference_kwargs is not None else None
+        inference_kwargs_str = serialize_kwargs(inference_kwargs) if inference_kwargs is not None else None
         env = {}
         if len(inference_kwargs_str) > 0:
             env["inference_kwargs"] = inference_kwargs_str
