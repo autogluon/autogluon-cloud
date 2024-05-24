@@ -33,6 +33,27 @@ def _save_image_and_update_dataframe_column(bytes):
 
     return im_path
 
+def _custom_json_deserializer(serialized_str):
+    """
+    Deserialize the JSON string that may include representations of complex data types like DataFrames
+    """
+    base_dict = json.loads(serialized_str)
+
+    deserialized_kwargs = {}
+    for key, value in base_dict.items():
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+                if isinstance(value, list) and all(isinstance(item, dict) for item in value):
+                    deserialized_kwargs[key] = pd.DataFrame(value)
+                else:
+                    deserialized_kwargs[key] = value
+            except json.JSONDecodeError:
+                deserialized_kwargs[key] = value
+        else:
+            deserialized_kwargs[key] = value
+
+    return deserialized_kwargs
 
 def model_fn(model_dir):
     """loads model from previously saved artifact"""
@@ -51,7 +72,7 @@ def model_fn(model_dir):
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
     inference_kwargs = os.environ.get("inference_kwargs", {})
     if inference_kwargs:
-        inference_kwargs = json.loads(inference_kwargs)
+        inference_kwargs = _custom_json_deserializer(inference_kwargs)
 
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
