@@ -33,6 +33,7 @@ def _save_image_and_update_dataframe_column(bytes):
 
     return im_path
 
+
 def _custom_json_deserializer(serialized_str):
     """
     Deserialize the JSON string that may include representations of complex data types like DataFrames
@@ -54,6 +55,7 @@ def _custom_json_deserializer(serialized_str):
             deserialized_kwargs[key] = value
 
     return deserialized_kwargs
+
 
 def model_fn(model_dir):
     """loads model from previously saved artifact"""

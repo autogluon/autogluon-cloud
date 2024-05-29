@@ -1,16 +1,18 @@
 # flake8: noqa
+import logging
 import os
 import pickle
 import shutil
+import sys
 from io import BytesIO, StringIO
 
 import pandas as pd
-import logging
-import sys
 
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
+
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def model_fn(model_dir):
     """loads model from previously saved artifact"""

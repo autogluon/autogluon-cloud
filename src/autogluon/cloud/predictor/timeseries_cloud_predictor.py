@@ -181,7 +181,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         self.id_column = id_column or self.id_column
         self.timestamp_column = timestamp_column or self.timestamp_column
         self.target_column = target or self.target_column
-        
+
         return self.backend.predict_real_time(
             test_data=test_data,
             id_column=self.id_column,
@@ -189,7 +189,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             target=self.target_column,
             static_features=static_features,
             accept=accept,
-            inference_kwargs=kwargs
+            inference_kwargs=kwargs,
         )
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:

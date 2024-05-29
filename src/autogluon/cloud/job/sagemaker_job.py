@@ -1,9 +1,7 @@
-import json
 import logging
 from abc import abstractmethod
 from typing import Optional
 
-import pandas as pd
 import sagemaker
 
 from ..utils.ag_sagemaker import (
