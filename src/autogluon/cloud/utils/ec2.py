@@ -63,13 +63,13 @@ def delete_key_pair(key_name: str, local_path: Optional[str]):
             os.remove(local_path)
 
 
-def parse_pytorch_version(name):
+def parse_pytorch_version(name: str):
     """Extracts the PyTorch version from the AMI name."""
     match = re.search(r"PyTorch (\d+\.\d+(\.\d+)?)", name)
     return tuple(map(int, match.group(1).split("."))) if match else (0, 0, 0)
 
 
-def latest_torch_image(images):
+def latest_torch_image(images: List[Dict[str, Any]]):
     """Finds the newest image based on PyTorch version and then creation date."""
 
     def image_key(image):
@@ -80,7 +80,7 @@ def latest_torch_image(images):
     return max(images, key=image_key)
 
 
-def get_latest_ami(ami_name="Deep Learning AMI GPU PyTorch*Ubuntu*"):
+def get_latest_ami(ami_name: str = "Deep Learning AMI GPU PyTorch*Ubuntu*") -> str:
     """
     Get the latest AMI ID based on PyTorch version and creation date.
 
