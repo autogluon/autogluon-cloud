@@ -1,10 +1,10 @@
-import dateutil.parser as parser
 import os
-from functools import partial
 import re
+from functools import partial
 from typing import Any, Dict, List, Optional
 
 import boto3
+import dateutil.parser as parser
 from botocore.exceptions import ClientError
 
 
