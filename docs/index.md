@@ -54,11 +54,11 @@ test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.cs
 test_data.drop(columns=["class"], inplace=True)
 predictor_init_args = {
     "label": "class"
-}  # init args you would pass to AG TabularPredictor
+}  # args used when creating TabularPredictor()
 predictor_fit_args = {
     "train_data": train_data,
     "time_limit": 120
-}  # fit args you would pass to AG TabularPredictor
+}  # args passed to TabularPredictor.fit()
 cloud_predictor = TabularCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
     predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
@@ -85,10 +85,10 @@ test_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/
 test_data.drop(columns=["label"], inplace=True)
 predictor_init_args = {
     "label": "label"
-}  # init args you would pass to AG MultiModalPredictor
+}  # args used when creating MultiModalPredictor()
 predictor_fit_args = {
     "train_data": train_data
-}  # fit args you would pass to AG MultiModalPredictor
+}  # args passed to MultiModalPredictor.fit()
 cloud_predictor = MultiModalCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
     predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
@@ -110,40 +110,28 @@ result = cloud_predictor.predict(test_data)
 import pandas as pd
 from autogluon.cloud import TimeSeriesCloudPredictor
 
-data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/cloud/timeseries_train.csv")
-id_column="item_id"
-timestamp_column="timestamp"
-target="target"
+data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv")
 
 predictor_init_args = {
-    "target": target
-}  # init args you would pass to AG TimeSeriesCloudPredictor
+    "target": "target",
+    "prediction_length" : 24,
+}  # args used when creating TimeSeriesPredictor()
 predictor_fit_args = {
     "train_data": data,
-    "time_limit": 120
-}  # fit args you would pass to AG TimeSeriesCloudPredictor
+    "time_limit": 120,
+}  # args passed to TimeSeriesPredictor.fit()
 cloud_predictor = TimeSeriesCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
     predictor_init_args=predictor_init_args,
     predictor_fit_args=predictor_fit_args,
-    id_column=id_column,
-    timestamp_column=timestamp_column
+    id_column="item_id",
+    timestamp_column="timestamp",
 )
 cloud_predictor.deploy()
-result = cloud_predictor.predict_real_time(
-    test_data=data,
-    id_column=id_column,
-    timestamp_column=timestamp_column,
-    target=target
-)
+result = cloud_predictor.predict_real_time(data)
 cloud_predictor.cleanup_deployment()
 # Batch inference
-result = cloud_predictor.predict(
-    test_data=data,
-    id_column=id_column,
-    timestamp_column=timestamp_column,
-    target=target
-)
+result = cloud_predictor.predict(data)
 ```
 :::
 
@@ -158,7 +146,7 @@ result = cloud_predictor.predict(
 pip install -U pip
 pip install -U setuptools wheel
 pip install --pre autogluon.cloud  # You don't need to install autogluon itself locally
-pip install --upgrade sagemaker  # This is required to ensure the information about newly released containers is available.
+pip install -U sagemaker  # This is required to ensure the information about newly released containers is available.
 ```
 
 ```{toctree}

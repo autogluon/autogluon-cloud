@@ -47,7 +47,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -66,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        AG_VERSION: ["source", "0.7.0"]
+        AG_VERSION: ["source", "1.1.0"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -77,7 +81,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -109,7 +117,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -141,7 +153,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -173,7 +189,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -205,7 +225,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -237,7 +261,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.8'
@@ -265,7 +293,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.8'
@@ -299,7 +331,11 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ github.sha }}
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Merge base branch into PR branch
+        run: git merge origin/${{ github.event.pull_request.base.ref }}
       - name: Setup Env Vars
         uses: ./.github/actions/setup-env-vars
       - uses: actions/setup-python@v4

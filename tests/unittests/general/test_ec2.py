@@ -1,12 +1,12 @@
 import os
 import tempfile
 
-from moto import mock_ec2
+from moto import mock_aws
 
 from autogluon.cloud.utils.ec2 import _get_key_pair, create_key_pair, delete_key_pair, get_latest_ami
 
 
-@mock_ec2
+@mock_aws
 def test_key_pair():
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
