@@ -1,8 +1,10 @@
 import os
+import re
 from functools import partial
 from typing import Any, Dict, List, Optional
 
 import boto3
+import dateutil.parser as parser
 from botocore.exceptions import ClientError
 
 
@@ -61,43 +63,46 @@ def delete_key_pair(key_name: str, local_path: Optional[str]):
             os.remove(local_path)
 
 
+def parse_pytorch_version(name: str):
+    """Extracts the PyTorch version from the AMI name."""
+    match = re.search(r"PyTorch (\d+\.\d+(\.\d+)?)", name)
+    return tuple(map(int, match.group(1).split("."))) if match else (0, 0, 0)
+
+
+def latest_torch_image(images: List[Dict[str, Any]]):
+    """Finds the newest image based on PyTorch version and then creation date."""
+
+    def image_key(image):
+        version = parse_pytorch_version(image["Name"])
+        creation_date = parser.parse(image["CreationDate"])
+        return version, creation_date
+
+    return max(images, key=image_key)
+
+
 def get_latest_ami(ami_name: str = "Deep Learning AMI GPU PyTorch*Ubuntu*") -> str:
     """
-    Get the latest ami id
+    Get the latest AMI ID based on PyTorch version and creation date.
 
-    Parameter
-    ---------
-    ami_name: str, default = Deep Learning AMI GPU PyTorch*Ubuntu*
-        Name of the ami. Could be regex.
+    Parameters
+    ----------
+    ami_name : str, default="Deep Learning AMI GPU PyTorch*Ubuntu*"
+        Name of the AMI. Could be a regex pattern.
 
-    Return
-    ------
-    str,
-        The latest ami id of the ami name being specified
+    Returns
+    -------
+    str
+        The latest AMI ID of the specified AMI name.
     """
-    from dateutil import parser
-
-    def newest_image(list_of_images: List[Dict[str, Any]]):
-        latest = None
-
-        for image in list_of_images:
-            if not latest:
-                latest = image
-                continue
-
-            if parser.parse(image["CreationDate"]) > parser.parse(latest["CreationDate"]):
-                latest = image
-
-        return latest
-
     ec2 = boto3.client("ec2")
-
     filters = [
         {"Name": "name", "Values": [ami_name]},
         {"Name": "owner-alias", "Values": ["amazon"]},
         {"Name": "architecture", "Values": ["x86_64"]},
         {"Name": "state", "Values": ["available"]},
     ]
+
     response = ec2.describe_images(Owners=["amazon"], Filters=filters)
-    source_image = newest_image(response["Images"])
-    return source_image["ImageId"]
+    latest_image = latest_torch_image(response["Images"])
+
+    return latest_image["ImageId"]
