@@ -40,6 +40,8 @@ jobs:
     needs: permission_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -47,11 +49,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -74,6 +72,8 @@ jobs:
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -81,11 +81,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -110,6 +106,8 @@ jobs:
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -117,11 +115,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -146,6 +140,8 @@ jobs:
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -153,11 +149,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -182,6 +174,8 @@ jobs:
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -189,11 +183,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -218,6 +208,8 @@ jobs:
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -225,11 +217,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -254,6 +242,8 @@ jobs:
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -261,11 +251,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.8'
@@ -286,6 +272,8 @@ jobs:
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -293,11 +281,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - uses: actions/setup-python@v4
         with:
           python-version: '3.8'
@@ -324,6 +308,8 @@ jobs:
     needs: [test_general_cloud, test_tabular_cloud, test_text_cloud, test_image_cloud, test_multimodal_cloud, test_timeseries_cloud, test_cluster]
     runs-on: ubuntu-latest
     steps:
+      - id: pr 
+        uses: jwalton/gh-find-current-pr@v1
       - name: Checkout repository
         if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v3
@@ -331,11 +317,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: refs/pull/${{ steps.pr.outputs.pr }}/merge
       - name: Setup Env Vars
         uses: ./.github/actions/setup-env-vars
       - uses: actions/setup-python@v4
@@ -359,12 +341,12 @@ jobs:
           branch: ${{ github.event.pull_request.head.ref }}
         run: |
           chmod +x ./.github/workflow_scripts/build_doc.sh
-          ./.github/workflow_scripts/build_doc.sh "$branch" '${{ github.event.pull_request.head.repo.full_name }}' '${{ env.SHORT_SHA }}' PR-'${{ github.event.number }}'
+          ./.github/workflow_scripts/build_doc.sh "$branch" '${{ github.event.pull_request.head.repo.full_name }}' '${{ env.SHORT_SHA }}' PR-'${{ steps.pr.outputs.pr }}'
       - name: Comment on PR
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: peter-evans/create-or-update-comment@v2.0.0
         with:
-          issue-number: ${{ github.event.number }}
+          issue-number: ${{ steps.pr.outputs.pr }}
           body: |
-            Job PR-${{ github.event.number }}-${{ env.SHORT_SHA }} is done.
-            Docs are uploaded to https://d12sc05jpx1wj5.cloudfront.net/PR-${{ github.event.number }}/${{ env.SHORT_SHA }}/index.html
+            Job PR-${{ steps.pr.outputs.pr }}-${{ env.SHORT_SHA }} is done.
+            Docs are uploaded to https://d12sc05jpx1wj5.cloudfront.net/PR-${{ steps.pr.outputs.pr }}/${{ env.SHORT_SHA }}/index.html
