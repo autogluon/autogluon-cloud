@@ -36,9 +36,6 @@ function install_latest_tabular {
 function install_latest_multimodal {
     install_latest_tabular_and_multimodal_dependencies
     python3 -m pip install -e autogluon/multimodal/
-    mim install mmcv-full --timeout 60
-    python3 -m pip install --upgrade "mmdet>=2.28, <3.0.0"
-    python3 -m pip install --upgrade "mmocr<1.0"
 }
 
 function install_tabular {
