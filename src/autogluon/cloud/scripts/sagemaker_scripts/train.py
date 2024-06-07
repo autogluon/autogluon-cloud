@@ -31,13 +31,13 @@ def get_env_if_present(name):
 
 
 def prepare_timeseries_dataframe(df, predictor_init_args):
-    target = predictor_init_args["target"]
+    target = predictor_init_args.get("target")
     cols = df.columns.to_list()
     id_column = cols[0]
     timestamp_column = cols[1]
     df[timestamp_column] = pd.to_datetime(df[timestamp_column])
     static_features = None
-    if target != cols[-1]:
+    if target is not None and target != cols[-1]:
         # target is not the last column, then there are static features being merged in
         target_index = cols.index(target)
         static_columns = cols[target_index + 1 :]
@@ -46,7 +46,6 @@ def prepare_timeseries_dataframe(df, predictor_init_args):
         df.drop(columns=static_columns, inplace=True)
     df = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
     if static_features is not None:
-        print(static_features)
         df.static_features = static_features
     return df
 

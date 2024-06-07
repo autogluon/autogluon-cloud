@@ -50,8 +50,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         *,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
-        id_column: str = "item_id",
-        timestamp_column: str = "timestamp",
+        id_column: Optional[str] = None,
+        timestamp_column: Optional[str] = None,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
@@ -120,7 +120,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
 
-        self.target_column = predictor_init_args.get("target", "target")
+        self.target_column = predictor_init_args.get("target")
         self.id_column = id_column
         self.timestamp_column = timestamp_column
 
@@ -146,6 +146,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     def predict_real_time(
         self,
         test_data: Union[str, pd.DataFrame],
+        id_column: Optional[str] = None,
+        timestamp_column: Optional[str] = None,
+        target: Optional[str] = None,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
         **kwargs,
@@ -175,6 +178,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Pandas.DataFrame
         Predict results in DataFrame
         """
+        self.id_column = id_column or self.id_column
+        self.timestamp_column = timestamp_column or self.timestamp_column
+        self.target_column = target or self.target_column
+
         return self.backend.predict_real_time(
             test_data=test_data,
             id_column=self.id_column,
@@ -182,6 +189,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             target=self.target_column,
             static_features=static_features,
             accept=accept,
+            inference_kwargs=kwargs,
         )
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
@@ -190,6 +198,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     def predict(
         self,
         test_data: Union[str, pd.DataFrame],
+        id_column: Optional[str] = None,
+        timestamp_column: Optional[str] = None,
+        target: Optional[str] = None,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         predictor_path: Optional[str] = None,
         framework_version: str = "latest",
@@ -199,6 +210,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
+        **kwargs,
     ) -> Optional[pd.DataFrame]:
         """
         Predict using SageMaker batch transform.
@@ -263,6 +275,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
                     Please refer to
                     https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
         """
+        self.id_column = id_column or self.id_column
+        self.timestamp_column = timestamp_column or self.timestamp_column
+        self.target_column = target or self.target_column
+
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
@@ -279,6 +295,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
+            inference_kwargs=kwargs,
             **backend_kwargs,
         )
 

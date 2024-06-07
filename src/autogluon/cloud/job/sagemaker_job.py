@@ -10,6 +10,7 @@ from ..utils.ag_sagemaker import (
     AutoGluonSagemakerEstimator,
 )
 from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, MODEL_ARTIFACT_NAME
+from ..utils.utils import serialize_kwargs
 from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
@@ -257,6 +258,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         model_kwargs,
         transformer_kwargs,
         repack_model=False,
+        inference_kwargs=None,
         **kwargs,
     ):
         self._local_mode = instance_type in (LOCAL_MODE, LOCAL_MODE_GPU)
@@ -265,6 +267,10 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         else:
             model_cls = AutoGluonNonRepackInferenceModel
         logger.log(20, "Creating inference model...")
+        inference_kwargs_str = serialize_kwargs(inference_kwargs) if inference_kwargs is not None else None
+        env = {}
+        if len(inference_kwargs_str) > 0:
+            env["inference_kwargs"] = inference_kwargs_str
         model = model_cls(
             model_data=model_data,
             role=role,
@@ -275,6 +281,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
             custom_image_uri=custom_image_uri,
             entry_point=entry_point,
             predictor_cls=predictor_cls,
+            env=env,
             **model_kwargs,
         )
         logger.log(20, "Inference model created successfully")

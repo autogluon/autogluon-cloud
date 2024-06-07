@@ -15,9 +15,9 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     def _preprocess_data(
         self,
         data: Union[pd.DataFrame, str],
-        id_column: str,
-        timestamp_column: str,
-        target: str,
+        id_column: Optional[str] = None,
+        timestamp_column: Optional[str] = None,
+        target: Optional[str] = None,
         static_features: Optional[Union[pd.DataFrame, str]] = None,
     ) -> pd.DataFrame:
         if isinstance(data, str):
@@ -27,12 +27,15 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         cols = data.columns.to_list()
         # Make sure id and timestamp columns are the first two columns, and target column is in the end
         # This is to ensure in the container we know how to find id and timestamp columns, and whether there are static features being merged
-        timestamp_index = cols.index(timestamp_column)
-        cols.insert(0, cols.pop(timestamp_index))
-        id_index = cols.index(id_column)
-        cols.insert(0, cols.pop(id_index))
-        target_index = cols.index(target)
-        cols.append(cols.pop(target_index))
+        if timestamp_column is not None:
+            timestamp_index = cols.index(timestamp_column)
+            cols.insert(0, cols.pop(timestamp_index))
+        if id_column is not None:
+            id_index = cols.index(id_column)
+            cols.insert(0, cols.pop(id_index))
+        if target is not None:
+            target_index = cols.index(target)
+            cols.append(cols.pop(target_index))
         data = data[cols]
 
         if static_features is not None:
@@ -48,8 +51,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         *,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
-        id_column: str,
-        timestamp_column: str,
+        id_column: Optional[str] = None,
+        timestamp_column: Optional[str] = None,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
@@ -199,9 +202,9 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     def predict(
         self,
         test_data: Union[str, pd.DataFrame],
-        id_column: str,
-        timestamp_column: str,
-        target: str,
+        id_column: Optional[str] = None,
+        timestamp_column: Optional[str] = None,
+        target: Optional[str] = None,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         **kwargs,
     ) -> Optional[pd.DataFrame]:

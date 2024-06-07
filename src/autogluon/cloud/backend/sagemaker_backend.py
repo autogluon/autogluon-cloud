@@ -558,7 +558,6 @@ class SagemakerBackend(Backend):
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
         inference_kwargs: Optional[Dict[str, Any]] = None,
-        **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -595,7 +594,6 @@ class SagemakerBackend(Backend):
         test_data_image_column: Optional[str] = None,
         accept: str = "application/x-parquet",
         inference_kwargs: Optional[Dict[str, Any]] = None,
-        **kwargs,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
@@ -704,6 +702,7 @@ class SagemakerBackend(Backend):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        inference_kwargs: Optional[Dict[str, Any]] = None,
         download: bool = True,
         persist: bool = True,
         save_path: Optional[str] = None,
@@ -783,6 +782,7 @@ class SagemakerBackend(Backend):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
+            inference_kwargs=inference_kwargs,
             download=download,
             persist=persist,
             save_path=save_path,
@@ -805,6 +805,7 @@ class SagemakerBackend(Backend):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        inference_kwargs: Optional[Dict[str, Any]] = None,
         download: bool = True,
         persist: bool = True,
         save_path: Optional[str] = None,
@@ -889,6 +890,7 @@ class SagemakerBackend(Backend):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
+            inference_kwargs=inference_kwargs,
             download=download,
             persist=persist,
             save_path=save_path,
@@ -1133,6 +1135,7 @@ class SagemakerBackend(Backend):
         instance_count=1,
         custom_image_uri=None,
         wait=True,
+        inference_kwargs=None,
         download=True,
         persist=True,
         save_path=None,
@@ -1256,6 +1259,7 @@ class SagemakerBackend(Backend):
             transformer_kwargs=transformer_kwargs,
             model_kwargs=model_kwargs,
             repack_model=repack_model,
+            inference_kwargs=inference_kwargs,
             **transform_kwargs,
         )
         self._batch_transform_jobs[job_name] = batch_transform_job

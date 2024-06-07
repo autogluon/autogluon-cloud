@@ -1,12 +1,17 @@
 # flake8: noqa
+import logging
 import os
 import pickle
 import shutil
+import sys
 from io import BytesIO, StringIO
 
 import pandas as pd
 
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
+
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def model_fn(model_dir):
@@ -31,12 +36,15 @@ def model_fn(model_dir):
 def prepare_timeseries_dataframe(df, predictor):
     target = predictor.target
     cols = df.columns.to_list()
+    logger.info(f"COLUMN {cols}")
     id_column = cols[0]
     timestamp_column = cols[1]
     df[timestamp_column] = pd.to_datetime(df[timestamp_column])
     static_features = None
     if target != cols[-1]:
         # target is not the last column, then there are static features being merged in
+        logger.info(f"Inside condition: {cols}, {target}")
+        logger.info(f"Inside condition: {cols}, {target}")
         target_index = cols.index(target)
         static_columns = cols[target_index + 1 :]
         static_features = df[[id_column] + static_columns].groupby([id_column], sort=False).head(1)
@@ -56,6 +64,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
 
     elif input_content_type == "text/csv":
         buf = StringIO(request_body)
+        logger.info(f"request body data path: {buf}")
         data = pd.read_csv(buf)
 
     elif input_content_type == "application/json":
@@ -77,6 +86,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
 
+    logger.info(f"Model is: {model}")
+    logger.info(f"Columns are: {data.columns}")
     data = prepare_timeseries_dataframe(data, model)
     prediction = model.predict(data, **inference_kwargs)
     prediction = pd.DataFrame(prediction)

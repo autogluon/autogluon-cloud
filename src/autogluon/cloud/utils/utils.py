@@ -1,5 +1,6 @@
 import base64
 import copy
+import json
 import logging
 import os
 import shutil
@@ -7,6 +8,7 @@ import tarfile
 import zipfile
 from datetime import datetime, timezone
 
+import pandas as pd
 import PIL
 from PIL import Image
 
@@ -91,3 +93,20 @@ def split_pred_and_pred_proba(prediction):
 
 def get_utc_timestamp_now():
     return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+
+def _custom_json_serializer(obj):
+    print(obj)
+    if isinstance(obj, pd.DataFrame):
+        return obj.to_dict(orient="records")
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+
+def serialize_kwargs(kwargs):
+    serialized_kwargs = {}
+    for key, value in kwargs.items():
+        try:
+            serialized_kwargs[key] = json.dumps(value, default=_custom_json_serializer)
+        except TypeError as e:
+            logger.error(f"Error serializing {key}: {e}")
+    return json.dumps(serialized_kwargs)

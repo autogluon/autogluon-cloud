@@ -384,7 +384,7 @@ class RayBackend(Backend):
             logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
         else:
             framework_version, py_version = parse_framework_version(
-                framework_version, "training", minimum_version="0.7.0"
+                framework_version, "training", minimum_version="1.0.0"
             )
             logger.log(20, f"Training with framework_version=={framework_version}")
             image_uri = image_uris.retrieve(
