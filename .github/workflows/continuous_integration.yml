@@ -47,11 +47,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -81,11 +77,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -106,7 +98,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        AG_VERSION: ["source", "0.7.0"]
+        AG_VERSION: ["source", "1.1.0"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -117,11 +109,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -142,7 +130,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        AG_VERSION: ["source", "0.7.0"]
+        AG_VERSION: ["source", "1.1.0"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -153,11 +141,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -178,7 +162,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        AG_VERSION: ["source", "0.7.0"]
+        AG_VERSION: ["source", "1.1.0"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -189,11 +173,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -214,7 +194,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        AG_VERSION: ["source", "0.7.0"]
+        AG_VERSION: ["source", "1.1.0"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -225,11 +205,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -250,7 +226,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        AG_VERSION: ["source", "0.7.0"]
+        AG_VERSION: ["source", "1.1.0"]
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
@@ -261,14 +237,10 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: '3.10'
       - name: Check if changes beside docs
         uses: dorny/paths-filter@v2
         id: changes
@@ -293,14 +265,10 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: '3.10'
       - name: Check if changes beside docs
         uses: dorny/paths-filter@v2
         id: changes
@@ -331,16 +299,12 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - name: Merge base branch into PR branch
-        run: git merge origin/${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Setup Env Vars
         uses: ./.github/actions/setup-env-vars
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: '3.10'
       - uses: r-lib/actions/setup-pandoc@v2
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
