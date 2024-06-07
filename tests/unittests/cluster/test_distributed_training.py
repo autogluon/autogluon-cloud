@@ -44,9 +44,11 @@ def test_distributed_training(test_helper, framework_version):
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             custom_image_uri=image_uri,
+            framework_version=framework_version,
             backend_kwargs={
                 "initialization_commands": [
                     "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com",
+                    "aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-west-2.amazonaws.com",
                     "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 369469875935.dkr.ecr.us-east-1.amazonaws.com",
                 ]
             },
