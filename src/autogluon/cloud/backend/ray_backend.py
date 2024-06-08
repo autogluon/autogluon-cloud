@@ -258,7 +258,7 @@ class RayBackend(Backend):
             logger.log(20, "Waiting for 60s to give the cluster some buffer time")
             time.sleep(60)
             cluster_manager.setup_connection()
-            time.sleep(10)  # waiting for connection to setup
+            time.sleep(60)  # waiting for connection to setup
             if job_name is None:
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
