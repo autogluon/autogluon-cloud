@@ -286,6 +286,10 @@ jobs:
           role-to-assume: arn:aws:iam::369469875935:role/CloudCluster
           role-duration-seconds: 7200
           aws-region: us-east-1
+      - name: Wait for permissions to propagate
+        run: sleep 60
+      - name: Debug AWS Identity
+        run: aws sts get-caller-identity
       - name: Test Cluster
         if: steps.changes.outputs.other_than_docs == 'true'
         run: |
