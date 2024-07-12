@@ -17,7 +17,6 @@ from ..utils.iam import (
     create_iam_policy,
     create_iam_role,
     create_instance_profile,
-    delete_iam_policy,
     get_policy,
     replace_iam_policy_place_holder,
     replace_trust_relationship_place_holder,
@@ -80,11 +79,10 @@ class RayAWSBackend(RayBackend):
         )
         create_iam_role(role_name=RAY_AWS_ROLE_NAME, trust_relationship=trust_relationship)
         policy_arn = get_policy(policy_name=RAY_AWS_POLICY_NAME)
-        if policy_arn is not None:
-            delete_iam_policy(policy_arn=policy_arn)
-        policy_arn = create_iam_policy(policy_name=RAY_AWS_POLICY_NAME, policy=iam_policy)
-        attach_iam_policy(role_name=RAY_AWS_ROLE_NAME, policy_arn=policy_arn)
-        attach_iam_policy(role_name=RAY_AWS_ROLE_NAME, policy_arn=ECR_READ_ONLY)
+        if policy_arn is None:
+            policy_arn = create_iam_policy(policy_name=RAY_AWS_POLICY_NAME, policy=iam_policy)
+            attach_iam_policy(role_name=RAY_AWS_ROLE_NAME, policy_arn=policy_arn)
+            attach_iam_policy(role_name=RAY_AWS_ROLE_NAME, policy_arn=ECR_READ_ONLY)
         instance_profile_arn = create_instance_profile(instance_profile_name=RAY_INSTANCE_PROFILE_NAME)
         if instance_profile_arn is not None:
             add_role_to_instance_profile(instance_profile_name=RAY_INSTANCE_PROFILE_NAME, role_name=RAY_AWS_ROLE_NAME)
