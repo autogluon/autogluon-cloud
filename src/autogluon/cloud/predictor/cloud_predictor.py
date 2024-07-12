@@ -392,6 +392,7 @@ class CloudPredictor(ABC):
         custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
         wait: bool = True,
+        model_reference_arn: Optional[str] = None,
         backend_kwargs: Optional[Dict] = None,
     ) -> None:
         """
@@ -447,6 +448,7 @@ class CloudPredictor(ABC):
             custom_image_uri=custom_image_uri,
             volume_size=volume_size,
             wait=wait,
+            model_reference_arn=model_reference_arn,
             **backend_kwargs,
         )
 
