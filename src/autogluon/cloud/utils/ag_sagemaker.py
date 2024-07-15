@@ -203,7 +203,7 @@ class AutoGluonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
             self.repacked_model_data or self.model_data,
             deploy_env,
             image_config=self.image_config,
-            model_reference_arn=self.model_reference_arn
+            model_reference_arn=self.model_reference_arn,
         )
 
 
@@ -231,7 +231,7 @@ class AutoGluonNonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
             self.model_data,
             deploy_env,
             image_config=self.image_config,
-            model_reference_arn=self.model_reference_arn
+            model_reference_arn=self.model_reference_arn,
         )
 
 
