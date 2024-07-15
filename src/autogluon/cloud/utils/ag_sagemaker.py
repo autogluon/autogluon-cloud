@@ -192,7 +192,7 @@ class AutoGluonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
         accelerator_type=None,
         serverless_inference_config=None,
         accept_eula=None,
-        model_reference_arn=None
+        model_reference_arn=None,
     ):  # pylint: disable=unused-argument
         deploy_key_prefix = fw_utils.model_code_key_prefix(self.key_prefix, self.name, self.image_uri)
         deploy_env = copy.deepcopy(self.env)
@@ -219,7 +219,7 @@ class AutoGluonNonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
         accelerator_type=None,
         serverless_inference_config=None,
         accept_eula=None,
-        model_reference_arn=None
+        model_reference_arn=None,
     ):  # pylint: disable=unused-argument
         deploy_env = copy.deepcopy(self.env)
         deploy_env.update(self._script_mode_env_vars())

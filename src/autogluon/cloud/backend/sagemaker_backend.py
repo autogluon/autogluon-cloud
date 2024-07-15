@@ -373,7 +373,7 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
-        model_reference_arn: Optional[str] = None
+        model_reference_arn: Optional[str] = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
