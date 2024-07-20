@@ -83,7 +83,7 @@ def get_instance_profile_arn(instance_profile_name: str) -> str:
     return response["InstanceProfile"]["Arn"]
 
 
-def delete_iam_policy(policy_arn: str):  # trigger
+def delete_iam_policy(policy_arn: str):
     """
     To delete a policy, need to first detach the policy to all attached entities, then delete all versions, finally delete the policy
     """
