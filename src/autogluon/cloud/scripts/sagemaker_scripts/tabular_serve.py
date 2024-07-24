@@ -1,8 +1,11 @@
 # flake8: noqa
 import base64
 import hashlib
+import json
+import logging
 import os
 import pickle
+import sys
 from io import BytesIO, StringIO
 
 import pandas as pd
@@ -13,6 +16,8 @@ from autogluon.core.utils import get_pred_from_proba_df
 from autogluon.tabular import TabularPredictor
 
 image_dir = os.path.join("/tmp", "ag_images")
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def _save_image_and_update_dataframe_column(bytes):
@@ -29,17 +34,48 @@ def _save_image_and_update_dataframe_column(bytes):
     return im_path
 
 
+def _custom_json_deserializer(serialized_str):
+    """
+    Deserialize the JSON string that may include representations of complex data types like DataFrames
+    """
+    base_dict = json.loads(serialized_str)
+
+    deserialized_kwargs = {}
+    for key, value in base_dict.items():
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+                if isinstance(value, list) and all(isinstance(item, dict) for item in value):
+                    deserialized_kwargs[key] = pd.DataFrame(value)
+                else:
+                    deserialized_kwargs[key] = value
+            except json.JSONDecodeError:
+                deserialized_kwargs[key] = value
+        else:
+            deserialized_kwargs[key] = value
+
+    return deserialized_kwargs
+
+
 def model_fn(model_dir):
     """loads model from previously saved artifact"""
-    model = TabularPredictor.load(model_dir)
-    model.persist_models()
-    globals()["column_names"] = model.original_features
+    logger.info("Loading the model")
+    try:
+        model = TabularPredictor.load(model_dir)
+        model.persist_models()
+        globals()["column_names"] = model.original_features
+    except Exception as e:
+        logger.error(f"Error loading the model: {str(e)}")
+        raise e
 
     return model
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
-    inference_kwargs = {}
+    inference_kwargs = os.environ.get("inference_kwargs", {})
+    if inference_kwargs:
+        inference_kwargs = _custom_json_deserializer(inference_kwargs)
+
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
@@ -60,9 +96,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         buf = bytes(request_body)
         payload = pickle.loads(buf)
         data = pd.read_parquet(BytesIO(payload["data"]))
-        inference_kwargs = payload["inference_kwargs"]
-        if inference_kwargs is None:
-            inference_kwargs = {}
+        inference_kwargs = payload.get("inference_kwargs", {})
 
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
