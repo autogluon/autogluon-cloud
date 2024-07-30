@@ -2,6 +2,8 @@
 
 set -ex
 
+echo "TEST CORRECT CHECKOUT"
+
 source $(dirname "$0")/env_setup.sh
 
 setup_lint_env
