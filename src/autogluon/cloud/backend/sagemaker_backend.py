@@ -710,6 +710,7 @@ class SagemakerBackend(Backend):
         model_kwargs: Optional[Dict] = None,
         transformer_kwargs: Optional[Dict] = None,
         transform_kwargs: Optional[Dict] = None,
+        local_predictor=None,
     ) -> Optional[pd.Series]:
         """
         Predict using SageMaker batch transform.
@@ -766,6 +767,8 @@ class SagemakerBackend(Backend):
             Any extra arguments needed to pass to transform.
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+        local_predictor: Optional[Any], default = None
+            Local predictor instance to use for batch inference
 
         Returns
         -------
@@ -789,6 +792,7 @@ class SagemakerBackend(Backend):
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
+            local_predictor=local_predictor,
         )
 
         return pred
@@ -811,6 +815,7 @@ class SagemakerBackend(Backend):
         model_kwargs: Optional[Dict] = None,
         transformer_kwargs: Optional[Dict] = None,
         transform_kwargs: Optional[Dict] = None,
+        local_predictor=None,  # Added parameter
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Predict using SageMaker batch transform.
@@ -870,6 +875,8 @@ class SagemakerBackend(Backend):
             Any extra arguments needed to pass to transform.
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+        local_predictor: Optional[Any], default = None
+            Local predictor instance to use for prediction
 
         Returns
         -------
@@ -895,6 +902,7 @@ class SagemakerBackend(Backend):
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
+            local_predictor=local_predictor, 
         )
 
         if include_predict:
@@ -1104,15 +1112,6 @@ class SagemakerBackend(Backend):
             raise e
 
     def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
-        # If a directory of images, upload directly
-        if isinstance(test_data, str) and not os.path.isdir(test_data):
-            # either a file to a dataframe, or a file to an image
-            if is_image_file(test_data):
-                logger.warning(
-                    "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
-                )
-            else:
-                test_data = load_pd.load(test_data)
 
         if isinstance(test_data, pd.DataFrame):
             test_data = self._prepare_data(test_data, "test", output_type="csv")
@@ -1140,6 +1139,7 @@ class SagemakerBackend(Backend):
         transformer_kwargs=None,
         split_pred_proba=True,
         transform_kwargs=None,
+        local_predictor=None,
     ):
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
@@ -1179,6 +1179,27 @@ class SagemakerBackend(Backend):
             test_data = convert_image_path_to_encoded_bytes_in_dataframe(
                 dataframe=test_data, image_column=test_data_image_column
             )
+
+        # If a directory of images, upload directly
+        if isinstance(test_data, str) and not os.path.isdir(test_data):
+            # either a file to a dataframe, or a file to an image
+            if is_image_file(test_data):
+                raise ValueError("Image file is not supported for batch inference")
+            else:
+                test_data = load_pd.load(test_data)
+
+        # Ensure columns are in sync with model expectations for tabular use cases
+        # TODO: Add support for other modalities once features are exposed in APIs
+        # Tracking at https://github.com/autogluon/autogluon/issues/4477
+        if isinstance(test_data, pd.DataFrame) and local_predictor is not None:
+            expected_columns = local_predictor.original_features
+            incoming_columns = test_data.columns.tolist()
+            missing_columns = set(expected_columns) - set(incoming_columns)
+            if missing_columns:
+                raise ValueError(f"Missing columns in input data: {missing_columns}")
+            # Remove extra columns and reorder to match the model's expected order
+            test_data = test_data[expected_columns]
+
         test_input = self._upload_batch_predict_data(test_data, cloud_bucket, cloud_key_prefix)
 
         self._serve_script_path = ScriptManager.get_serve_script(
@@ -1268,8 +1289,8 @@ class SagemakerBackend(Backend):
             pred = results
             if split_pred_proba:
                 pred, pred_proba = split_pred_and_pred_proba(results)
-        if not persist:
-            os.remove(results_path)
+            if not persist:
+                os.remove(results_path)
 
         return pred, pred_proba
 

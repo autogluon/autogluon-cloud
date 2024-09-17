@@ -622,6 +622,7 @@ class CloudPredictor(ABC):
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
+        local_predictor = self.to_local_predictor()
         return self.backend.predict(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
@@ -631,6 +632,7 @@ class CloudPredictor(ABC):
             instance_type=instance_type,
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
+            local_predictor=local_predictor,
             wait=wait,
             **backend_kwargs,
         )
@@ -719,6 +721,10 @@ class CloudPredictor(ABC):
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
+        local_predictor = None
+        #TODO add support for multimodal and timeseries as this is needed for batch inference see issue #136
+        if self.predictor_type == "tabular":
+            local_predictor = self.to_local_predictor()
         return self.backend.predict_proba(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
@@ -729,6 +735,7 @@ class CloudPredictor(ABC):
             instance_type=instance_type,
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
+            local_predictor=local_predictor,  # Only pass for tabular predictor
             wait=wait,
             **backend_kwargs,
         )
