@@ -58,9 +58,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
 
     elif input_content_type == "application/jsonl":
         buf = StringIO(request_body)
-        data = _read_with_fallback(
-            lambda b: pd.read_json(b, orient="records", lines=True), buf, column_names
-        )
+        data = _read_with_fallback(lambda b: pd.read_json(b, orient="records", lines=True), buf, column_names)
 
     elif input_content_type == "application/x-autogluon":
         buf = bytes(request_body)

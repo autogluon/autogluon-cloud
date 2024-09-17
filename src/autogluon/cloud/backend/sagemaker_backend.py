@@ -902,7 +902,7 @@ class SagemakerBackend(Backend):
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
-            local_predictor=local_predictor, 
+            local_predictor=local_predictor,
         )
 
         if include_predict:
@@ -1112,7 +1112,6 @@ class SagemakerBackend(Backend):
             raise e
 
     def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
-
         if isinstance(test_data, pd.DataFrame):
             test_data = self._prepare_data(test_data, "test", output_type="csv")
         logger.log(20, "Uploading data...")

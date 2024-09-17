@@ -722,7 +722,7 @@ class CloudPredictor(ABC):
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
         local_predictor = None
-        #TODO add support for multimodal and timeseries as this is needed for batch inference see issue #136
+        # TODO add support for multimodal and timeseries as this is needed for batch inference see issue #136
         if self.predictor_type == "tabular":
             local_predictor = self.to_local_predictor()
         return self.backend.predict_proba(
