@@ -318,6 +318,8 @@ class SagemakerBackend(Backend):
             predictor_fit_args=predictor_fit_args,
             leaderboard=leaderboard,
         )
+        # Get the label from predictor_init_args
+        label = predictor_init_args.get('label') or predictor_init_args.get('target') or None
         if image_column is not None:
             ag_args["image_column"] = image_column
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
@@ -325,6 +327,7 @@ class SagemakerBackend(Backend):
         inputs = self._upload_fit_artifact(
             train_data=train_data,
             tune_data=tune_data,
+            label=label,
             ag_args=ag_args_path,
             image_column=image_column,
             serving_script=ScriptManager.get_serve_script(
@@ -710,7 +713,6 @@ class SagemakerBackend(Backend):
         model_kwargs: Optional[Dict] = None,
         transformer_kwargs: Optional[Dict] = None,
         transform_kwargs: Optional[Dict] = None,
-        local_predictor=None,
     ) -> Optional[pd.Series]:
         """
         Predict using SageMaker batch transform.
@@ -767,8 +769,6 @@ class SagemakerBackend(Backend):
             Any extra arguments needed to pass to transform.
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
-        local_predictor: Optional[Any], default = None
-            Local predictor instance to use for batch inference
 
         Returns
         -------
@@ -792,7 +792,7 @@ class SagemakerBackend(Backend):
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
-            local_predictor=local_predictor,
+            original_features=self.original_features,
         )
 
         return pred
@@ -815,7 +815,6 @@ class SagemakerBackend(Backend):
         model_kwargs: Optional[Dict] = None,
         transformer_kwargs: Optional[Dict] = None,
         transform_kwargs: Optional[Dict] = None,
-        local_predictor=None,  # Added parameter
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Predict using SageMaker batch transform.
@@ -875,8 +874,7 @@ class SagemakerBackend(Backend):
             Any extra arguments needed to pass to transform.
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
-        local_predictor: Optional[Any], default = None
-            Local predictor instance to use for prediction
+
 
         Returns
         -------
@@ -902,7 +900,7 @@ class SagemakerBackend(Backend):
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
-            local_predictor=local_predictor,
+            original_features=self.original_features,
         )
 
         if include_predict:
@@ -978,6 +976,7 @@ class SagemakerBackend(Backend):
         self,
         train_data,
         tune_data,
+        label,
         ag_args,
         serving_script,
         image_column=None,
@@ -1007,6 +1006,7 @@ class SagemakerBackend(Backend):
                 )
 
         train_input = train_data
+        self.original_features = [col for col in train_data.columns if col != label]
         train_data = self._prepare_data(train_data, "train")
         logger.log(20, "Uploading train data...")
         train_input = self.sagemaker_session.upload_data(
@@ -1138,7 +1138,7 @@ class SagemakerBackend(Backend):
         transformer_kwargs=None,
         split_pred_proba=True,
         transform_kwargs=None,
-        local_predictor=None,
+        original_features=None,
     ):
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
@@ -1192,8 +1192,8 @@ class SagemakerBackend(Backend):
         # Ensure columns are in sync with model expectations for tabular use cases
         # TODO: Add support for other modalities once features are exposed in APIs
         # Tracking at https://github.com/autogluon/autogluon/issues/4477
-        if isinstance(test_data, pd.DataFrame) and local_predictor is not None:
-            expected_columns = local_predictor.original_features
+        if isinstance(test_data, pd.DataFrame) and original_features is not None:
+            expected_columns = original_features
             incoming_columns = test_data.columns.tolist()
             missing_columns = set(expected_columns) - set(incoming_columns)
             if missing_columns:
