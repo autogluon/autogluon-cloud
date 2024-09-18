@@ -319,7 +319,7 @@ class SagemakerBackend(Backend):
             leaderboard=leaderboard,
         )
         # Get the label from predictor_init_args
-        label = predictor_init_args.get('label') or predictor_init_args.get('target') or None
+        label = predictor_init_args.get("label") or predictor_init_args.get("target") or None
         if image_column is not None:
             ag_args["image_column"] = image_column
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
@@ -1189,9 +1189,6 @@ class SagemakerBackend(Backend):
             else:
                 test_data = load_pd.load(test_data)
 
-        # Ensure columns are in sync with model expectations for tabular use cases
-        # TODO: Add support for other modalities once features are exposed in APIs
-        # Tracking at https://github.com/autogluon/autogluon/issues/4477
         if isinstance(test_data, pd.DataFrame) and original_features is not None:
             expected_columns = original_features
             incoming_columns = test_data.columns.tolist()
