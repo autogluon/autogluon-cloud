@@ -1006,6 +1006,8 @@ class SagemakerBackend(Backend):
                 )
 
         train_input = train_data
+        if isinstance(train_data, str):
+            train_data = load_pd.load(train_data)
         self.original_features = [col for col in train_data.columns if col != label]
         train_data = self._prepare_data(train_data, "train")
         logger.log(20, "Uploading train data...")
