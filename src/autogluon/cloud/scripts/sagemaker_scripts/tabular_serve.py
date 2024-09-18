@@ -44,8 +44,6 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     if input_content_type == "application/x-parquet":
         buf = BytesIO(request_body)
         data = pd.read_parquet(buf)
-
-        # Reorder columns or assign expected columns if necessary
         data = _align_columns(data, column_names)
 
     elif input_content_type == "text/csv":
@@ -80,6 +78,10 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     if image_column is not None:
         print(f"Detected image column {image_column}")
         data[image_column] = [_save_image_and_update_dataframe_column(bytes) for bytes in data[image_column]]
+
+    # Ensure inference_kwargs is a dictionary
+    if inference_kwargs is None:
+        inference_kwargs = {}
 
     # Make predictions
     if model.problem_type not in [REGRESSION, QUANTILE]:
