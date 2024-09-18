@@ -79,7 +79,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         print(f"Detected image column {image_column}")
         data[image_column] = [_save_image_and_update_dataframe_column(bytes) for bytes in data[image_column]]
 
-    # Ensure inference_kwargs is a dictionary
+    # Ensure inference_kwargs is a dictionary right before use
     if inference_kwargs is None:
         inference_kwargs = {}
 

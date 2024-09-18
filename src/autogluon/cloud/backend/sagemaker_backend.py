@@ -1183,7 +1183,9 @@ class SagemakerBackend(Backend):
         if isinstance(test_data, str) and not os.path.isdir(test_data):
             # either a file to a dataframe, or a file to an image
             if is_image_file(test_data):
-                raise ValueError("Image file is not supported for batch inference")
+                logger.warning(
+                    "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
+                )
             else:
                 test_data = load_pd.load(test_data)
 
