@@ -131,3 +131,6 @@ dmypy.json
 src/autogluon/cloud/version.py
 VERSION.minor
 .idea
+.vscode
+.DS_Store
+results.xml

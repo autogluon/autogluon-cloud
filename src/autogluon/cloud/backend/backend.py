@@ -28,6 +28,7 @@ class Backend(ABC):
         self.local_output_path = local_output_path
         self._cloud_output_path = cloud_output_path
         self.predictor_type = predictor_type
+        self.original_features = None
 
     @abstractmethod
     def generate_default_permission(self, **kwargs) -> Dict[str, str]:

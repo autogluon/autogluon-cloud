@@ -318,6 +318,8 @@ class SagemakerBackend(Backend):
             predictor_fit_args=predictor_fit_args,
             leaderboard=leaderboard,
         )
+        # Get the label from predictor_init_args
+        label = predictor_init_args.get("label") or predictor_init_args.get("target") or None
         if image_column is not None:
             ag_args["image_column"] = image_column
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
@@ -325,6 +327,7 @@ class SagemakerBackend(Backend):
         inputs = self._upload_fit_artifact(
             train_data=train_data,
             tune_data=tune_data,
+            label=label,
             ag_args=ag_args_path,
             image_column=image_column,
             serving_script=ScriptManager.get_serve_script(
@@ -789,6 +792,7 @@ class SagemakerBackend(Backend):
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
+            original_features=self.original_features,
         )
 
         return pred
@@ -871,6 +875,7 @@ class SagemakerBackend(Backend):
             Please refer to
             https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
 
+
         Returns
         -------
         Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
@@ -895,6 +900,7 @@ class SagemakerBackend(Backend):
             model_kwargs=model_kwargs,
             transformer_kwargs=transformer_kwargs,
             transform_kwargs=transform_kwargs,
+            original_features=self.original_features,
         )
 
         if include_predict:
@@ -970,6 +976,7 @@ class SagemakerBackend(Backend):
         self,
         train_data,
         tune_data,
+        label,
         ag_args,
         serving_script,
         image_column=None,
@@ -999,6 +1006,9 @@ class SagemakerBackend(Backend):
                 )
 
         train_input = train_data
+        if isinstance(train_data, str):
+            train_data = load_pd.load(train_data)
+        self.original_features = [col for col in train_data.columns if col != label]
         train_data = self._prepare_data(train_data, "train")
         logger.log(20, "Uploading train data...")
         train_input = self.sagemaker_session.upload_data(
@@ -1104,16 +1114,6 @@ class SagemakerBackend(Backend):
             raise e
 
     def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
-        # If a directory of images, upload directly
-        if isinstance(test_data, str) and not os.path.isdir(test_data):
-            # either a file to a dataframe, or a file to an image
-            if is_image_file(test_data):
-                logger.warning(
-                    "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
-                )
-            else:
-                test_data = load_pd.load(test_data)
-
         if isinstance(test_data, pd.DataFrame):
             test_data = self._prepare_data(test_data, "test", output_type="csv")
         logger.log(20, "Uploading data...")
@@ -1140,6 +1140,7 @@ class SagemakerBackend(Backend):
         transformer_kwargs=None,
         split_pred_proba=True,
         transform_kwargs=None,
+        original_features=None,
     ):
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
@@ -1179,6 +1180,26 @@ class SagemakerBackend(Backend):
             test_data = convert_image_path_to_encoded_bytes_in_dataframe(
                 dataframe=test_data, image_column=test_data_image_column
             )
+
+        # If a directory of images, upload directly
+        if isinstance(test_data, str) and not os.path.isdir(test_data):
+            # either a file to a dataframe, or a file to an image
+            if is_image_file(test_data):
+                logger.warning(
+                    "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
+                )
+            else:
+                test_data = load_pd.load(test_data)
+
+        if isinstance(test_data, pd.DataFrame) and original_features is not None:
+            expected_columns = original_features
+            incoming_columns = test_data.columns.tolist()
+            missing_columns = set(expected_columns) - set(incoming_columns)
+            if missing_columns:
+                raise ValueError(f"Missing columns in input data: {missing_columns}")
+            # Remove extra columns and reorder to match the model's expected order
+            test_data = test_data[expected_columns]
+
         test_input = self._upload_batch_predict_data(test_data, cloud_bucket, cloud_key_prefix)
 
         self._serve_script_path = ScriptManager.get_serve_script(
@@ -1268,8 +1289,8 @@ class SagemakerBackend(Backend):
             pred = results
             if split_pred_proba:
                 pred, pred_proba = split_pred_and_pred_proba(results)
-        if not persist:
-            os.remove(results_path)
+            if not persist:
+                os.remove(results_path)
 
         return pred, pred_proba
 
