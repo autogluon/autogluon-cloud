@@ -112,7 +112,7 @@ install_requires = [
     "autogluon.common>=0.7",
     # <2 because unlikely to introduce breaking changes in minor releases. >=1.10 because 1.10 is 3 years old, no need to support older
     "boto3>=1.10,<2.0",
-    "packaging>=23.0,<24.0",
+    "packaging>=23.0,<25.0",
     # updated sagemaker is required to fetch latest container info, so we don't want to cap the version too strict
     # otherwise cloud module needs to be released to support new container
     "sagemaker>=2.126.0,<3.0",
