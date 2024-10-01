@@ -52,7 +52,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -82,7 +82,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -114,7 +114,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -146,7 +146,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -178,7 +178,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -210,7 +210,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -242,7 +242,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -274,7 +274,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Check if changes beside docs
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
