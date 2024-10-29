@@ -288,7 +288,7 @@ jobs:
             other_than_docs:
               - '!(docs/**)**'
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::369469875935:role/CloudCluster
           role-duration-seconds: 7200
@@ -318,7 +318,7 @@ jobs:
           python-version: '3.10'
       - uses: r-lib/actions/setup-pandoc@v2
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::369469875935:role/AutoGluonCloudCIDocRole
           role-duration-seconds: 3600
