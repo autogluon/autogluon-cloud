@@ -129,6 +129,7 @@ class AutoGluonSagemakerInferenceModel(Model):
         instance_type,
         custom_image_uri=None,
         env=None,
+        model_reference_arn=None,
         **kwargs,
     ):
         image_uri = custom_image_uri
@@ -152,6 +153,7 @@ class AutoGluonSagemakerInferenceModel(Model):
             entry_point=entry_point,
             image_uri=image_uri,
             env=env,
+            model_reference_arn=model_reference_arn,
             **kwargs,
         )
 
@@ -201,6 +203,7 @@ class AutoGluonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
             self.repacked_model_data or self.model_data,
             deploy_env,
             image_config=self.image_config,
+            model_reference_arn=self.model_reference_arn,
         )
 
 
@@ -228,6 +231,7 @@ class AutoGluonNonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
             self.model_data,
             deploy_env,
             image_config=self.image_config,
+            model_reference_arn=self.model_reference_arn,
         )
 
 
