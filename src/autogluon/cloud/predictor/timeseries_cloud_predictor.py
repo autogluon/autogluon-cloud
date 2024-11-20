@@ -182,6 +182,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             target=self.target_column,
             static_features=static_features,
             accept=accept,
+            **kwargs
         )
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
