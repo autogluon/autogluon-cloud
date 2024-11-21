@@ -5,6 +5,8 @@ AG_VERSION="${2:-source}"
 
 set -ex
 
+echo "TEST GENERAL"
+
 source $(dirname "$0")/env_setup.sh
 
 if [ $MODULE = "tabular" ]
