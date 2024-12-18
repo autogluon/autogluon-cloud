@@ -32,7 +32,7 @@ def _save_image_and_update_dataframe_column(bytes):
 def model_fn(model_dir):
     """loads model from previously saved artifact"""
     model = TabularPredictor.load(model_dir)
-    model.persist_models()
+    model.persist()
     globals()["column_names"] = model.original_features
 
     return model
