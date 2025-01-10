@@ -45,7 +45,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         return TimeSeriesPredictor
 
-
     def fit(
         self,
         *,
@@ -138,9 +137,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if "hyperparameters" not in backend_kwargs["autogluon_sagemaker_estimator_kwargs"]:
             backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"] = {}
 
-        backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"][
-            "predictor_metadata"
-        ] = json.dumps(predictor_metadata)
+        backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"]["predictor_metadata"] = json.dumps(
+            predictor_metadata
+        )
 
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(

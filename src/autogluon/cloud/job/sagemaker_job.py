@@ -91,9 +91,7 @@ class SageMakerJob(RemoteJob):
             return "NotCreated"
         if not self._local_mode:
             return self._get_job_status()
-        logger.warning(
-            "Job status not available in local mode. Please check the local log."
-        )
+        logger.warning("Job status not available in local mode. Please check the local log.")
         return None
 
     def get_output_path(self) -> Optional[str]:
@@ -167,9 +165,7 @@ class SageMakerFitJob(SageMakerJob):
 
     def _get_output_path(self):
         if not self._local_mode:
-            return self.session.describe_training_job(self.job_name)["ModelArtifacts"][
-                "S3ModelArtifacts"
-            ]
+            return self.session.describe_training_job(self.job_name)["ModelArtifacts"]["S3ModelArtifacts"]
         assert self._output_path is not None
         return self._output_path + "/" + self._output_filename
 
@@ -217,9 +213,7 @@ class SageMakerFitJob(SageMakerJob):
         )
         logger.log(20, f"Start sagemaker training job `{job_name}`")
         try:
-            sagemaker_estimator.fit(
-                inputs=inputs, wait=wait, job_name=job_name, **kwargs
-            )
+            sagemaker_estimator.fit(inputs=inputs, wait=wait, job_name=job_name, **kwargs)
             self._job_name = job_name
             self._framework_version = framework_version
 
@@ -229,13 +223,9 @@ class SageMakerFitJob(SageMakerJob):
             latest_training_job_name = latest_training_job.name
             assert latest_training_job_name is not None
 
-            self._output_path = (
-                sagemaker_estimator.output_path + "/" + latest_training_job_name
-            )
+            self._output_path = sagemaker_estimator.output_path + "/" + latest_training_job_name
         except Exception as e:
-            logger.error(
-                f"Training failed. Please check sagemaker console training jobs {job_name} for details."
-            )
+            logger.error(f"Training failed. Please check sagemaker console training jobs {job_name} for details.")
             raise e
 
 
@@ -260,13 +250,10 @@ class SageMakerBatchTransformationJob(SageMakerJob):
     def _get_job_status(self):
         return self.session.describe_transform_job(self.job_name)["TransformJobStatus"]
 
-
     def _get_output_path(self):
         if not self._local_mode:
             return (
-                self.session.describe_transform_job(self.job_name)["TransformOutput"][
-                    "S3OutputPath"
-                ]
+                self.session.describe_transform_job(self.job_name)["TransformOutput"]["S3OutputPath"]
                 + "/"
                 + self._output_filename
             )
@@ -342,9 +329,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
             latest_transform_job_name = latest_transform_job.name
             assert latest_transform_job_name is not None
 
-            self._output_path = (
-                transformer.output_path + "/" + latest_transform_job_name
-            )
+            self._output_path = transformer.output_path + "/" + latest_transform_job_name
             logger.log(20, "Transform done")
         except Exception as e:
             transformer.delete_model()
@@ -354,9 +339,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
 
         if wait:
             transformer.delete_model()
-            logger.log(
-                20, f"Predict results have been saved to {self.get_output_path()}"
-            )
+            logger.log(20, f"Predict results have been saved to {self.get_output_path()}")
         else:
             logger.log(
                 20,
