@@ -320,8 +320,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             self.id_column = metadata.get("id_column")
             self.timestamp_column = metadata.get("timestamp_column")
             self.target_column = metadata.get("target_column")
-            if "static_features" in metadata:
-            self.static_features = json.loads(metadata.get("static_features", None))
         else:
             logger.warning(
                 "No predictor metadata found in training job. Please set id_column, timestamp_column and target_column manually."

@@ -14,22 +14,29 @@ def test_timeseries(test_helper, framework_version):
         time_limit = 60
 
         predictor_init_args = dict(target="target", prediction_length=3)
-
         predictor_fit_args = dict(
             train_data=train_data,
             presets="medium_quality",
             time_limit=time_limit,
         )
+
         cloud_predictor = TimeSeriesCloudPredictor(
             cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries/{framework_version}/{timestamp}",
             local_output_path="test_timeseries_cloud_predictor",
         )
+        cloud_predictor_no_train = TimeSeriesCloudPredictor(
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries-no-train/{framework_version}/{timestamp}",
+            local_output_path="test_timeseries_cloud_predictor_no_train",
+        )
+
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
-        test_helper.test_basic_functionality(
+
+        test_helper.test_functionality(
             cloud_predictor,
             predictor_init_args,
             predictor_fit_args,
+            cloud_predictor_no_train,
             train_data,
             fit_kwargs=dict(
                 static_features=static_features,
