@@ -114,7 +114,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         -------
         `TimeSeriesCloudPredictor` object. Returns self.
         """
-        assert not self.backend.is_fit, "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        assert (
+            not self.backend.is_fit
+        ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         if backend_kwargs is None:
             backend_kwargs = {}
 
@@ -132,17 +134,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         # Add to backend kwargs
         if "autogluon_sagemaker_estimator_kwargs" not in backend_kwargs:
             backend_kwargs["autogluon_sagemaker_estimator_kwargs"] = {}
-        if (
-            "hyperparameters"
-            not in backend_kwargs["autogluon_sagemaker_estimator_kwargs"]
-        ):
-            backend_kwargs["autogluon_sagemaker_estimator_kwargs"][
-                "hyperparameters"
-            ] = {}
+        if "hyperparameters" not in backend_kwargs["autogluon_sagemaker_estimator_kwargs"]:
+            backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"] = {}
 
-        backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"][
-            "predictor_metadata"
-        ] = json.dumps(predictor_metadata)
+        backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"]["predictor_metadata"] = json.dumps(
+            predictor_metadata
+        )
 
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
@@ -195,11 +192,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Pandas.DataFrame
         Predict results in DataFrame
         """
-        if (
-            self.id_column is None
-            or self.timestamp_column is None
-            or self.target_column is None
-        ):
+        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
             raise ValueError(
                 "Please set id_column, timestamp_column and target_column before calling predict_real_time"
             )
@@ -213,9 +206,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         )
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
-        raise ValueError(
-            f"{self.__class__.__name__} does not support predict_proba operation."
-        )
+        raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
     def predict(
         self,
@@ -296,14 +287,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
-        if (
-            self.id_column is None
-            or self.timestamp_column is None
-            or self.target_column is None
-        ):
-            raise ValueError(
-                "Please set id_column, timestamp_column and target_column before calling predict"
-            )
+        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
+            raise ValueError("Please set id_column, timestamp_column and target_column before calling predict")
         return self.backend.predict(
             test_data=test_data,
             id_column=self.id_column,
@@ -324,9 +309,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         self,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
-        raise ValueError(
-            f"{self.__class__.__name__} does not support predict_proba operation."
-        )
+        raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
     def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
         """Attach to existing training job"""
