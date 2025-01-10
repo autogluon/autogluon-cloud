@@ -296,6 +296,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
+        if (
+            self.id_column is None
+            or self.timestamp_column is None
+            or self.target_column is None
+        ):
+            raise ValueError(
+                "Please set id_column, timestamp_column and target_column before calling predict"
+            )
         return self.backend.predict(
             test_data=test_data,
             id_column=self.id_column,
