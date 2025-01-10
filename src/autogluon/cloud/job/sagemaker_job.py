@@ -170,10 +170,13 @@ class SageMakerFitJob(SageMakerJob):
         return self._output_path + "/" + self._output_filename
 
     def _get_hyperparameters(self):
-        hyperparameters = self.session.describe_training_job(self.job_name)["HyperParameters"]
-        if "predictor_metadata" in hyperparameters:
-            hyperparameters["predictor_metadata"] = json.loads(hyperparameters["predictor_metadata"])
-        return hyperparameters
+        if self.job_name:
+            hyperparameters = self.session.describe_training_job(self.job_name)["HyperParameters"]
+            if "predictor_metadata" in hyperparameters:
+                hyperparameters["predictor_metadata"] = json.loads(hyperparameters["predictor_metadata"])
+            return hyperparameters
+        else:
+            return None
 
     def run(
         self,
