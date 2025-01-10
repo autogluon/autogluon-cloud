@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict, Optional, Union
 
@@ -42,8 +43,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     def _get_local_predictor_cls(self):
         from autogluon.timeseries import TimeSeriesPredictor
 
-        predictor_cls = TimeSeriesPredictor
-        return predictor_cls
+        return TimeSeriesPredictor
+
 
     def fit(
         self,
@@ -123,6 +124,23 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         self.target_column = predictor_init_args.get("target", "target")
         self.id_column = id_column
         self.timestamp_column = timestamp_column
+
+        # Create predictor metadata dict
+        predictor_metadata = {
+            "id_column": id_column,
+            "timestamp_column": timestamp_column,
+            "target_column": predictor_init_args.get("target", "target"),
+        }
+
+        # Add to backend kwargs
+        if "autogluon_sagemaker_estimator_kwargs" not in backend_kwargs:
+            backend_kwargs["autogluon_sagemaker_estimator_kwargs"] = {}
+        if "hyperparameters" not in backend_kwargs["autogluon_sagemaker_estimator_kwargs"]:
+            backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"] = {}
+
+        backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"][
+            "predictor_metadata"
+        ] = json.dumps(predictor_metadata)
 
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
@@ -287,3 +305,26 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
+
+    def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
+        """Attach to existing training job"""
+        super().attach_job(job_name)
+
+        # Get full job description including hyperparameters
+        job_desc = self.backend.get_fit_job_info()
+        hyperparameters = job_desc.get("hyperparameters", {})
+
+        # Extract and set predictor metadata
+        if "predictor_metadata" in hyperparameters:
+            metadata = hyperparameters["predictor_metadata"]
+            self.id_column = metadata.get("id_column")
+            self.timestamp_column = metadata.get("timestamp_column")
+            self.target_column = metadata.get("target_column")
+            if "static_features" in metadata:
+            self.static_features = json.loads(metadata.get("static_features", None))
+        else:
+            logger.warning(
+                "No predictor metadata found in training job. Please set id_column, timestamp_column and target_column manually."
+            )
+
+        return self

@@ -1,6 +1,7 @@
+import json
 import logging
 from abc import abstractmethod
-from typing import Optional
+from typing import Dict, Optional, Union
 
 import sagemaker
 
@@ -61,6 +62,10 @@ class SageMakerJob(RemoteJob):
     def _get_output_path(self):
         raise NotImplementedError
 
+    @abstractmethod
+    def _get_hyperparameters(self):
+        raise NotImplementedError
+
     @property
     def job_name(self):
         return self._job_name
@@ -86,7 +91,9 @@ class SageMakerJob(RemoteJob):
             return "NotCreated"
         if not self._local_mode:
             return self._get_job_status()
-        logger.warning("Job status not available in local mode. Please check the local log.")
+        logger.warning(
+            "Job status not available in local mode. Please check the local log."
+        )
         return None
 
     def get_output_path(self) -> Optional[str]:
@@ -102,6 +109,17 @@ class SageMakerJob(RemoteJob):
         if not self.completed:
             return None
         return self._get_output_path()
+
+    def get_hyperparameters(self) -> Dict[str, Union[int, str]]:
+        """
+        Get hyperparameters of the job
+
+        Returns:
+        --------
+        dict:
+            Hyperparameters of the training job
+        """
+        return self._get_hyperparameters()
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
@@ -140,6 +158,7 @@ class SageMakerFitJob(SageMakerJob):
             status=self.get_job_status(),
             framework_version=self.framework_version,
             artifact_path=self.get_output_path(),
+            hyperparameters=self.get_hyperparameters(),
         )
         return info
 
@@ -148,9 +167,17 @@ class SageMakerFitJob(SageMakerJob):
 
     def _get_output_path(self):
         if not self._local_mode:
-            return self.session.describe_training_job(self.job_name)["ModelArtifacts"]["S3ModelArtifacts"]
+            return self.session.describe_training_job(self.job_name)["ModelArtifacts"][
+                "S3ModelArtifacts"
+            ]
         assert self._output_path is not None
         return self._output_path + "/" + self._output_filename
+
+    def _get_hyperparameters(self):
+        hyperparameters = self.session.describe_training_job(self.job_name)["HyperParameters"]
+        if "predictor_metadata" in hyperparameters:
+            hyperparameters["predictor_metadata"] = json.loads(hyperparameters["predictor_metadata"])
+        return hyperparameters
 
     def run(
         self,
@@ -190,7 +217,9 @@ class SageMakerFitJob(SageMakerJob):
         )
         logger.log(20, f"Start sagemaker training job `{job_name}`")
         try:
-            sagemaker_estimator.fit(inputs=inputs, wait=wait, job_name=job_name, **kwargs)
+            sagemaker_estimator.fit(
+                inputs=inputs, wait=wait, job_name=job_name, **kwargs
+            )
             self._job_name = job_name
             self._framework_version = framework_version
 
@@ -200,9 +229,13 @@ class SageMakerFitJob(SageMakerJob):
             latest_training_job_name = latest_training_job.name
             assert latest_training_job_name is not None
 
-            self._output_path = sagemaker_estimator.output_path + "/" + latest_training_job_name
+            self._output_path = (
+                sagemaker_estimator.output_path + "/" + latest_training_job_name
+            )
         except Exception as e:
-            logger.error(f"Training failed. Please check sagemaker console training jobs {job_name} for details.")
+            logger.error(
+                f"Training failed. Please check sagemaker console training jobs {job_name} for details."
+            )
             raise e
 
 
@@ -219,6 +252,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         info = dict(
             name=self.job_name,
             status=self.get_job_status(),
+            hyperparameters=self.get_hyperparameters(),
             result_path=self._get_output_path(),
         )
         return info
@@ -226,10 +260,13 @@ class SageMakerBatchTransformationJob(SageMakerJob):
     def _get_job_status(self):
         return self.session.describe_transform_job(self.job_name)["TransformJobStatus"]
 
+
     def _get_output_path(self):
         if not self._local_mode:
             return (
-                self.session.describe_transform_job(self.job_name)["TransformOutput"]["S3OutputPath"]
+                self.session.describe_transform_job(self.job_name)["TransformOutput"][
+                    "S3OutputPath"
+                ]
                 + "/"
                 + self._output_filename
             )
@@ -280,14 +317,22 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         logger.log(20, "Inference model created successfully")
         logger.log(20, "Creating transformer...")
         transformer = model.transformer(
-            instance_count=instance_count, instance_type=instance_type, output_path=output_path, **transformer_kwargs
+            instance_count=instance_count,
+            instance_type=instance_type,
+            output_path=output_path,
+            **transformer_kwargs,
         )
         logger.log(20, "Transformer created successfully")
 
         try:
             logger.log(20, "Transforming")
             transformer.transform(
-                test_input, job_name=job_name, split_type=split_type, content_type=content_type, wait=wait, **kwargs
+                test_input,
+                job_name=job_name,
+                split_type=split_type,
+                content_type=content_type,
+                wait=wait,
+                **kwargs,
             )
             self._job_name = job_name
 
@@ -297,7 +342,9 @@ class SageMakerBatchTransformationJob(SageMakerJob):
             latest_transform_job_name = latest_transform_job.name
             assert latest_transform_job_name is not None
 
-            self._output_path = transformer.output_path + "/" + latest_transform_job_name
+            self._output_path = (
+                transformer.output_path + "/" + latest_transform_job_name
+            )
             logger.log(20, "Transform done")
         except Exception as e:
             transformer.delete_model()
@@ -307,6 +354,11 @@ class SageMakerBatchTransformationJob(SageMakerJob):
 
         if wait:
             transformer.delete_model()
-            logger.log(20, f"Predict results have been saved to {self.get_output_path()}")
+            logger.log(
+                20, f"Predict results have been saved to {self.get_output_path()}"
+            )
         else:
-            logger.log(20, "Predict asynchronously. You can use `info()` or `get_job_status()` to check the status.")
+            logger.log(
+                20,
+                "Predict asynchronously. You can use `info()` or `get_job_status()` to check the status.",
+            )

@@ -26,7 +26,10 @@ from ..utils.ag_sagemaker import (
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
 from ..utils.dlc_utils import parse_framework_version
-from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
+from ..utils.iam import (
+    replace_iam_policy_place_holder,
+    replace_trust_relationship_place_holder,
+)
 from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.sagemaker_iam import (
     SAGEMAKER_CLOUD_POLICY,
