@@ -345,3 +345,10 @@ class SageMakerBatchTransformationJob(SageMakerJob):
                 20,
                 "Predict asynchronously. You can use `info()` or `get_job_status()` to check the status.",
             )
+
+    def _get_hyperparameters(self):
+        """
+        Get hyperparameters of the batch transformation job
+        Currently batch transformation jobs don't have hyperparameters
+        """
+        return {}
