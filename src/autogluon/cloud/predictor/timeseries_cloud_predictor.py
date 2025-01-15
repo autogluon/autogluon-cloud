@@ -126,20 +126,15 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         # Create predictor metadata dict
         predictor_metadata = {
-            "id_column": id_column,
-            "timestamp_column": timestamp_column,
-            "target_column": predictor_init_args.get("target", "target"),
+            "id_column": self.id_column,
+            "timestamp_column": self.timestamp_column,
+            "target_column": self.target_column,
         }
 
         # Add to backend kwargs
-        if "autogluon_sagemaker_estimator_kwargs" not in backend_kwargs:
-            backend_kwargs["autogluon_sagemaker_estimator_kwargs"] = {}
-        if "hyperparameters" not in backend_kwargs["autogluon_sagemaker_estimator_kwargs"]:
-            backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"] = {}
-
-        backend_kwargs["autogluon_sagemaker_estimator_kwargs"]["hyperparameters"]["predictor_metadata"] = json.dumps(
-            predictor_metadata
-        )
+        backend_kwargs.setdefault("autogluon_sagemaker_estimator_kwargs", {}).setdefault("hyperparameters", {})[
+            "predictor_metadata"
+        ] = json.dumps(predictor_metadata)
 
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
