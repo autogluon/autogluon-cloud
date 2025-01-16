@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict, Optional, Union
 
@@ -42,8 +43,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     def _get_local_predictor_cls(self):
         from autogluon.timeseries import TimeSeriesPredictor
 
-        predictor_cls = TimeSeriesPredictor
-        return predictor_cls
+        return TimeSeriesPredictor
 
     def fit(
         self,
@@ -124,6 +124,18 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         self.id_column = id_column
         self.timestamp_column = timestamp_column
 
+        # Create predictor metadata dict
+        predictor_metadata = {
+            "id_column": self.id_column,
+            "timestamp_column": self.timestamp_column,
+            "target_column": self.target_column,
+        }
+
+        # Add to backend kwargs
+        backend_kwargs.setdefault("autogluon_sagemaker_estimator_kwargs", {}).setdefault("hyperparameters", {})[
+            "predictor_metadata"
+        ] = json.dumps(predictor_metadata)
+
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
@@ -175,6 +187,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Pandas.DataFrame
         Predict results in DataFrame
         """
+        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
+            raise ValueError(
+                "Please set id_column, timestamp_column and target_column before calling predict_real_time"
+            )
         return self.backend.predict_real_time(
             test_data=test_data,
             id_column=self.id_column,
@@ -266,6 +282,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
+        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
+            raise ValueError("Please set id_column, timestamp_column and target_column before calling predict")
         return self.backend.predict(
             test_data=test_data,
             id_column=self.id_column,
@@ -287,3 +305,24 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
+
+    def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
+        """Attach to existing training job"""
+        super().attach_job(job_name)
+
+        # Get full job description including hyperparameters
+        job_desc = self.backend.get_fit_job_info()
+        hyperparameters = job_desc.get("hyperparameters", {})
+
+        # Extract and set predictor metadata
+        if hyperparameters and "predictor_metadata" in hyperparameters:
+            metadata = hyperparameters["predictor_metadata"]
+            self.id_column = metadata.get("id_column")
+            self.timestamp_column = metadata.get("timestamp_column")
+            self.target_column = metadata.get("target_column")
+        else:
+            logger.warning(
+                "No predictor metadata found in training job. Please set id_column, timestamp_column and target_column manually."
+            )
+
+        return self

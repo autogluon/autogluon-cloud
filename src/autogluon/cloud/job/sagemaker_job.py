@@ -1,6 +1,7 @@
+import json
 import logging
 from abc import abstractmethod
-from typing import Optional
+from typing import Dict, Optional, Union
 
 import sagemaker
 
@@ -61,6 +62,10 @@ class SageMakerJob(RemoteJob):
     def _get_output_path(self):
         raise NotImplementedError
 
+    @abstractmethod
+    def _get_hyperparameters(self):
+        raise NotImplementedError
+
     @property
     def job_name(self):
         return self._job_name
@@ -103,6 +108,17 @@ class SageMakerJob(RemoteJob):
             return None
         return self._get_output_path()
 
+    def get_hyperparameters(self) -> Dict[str, Union[int, str]]:
+        """
+        Get hyperparameters of the job
+
+        Returns:
+        --------
+        dict:
+            Hyperparameters of the training job
+        """
+        return self._get_hyperparameters()
+
     def __getstate__(self):
         state_dict = self.__dict__.copy()
         state_dict["session"] = None
@@ -140,6 +156,7 @@ class SageMakerFitJob(SageMakerJob):
             status=self.get_job_status(),
             framework_version=self.framework_version,
             artifact_path=self.get_output_path(),
+            hyperparameters=self.get_hyperparameters(),
         )
         return info
 
@@ -151,6 +168,15 @@ class SageMakerFitJob(SageMakerJob):
             return self.session.describe_training_job(self.job_name)["ModelArtifacts"]["S3ModelArtifacts"]
         assert self._output_path is not None
         return self._output_path + "/" + self._output_filename
+
+    def _get_hyperparameters(self):
+        if self.job_name:
+            hyperparameters = self.session.describe_training_job(self.job_name)["HyperParameters"]
+            if "predictor_metadata" in hyperparameters:
+                hyperparameters["predictor_metadata"] = json.loads(hyperparameters["predictor_metadata"])
+            return hyperparameters
+        else:
+            return None
 
     def run(
         self,
@@ -219,6 +245,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         info = dict(
             name=self.job_name,
             status=self.get_job_status(),
+            hyperparameters=self.get_hyperparameters(),
             result_path=self._get_output_path(),
         )
         return info
@@ -280,14 +307,22 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         logger.log(20, "Inference model created successfully")
         logger.log(20, "Creating transformer...")
         transformer = model.transformer(
-            instance_count=instance_count, instance_type=instance_type, output_path=output_path, **transformer_kwargs
+            instance_count=instance_count,
+            instance_type=instance_type,
+            output_path=output_path,
+            **transformer_kwargs,
         )
         logger.log(20, "Transformer created successfully")
 
         try:
             logger.log(20, "Transforming")
             transformer.transform(
-                test_input, job_name=job_name, split_type=split_type, content_type=content_type, wait=wait, **kwargs
+                test_input,
+                job_name=job_name,
+                split_type=split_type,
+                content_type=content_type,
+                wait=wait,
+                **kwargs,
             )
             self._job_name = job_name
 
@@ -309,4 +344,14 @@ class SageMakerBatchTransformationJob(SageMakerJob):
             transformer.delete_model()
             logger.log(20, f"Predict results have been saved to {self.get_output_path()}")
         else:
-            logger.log(20, "Predict asynchronously. You can use `info()` or `get_job_status()` to check the status.")
+            logger.log(
+                20,
+                "Predict asynchronously. You can use `info()` or `get_job_status()` to check the status.",
+            )
+
+    def _get_hyperparameters(self):
+        """
+        Get hyperparameters of the batch transformation job
+        Currently batch transformation jobs don't have hyperparameters
+        """
+        return {}

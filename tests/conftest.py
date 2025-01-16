@@ -164,7 +164,10 @@ class CloudTestHelper:
             predict_real_time_kwargs = dict()
         cloud_predictor.deploy(**deploy_kwargs)
         CloudTestHelper.test_endpoint(
-            cloud_predictor, test_data, inference_kwargs=inference_kwargs, **predict_real_time_kwargs
+            cloud_predictor,
+            test_data,
+            inference_kwargs=inference_kwargs,
+            **predict_real_time_kwargs,
         )
         detached_endpoint = cloud_predictor.detach_endpoint()
         cloud_predictor.attach_endpoint(detached_endpoint)
@@ -182,21 +185,35 @@ class CloudTestHelper:
 
         if predict_kwargs is None:
             predict_kwargs = dict()
-        pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
-        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
+        if isinstance(cloud_predictor, TimeSeriesCloudPredictor):
+            pred = cloud_predictor.predict(test_data, **predict_kwargs)
+            assert isinstance(pred, pd.DataFrame)
+        else:
+            pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
+            assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
         info = cloud_predictor.info()
         assert info["recent_batch_inference_job"]["status"] == "Completed"
 
         # Test deploy with already trained predictor
         trained_predictor_path = cloud_predictor.get_fit_job_output_path()
-        cloud_predictor_no_train.deploy(predictor_path=trained_predictor_path, **deploy_kwargs)
+        if isinstance(cloud_predictor_no_train, TimeSeriesCloudPredictor):
+            cloud_predictor_no_train.attach_job(job_name)
+            cloud_predictor_no_train.deploy(**deploy_kwargs)
+        else:
+            cloud_predictor_no_train.deploy(predictor_path=trained_predictor_path, **deploy_kwargs)
         CloudTestHelper.test_endpoint(cloud_predictor_no_train, test_data, **predict_real_time_kwargs)
         cloud_predictor_no_train.cleanup_deployment()
 
-        pred, pred_proba = cloud_predictor_no_train.predict_proba(
-            test_data, predictor_path=trained_predictor_path, **predict_kwargs
-        )
-        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
+        if isinstance(cloud_predictor_no_train, TimeSeriesCloudPredictor):
+            cloud_predictor_no_train.attach_job(job_name)
+            pred = cloud_predictor_no_train.predict(test_data, predictor_path=trained_predictor_path, **predict_kwargs)
+            assert isinstance(pred, pd.DataFrame)
+        else:
+            pred, pred_proba = cloud_predictor_no_train.predict_proba(
+                test_data, predictor_path=trained_predictor_path, **predict_kwargs
+            )
+            assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
+
         info = cloud_predictor_no_train.info()
         assert info["recent_batch_inference_job"]["status"] == "Completed"
 
