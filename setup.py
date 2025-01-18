@@ -104,7 +104,7 @@ def default_setup_args(*, version):
     return setup_args
 
 
-version = "0.4.1"
+version = "0.4.2"
 version = update_version(version, use_file_if_exists=False, create_file=True)
 
 install_requires = [
