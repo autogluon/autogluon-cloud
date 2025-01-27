@@ -119,7 +119,7 @@ install_requires = [
     "pyarrow>=11.0,<11.1",
     "PyYAML~=6.0",
     "Pillow>=10.2,<11",  # unlikely to introduce breaking changes in minor releases
-    "ray[default]>=2.10.0,<2.11",
+    "ray[default]>=2.10.0,<2.42",
 ]
 
 extras_require = dict()
