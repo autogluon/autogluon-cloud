@@ -25,7 +25,7 @@ pip install -U sagemaker
 
 This is required to ensure the information about newly released containers is available.
 
-## Prepare an AWS Role with Necessary Permissions
+## Prepare an IAM Role with Necessary Permissions
 Currently, AutoGluon-Cloud can use two cloud backends: **Amazon SageMaker** and **Ray (AWS)**.
 Here is an overview of the features supported by each backend.
 
