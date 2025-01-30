@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation template for AutoGluon-Cloud to run on Ray'
+Description: 'CloudFormation template for AutoGluon-Cloud to run on an AWS Ray cluster'
 
 Resources:
   AGCloudRayBucket:
