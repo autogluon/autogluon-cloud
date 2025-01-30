@@ -68,7 +68,10 @@ def default_setup_args(*, version):
             AUTOGLUON: [
                 "LICENSE",
             ],
-            'autogluon.cloud': ['default_cluster_configs/*.yaml'],
+            "autogluon.cloud": [
+                "default_cluster_configs/*.yaml",
+                "cloudformation/*.yaml",
+            ],
         },
         classifiers=[
             "Development Status :: 4 - Beta",

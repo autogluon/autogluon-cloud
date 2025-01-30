@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for AutoGluon-Cloud to run on Ray'
+
+Resources:
+  AGCloudRayBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub
+        - '${AWS::StackName}-bucket-${suffix}'
+        - suffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AGCloudRayExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-custom-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'ec2:RunInstances'
+                Resource:
+                  - 'arn:aws:ec2:*::image/ami-*'
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:instance/*'
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:network-interface/*'
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:subnet/*'
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:key-pair/*'
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:volume/*'
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:security-group/*'
+
+              - Effect: Allow
+                Action:
+                  - ec2:TerminateInstances
+                  - ec2:DeleteTags
+                  - ec2:StartInstances
+                  - ec2:CreateTags
+                  - ec2:StopInstances
+                Resource:
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:instance/*'
+
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - ec2:AuthorizeSecurityGroupIngress
+                Resource: '*'
+
+              - Effect: Allow
+                Action:
+                  - ec2:CreateSecurityGroup
+                Resource:
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:security-group/*'
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:vpc/*'
+
+              - Effect: Allow
+                Action:
+                  - ec2:CreateKeyPair
+                  - ec2:DeleteKeyPair
+                Resource:
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:key-pair/ag_ray_cluster*'
+
+              - Effect: Allow
+                Action:
+                  - iam:GetInstanceProfile
+                  - iam:CreateInstanceProfile
+                  - iam:CreateRole
+                  - iam:GetRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:AddRoleToInstanceProfile
+                  - iam:PassRole
+                Resource: '*'
+
+              - Effect: Allow
+                Action:
+                  - iam:CreatePolicy
+                  - iam:DeletePolicy
+                Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/AGRayClusterPolicy*'
+
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:GetObject
+                  - s3:GetObjectAcl
+                  - s3:AbortMultipartUpload
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AGCloudRayBucket}/*'
+                  - !Sub 'arn:aws:s3:::${AGCloudRayBucket}'
+                  - 'arn:aws:s3:::*SageMaker*'
+                  - 'arn:aws:s3:::*Sagemaker*'
+                  - 'arn:aws:s3:::*sagemaker*'
+
+              - Effect: Allow
+                Action: 's3:ListBucket'
+                Resource: '*'
+
+              - Effect: Allow
+                Action:
+                  - iam:ListPolicies
+                  - iam:ListEntitiesForPolicy
+                  - iam:ListPolicyVersions
+                Resource: '*'
+
+Outputs:
+  BucketName:
+    Description: S3 bucket where AutoGluon-Cloud will store data for Ray
+    Value: !Ref AGCloudRayBucket
+
+  RoleARN:
+    Description: ARN of the created IAM role for AutoGluon-Cloud with Ray
+    Value: !GetAtt AGCloudRayExecutionRole.Arn
