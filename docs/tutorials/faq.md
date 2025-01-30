@@ -1,4 +1,4 @@
-# AutoGluon Cloud FAQ
+# AutoGluon-Cloud FAQ
 
 ## Supported Docker Containers
 `autogluon.cloud` supports AutoGluon Deep Learning Containers version 0.6.0 and newer.

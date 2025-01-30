@@ -1,6 +1,6 @@
-# Train and Deploy AutoGluon Models with AutoGluon Cloud on AWS SageMaker
+# Train and Deploy AutoGluon Models with AutoGluon-Cloud on AWS SageMaker
 
-To help with AutoGluon models training, AWS developed a set of training and inference [deep learning containers](https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-training-containers). 
+To help with AutoGluon models training, AWS developed a set of training and inference [deep learning containers](https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-training-containers).
 The containers can be used to train models with CPU and GPU instances and deployed as a SageMaker endpoint or used as a batch transform job.
 
 We offer the [autogluon.cloud](https://github.com/autogluon/autogluon-cloud) module to utilize those containers and [AWS SageMaker](https://aws.amazon.com/sagemaker/) underneath to train/deploy AutoGluon backed models with simple APIs.
@@ -14,95 +14,171 @@ Costs for running cloud compute are managed by AWS SageMaker, and storage costs 
 `autogluon.cloud` does not come with the default `autogluon` installation. You can install it via:
 
 ```bash
-pip3 install autogluon.cloud
+pip install autogluon.cloud
 ```
 
 Also ensure that the latest version of sagemaker python API is installed via:
 
 ```bash
-pip3 install -U sagemaker
+pip install -U sagemaker
 ```
 
 This is required to ensure the information about newly released containers is available.
 
 ## Prepare an AWS Role with Necessary Permissions
-`autogluon.cloud` utilizes various AWS resources to operate.
-To help you to setup the necessary permissions, you can generate trust relationship and IAM policy with our utils through
+Currently, AutoGluon-Cloud can use two cloud backends: **Amazon SageMaker** and **Ray (AWS)**.
+Here is an overview of the features supported by each backend.
 
-```python
-from autogluon.cloud import TabularCloudPredictor  # Can be other CloudPredictor as well
+| Feature                        | SageMaker | Ray (AWS) |
+|--------------------------------|---------------|--------------|
+| **Supported modalities**       | `tabular`, `timeseries`, `multimodal` | `tabular` |
+| **Training (single instance)** | ✅ | ✅ |
+| **Training (distributed)**     | ❌ | ✅ |
+| **Inference endpoints**        | ✅ | ❌ |
+| **Batch inference**            | ✅ | ❌ |
 
-TabularCloudPredictor.generate_default_permission(
-    backend="BACKNED_YOU_WANT",  # We currently support "sagemaker" and "ray_aws"
-    account_id="YOUR_ACCOUNT_ID",  # The AWS account ID you plan to use for CloudPredictor.
-    cloud_output_bucket="S3_BUCKET"  # S3 bucket name where intermediate artifacts will be uploaded and trained models should be saved. You need to create this bucket beforehand.
-)
-```
+AutoGluon-Cloud needs to interact with various AWS resources. For this purpose, we recommend to set up a dedicated IAM role with the necessary permissions. This can be done using one of the following options.
 
-```{note}
-Make sure you review the trust relationship and IAM policy files, and make necessary changes according to your use case before applying them.
-```
+::::{tab-set}
+:::{tab-item} CloudFormation (AWS CLI)
+:sync: setup-cli
+1. Download and review the CloudFormation template from the [AutoGluon-Cloud repository](https://github.com/shchur/autogluon-cloud/tree/add-cfn-templates/cloudformation)
+    ```bash
+    BACKEND="sagemaker"  # Supported options "sagemaker", "ray_aws"
+    wget https://raw.githubusercontent.com/shchur/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_$BACKEND.yaml
+    ```
+    ```{note}
+    Make sure you review the IAM policy defined in the CloudFormation template, and make necessary changes according to your use case before applying it.
+    ```
 
-We recommend you to create an IAM Role for your IAM User to delegate as IAM Role doesn't have permanent long-term credentials and is used to directly interact with AWS services. Here is how this can be done using the AWS CLI.
+2. Deploy the CloudFormation stack
+    ```bash
+    aws cloudformation create-stack \
+        --stack-name ag-cloud \  # use your preferred stack name
+        --template-body file://ag_cloud_$BACKEND.yaml \
+        --capabilities CAPABILITY_NAMED_IAM  # give permission to create IAM roles
+    ```
 
-```{note}
-Make sure to replace `AUTOGLUON-ROLE-NAME` with your desired role name, `AUTOGLUON-POLICY-NAME` with your desired policy name, and `222222222222` with your AWS account number.
-```
+3. Review the outputs produced by the stack
+    ```bash
+    aws cloudformation describe-stacks --stack-name ag-cloud --query "Stacks[0].Outputs"
+    ```
+    The output should contain the **name of the S3 bucket** and the **ARN of the IAM role** created for AutoGluon-Cloud.
+    ```json
+    [
+        {
+            "OutputKey": "BucketName",
+            "OutputValue": "ag-cloud-bucket-abcd1234",
+            "Description": "S3 bucket where AutoGluon-Cloud will save trained predictors"
+        },
+        {
+            "OutputKey": "RoleARN",
+            "OutputValue": "arn:aws:iam::222222222222:role/ag-cloud-execution-role",
+            "Description": "ARN of the created IAM role for AutoGluon-Cloud to run on SageMaker"
+        }
+    ]
+    ```
 
-1. Create the IAM role.
+:::
+:::{tab-item} CloudFormation (AWS Console)
+:sync: setup-cfn
+1. Download and review the CloudFormation template for the backend of your choice from the [AutoGluon-Cloud repository](https://github.com/shchur/autogluon-cloud/tree/add-cfn-templates/cloudformation)
+    - Template for [SageMaker](https://raw.githubusercontent.com/shchur/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_sagemaker.yaml)
+    - Template for [Ray (AWS)](https://raw.githubusercontent.com/shchur/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_ray_aws.yaml)
+
+    ```{note}
+    Make sure you review the IAM policy defined in the CloudFormation template, and make necessary changes according to your use case before applying it.
+    ```
+
+2. Log in to the <a href="https://console.aws.amazon.com" target="_blank" rel="noopener noreferrer">AWS Console</a>. Make sure to select the region where you would like to use AutoGluon-Cloud.
+4. Go to <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create" target="_blank" rel="noopener noreferrer">CloudFormation > Stacks > Create stack</a> and create a stack using the CloudFormation template downloaded in Step 1.
+
+5. After the stack is created, go to the *Outputs* tab and view the **name of the S3 bucket** and the **ARN of the IAM role** created for AutoGluon-Cloud
+    ![img](img/stack-outputs.png)
+
+:::
+:::{tab-item} Manual
+:sync: setup-manual
+1. Create an S3 bucket for AutoGluon-Cloud to store predictors. Replace `S3_BUCKET_NAME` with your preferred name for the bucket.
+    ```bash
+    aws s3 mb s3://S3_BUCKET_NAME
+    ```
+
+2. Generate trust relationship and IAM policy with our utils via the following command
+    ```python
+    from autogluon.cloud import TabularCloudPredictor  # Can be other CloudPredictor as well
+
+    TabularCloudPredictor.generate_default_permission(
+        backend="BACKEND_YOU_WANT",  # We currently support "sagemaker" and "ray_aws"
+        account_id="YOUR_ACCOUNT_ID",  # The AWS account ID you plan to use for CloudPredictor.
+        cloud_output_bucket="S3_BUCKET_NAME"  # S3 bucket name where intermediate artifacts will be uploaded and trained models should be saved. You need to create this bucket beforehand.
+    )
+    ```
+    ```{note}
+    Make sure you review the trust relationship and IAM policy files, and make necessary changes according to your use case before applying them.
+    ```
+    In the following steps, make sure to replace `AUTOGLUON-ROLE-NAME` with your desired role name, `AUTOGLUON-POLICY-NAME` with your desired policy name, and `222222222222` with your AWS account number.
+
+3. Create the IAM role.
     ```bash
     aws iam create-role --role-name AUTOGLUON-ROLE-NAME --assume-role-policy-document file://ag_cloud_sagemaker_trust_relationship.json
     ```
     This method will return the **role ARN** that looks similar to `arn:aws:iam::222222222222:role/AUTOGLUON-ROLE-NAME`. Keep it for further reference.
 
-2. Create the IAM policy.
+4. Create the IAM policy.
     ```bash
     aws iam create-policy --policy-name AUTOGLUON-POLICY-NAME --policy-document file://ag_cloud_sagemaker_iam_policy.json
     ```
     This method will return the **policy ARN** that looks similar to `arn:aws:iam::222222222222:policy/AUTOGLUON-POLICY-NAME`. Keep it for further reference.
 
-3. Attach the IAM policy to the role.
+5. Attach the IAM policy to the role.
     ```bash
     aws iam attach-role-policy --role-name AUTOGLUON-ROLE-NAME --policy-arn "arn:aws:iam::222222222222:policy/AUTOGLUON-POLICY-NAME"
     ```
+:::
+::::
 
-4. Assume the IAM role using AWS CLI or boto3. 
+Make sure to remember:
+- **ARN of the IAM role** created for AutoGluon-Cloud
+- **Name of the S3 bucket**, where AutoGluon-Cloud will store the training artifacts
 
-    <details><summary>AWS CLI</summary>
+After completing the setup, assume the IAM role using AWS CLI or boto3.
 
-    See section "Assume the IAM role" in this [tutorial](https://repost.aws/knowledge-center/iam-assume-role-cli).
+::::{tab-set}
+:::{tab-item} Python / boto3
+:sync: assume-boto3
+```python
+import boto3
 
-    </details>
+# Replace this with the ARN of your AutoGluon-Cloud IAM role
+ROLE_ARN = "arn:aws:iam::222222222222:role/AUTOGLUON-ROLE-NAME"
 
-    <details><summary>Python/boto3</summary>
+session = boto3.Session()
+credentials = session.client("sts").assume_role(
+    RoleArn=ROLE_ARN,
+    RoleSessionName="AutoGluonCloudSession"
+)["Credentials"]
 
-    ```python
-    import boto3
-    session = boto3.Session()
-    response = session.client("sts").assume_role(
-        RoleArn="arn:aws:iam::222222222222:role/AUTOGLUON-ROLE-NAME",
-        RoleSessionName="AutoGluonCloudSession",
-    )
-    credentials = response['Credentials']
-    boto3.setup_default_session(
-        aws_access_key_id=credentials['AccessKeyId'],
-        aws_secret_access_key=credentials['SecretAccessKey'],
-        aws_session_token=credentials['SessionToken'],
-    )
-    ```
-    Now when you use `autogluon.cloud` in the same Python script / Jupyter notebook, the correct IAM role will be used.
-
-    </details>
-
-
+boto3.setup_default_session(
+    aws_access_key_id=credentials["AccessKeyId"],
+    aws_secret_access_key=credentials["SecretAccessKey"],
+    aws_session_token=credentials["SessionToken"],
+)
+```
+Now when you use `autogluon.cloud` in the same Python script / Jupyter notebook, the correct IAM role will be used.
+:::
+:::{tab-item} AWS CLI
+:sync: assume-cli
+See section "Assume the IAM role" in this [tutorial](https://repost.aws/knowledge-center/iam-assume-role-cli).
+:::
+::::
 
 For more details on setting up IAM roles and policies, refer to this [tutorial](https://aws.amazon.com/premiumsupport/knowledge-center/iam-assume-role-cli/).
-
 
 ## Training
 Using `autogluon.cloud` to train AutoGluon backed models is simple and not too much different from training an AutoGluon predictor directly.
 
-Currently, `autogluon.cloud` supports training/deploying `tabular`, `multimodal`, `text`, and `image` predictors. In the example below, we use `TabularCloudPredictor` for demonstration. You can substitute it with other `CloudPredictors` easily as they share the same APIs.
+Currently, `autogluon.cloud` supports training/deploying `tabular`, `multimoda` and `timeseries` predictors. In the example below, we use `TabularCloudPredictor` for demonstration. You can substitute it with other `CloudPredictors` easily as they share the same APIs.
 
 ```python
 from autogluon.cloud import TabularCloudPredictor
@@ -114,7 +190,7 @@ cloud_predictor = TabularCloudPredictor(
 ).fit(
     predictor_init_args=predictor_init_args,
     predictor_fit_args=predictor_fit_args,
-    instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
+    instance_type="ml.m5.2xlarge",  # Check out supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
     wait=True,  # Set this to False to make it an unblocking call and immediately return
 )
 ```
@@ -201,7 +277,7 @@ One key inside would be `endpoint`, and it will tell you the name of the endpoin
 }
 ```
 
-### Invoke the Endpoint without AutoGluon Cloud
+### Invoke the Endpoint without AutoGluon-Cloud
 The endpoint being deployed is a normal Sagemaker Endpoint, and you can invoke it through other methods. For example, to invoke an endpoint with boto3 directly
 
 ```python

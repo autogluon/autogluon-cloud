@@ -1,9 +1,9 @@
-# AutoGluon Cloud Distributed Training
-AutoGluon Cloud currently supports distributed training for Tabular.
+# AutoGluon-Cloud Distributed Training
+AutoGluon-Cloud currently supports distributed training for Tabular.
 
 Tabular predictor trains multiple folds of models underneath and parallelize model training on a single machine. It is natural to expand this strategy to a cluster of machines.
 
-With AutoGluon Cloud, we help you to spin up the cluster, dispatch the jobs, and tear down the cluster. And it is not much different from how you would normally train a `TabularCloudPredictor``. All you need to do is specify `backend="ray_aws"` when you init the predictor
+With AutoGluon-Cloud, we help you to spin up the cluster, dispatch the jobs, and tear down the cluster. And it is not much different from how you would normally train a `TabularCloudPredictor``. All you need to do is specify `backend="ray_aws"` when you init the predictor
 
 ```python
 cloud_predictor = TabularCloudPredictor(
