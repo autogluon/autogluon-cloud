@@ -1,12 +1,12 @@
-# Train and Deploy AutoGluon Models with AutoGluon-Cloud on AWS SageMaker
+# Train and Deploy AutoGluon Models on Amazon SageMaker with AutoGluon-Cloud
 
 To help with AutoGluon models training, AWS developed a set of training and inference [deep learning containers](https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-training-containers).
 The containers can be used to train models with CPU and GPU instances and deployed as a SageMaker endpoint or used as a batch transform job.
 
-We offer the [autogluon.cloud](https://github.com/autogluon/autogluon-cloud) module to utilize those containers and [AWS SageMaker](https://aws.amazon.com/sagemaker/) underneath to train/deploy AutoGluon backed models with simple APIs.
+We offer the [autogluon.cloud](https://github.com/autogluon/autogluon-cloud) module to utilize those containers and [Amazon SageMaker](https://aws.amazon.com/sagemaker/) underneath to train/deploy AutoGluon backed models with simple APIs.
 
 ```{attention}
-Costs for running cloud compute are managed by AWS SageMaker, and storage costs are managed by AWS S3. AutoGluon-Cloud is a wrapper to these services at no additional charge. While AutoGluon-Cloud makes an effort to simplify the usage of these services, it is ultimately the user's responsibility to monitor compute usage within their account to avoid unexpected charges.
+Costs for running cloud compute are managed by Amazon SageMaker, and storage costs are managed by AWS S3. AutoGluon-Cloud is a wrapper to these services at no additional charge. While AutoGluon-Cloud makes an effort to simplify the usage of these services, it is ultimately the user's responsibility to monitor compute usage within their account to avoid unexpected charges.
 ```
 
 
