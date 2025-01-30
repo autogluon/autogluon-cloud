@@ -42,10 +42,10 @@ AutoGluon-Cloud needs to interact with various AWS resources. For this purpose, 
 ::::{tab-set}
 :::{tab-item} CloudFormation (AWS CLI)
 :sync: setup-cli
-1. Download and review the CloudFormation template from the [AutoGluon-Cloud repository](https://github.com/shchur/autogluon-cloud/tree/add-cfn-templates/cloudformation)
+1. Download and review the CloudFormation template from the [AutoGluon-Cloud repository](https://github.com/autogluon/autogluon-cloud/tree/add-cfn-templates/cloudformation)
     ```bash
     BACKEND="sagemaker"  # Supported options "sagemaker", "ray_aws"
-    wget https://raw.githubusercontent.com/shchur/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_$BACKEND.yaml
+    wget https://raw.githubusercontent.com/autogluon/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_$BACKEND.yaml
     ```
     ```{note}
     Make sure you review the IAM policy defined in the CloudFormation template, and make necessary changes according to your use case before applying it.
@@ -82,9 +82,9 @@ AutoGluon-Cloud needs to interact with various AWS resources. For this purpose, 
 :::
 :::{tab-item} CloudFormation (AWS Console)
 :sync: setup-cfn
-1. Download and review the CloudFormation template for the backend of your choice from the [AutoGluon-Cloud repository](https://github.com/shchur/autogluon-cloud/tree/add-cfn-templates/cloudformation)
-    - Template for [SageMaker](https://raw.githubusercontent.com/shchur/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_sagemaker.yaml)
-    - Template for [Ray (AWS)](https://raw.githubusercontent.com/shchur/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_ray_aws.yaml)
+1. Download and review the CloudFormation template for the backend of your choice from the [AutoGluon-Cloud repository](https://github.com/autogluon/autogluon-cloud/tree/add-cfn-templates/cloudformation)
+    - Template for [SageMaker](https://raw.githubusercontent.com/autogluon/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_sagemaker.yaml)
+    - Template for [Ray (AWS)](https://raw.githubusercontent.com/autogluon/autogluon-cloud/refs/heads/add-cfn-templates/cloudformation/ag_cloud_ray_aws.yaml)
 
     ```{note}
     Make sure you review the IAM policy defined in the CloudFormation template, and make necessary changes according to your use case before applying it.
