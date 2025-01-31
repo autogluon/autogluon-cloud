@@ -265,7 +265,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        AG_VERSION: ["source", "1.1.0"]
+        AG_VERSION: ["1.1.0"]   # TODO: add back "source" in CI. https://github.com/autogluon/autogluon-cloud/issues/174
     needs: cloud_lint_check
     runs-on: ubuntu-latest
     steps:
