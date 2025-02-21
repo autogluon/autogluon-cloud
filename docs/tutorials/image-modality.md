@@ -8,7 +8,7 @@ If your training and inference tasks involve image modality, your data would con
 ```
 
 ### Preparing the Image Column
-Currently, AutoGluon Cloud only supports one image per row.
+Currently, AutoGluon-Cloud only supports one image per row.
 If your dataset contains one or more images per row, we first need to preprocess the image column to only contain the first image of each row.
 
 For example, if your images are seperated with `;`, you can preprocess it via:
@@ -43,7 +43,7 @@ test_data[image_col] = test_data[image_col].apply(lambda path: os.path.abspath(p
 ```
 
 ### Perform Training/Inference with Image Modality
-Provide argument `image_column` as the column name containing image paths to `CloudPredictor` fit/inference APIs along with other arguments that you would normally pass to a CloudPredictor 
+Provide argument `image_column` as the column name containing image paths to `CloudPredictor` fit/inference APIs along with other arguments that you would normally pass to a CloudPredictor
 In the example above, `image_column` would be `image`
 
 ```python

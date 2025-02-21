@@ -12,7 +12,7 @@
 
 AutoGluon-Cloud aims to provide user tools to train, fine-tune and deploy [AutoGluon](https://auto.gluon.ai/stable/index.html) backed models on the cloud. With just a few lines of codes, users could train a model and perform inference on the cloud without worrying about MLOps details such as resource management.
 
-Currently, AutoGluon-Cloud supports [AWS SageMaker](https://aws.amazon.com/sagemaker/) as the cloud backend.
+Currently, AutoGluon-Cloud supports [Amazon SageMaker](https://aws.amazon.com/sagemaker/) as the cloud backend.
 
 ## Installation
 ```bash
