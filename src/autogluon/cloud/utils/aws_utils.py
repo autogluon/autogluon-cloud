@@ -10,7 +10,7 @@ def get_latest_amazon_linux_ami(region="us-east-1", version="al2023"):
     filters = [
         {"Name": "owner-alias", "Values": ["amazon"]},
         {"Name": "name", "Values": [f"{version}-ami-*"]},  # Amazon Linux 2 or AL2023
-        {"Name": "state", "Values": ["available"]}
+        {"Name": "state", "Values": ["available"]},
     ]
     response = ec2_client.describe_images(Filters=filters, Owners=["amazon"])
     if not response["Images"]:
