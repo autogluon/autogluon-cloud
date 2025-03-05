@@ -26,6 +26,7 @@ from .constants import (
     VOLUME_SIZE,
 )
 from .ray_cluster_config_generator import RayClusterConfigGenerator
+from ..utils.aws_utils import get_latest_amazon_linux_ami
 
 
 class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
@@ -36,6 +37,7 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
         config: Optional[Union[str, Dict[str, Any]]] = None,
         cluster_name: Optional[str] = None,
         region: str = "us-east-1",
+        use_latest_ami: bool = True,
         **kwargs,
     ) -> None:
         """
@@ -56,6 +58,13 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             cluster_name = f"ag_ray_aws_default_{get_utc_timestamp_now()}"
             self._update_cluster_name(cluster_name)
             self._update_region(region)
+
+            if use_latest_ami:
+                try:
+                    latest_ami = get_latest_amazon_linux_ami()
+                    self._update_ami(latest_ami)
+                except Exception as e:
+                    print(f"Warning: Could not fetch latest Amazon Linux AMI : {e}")
 
     def _update_config(
         self,

@@ -5,6 +5,20 @@ import sagemaker
 from botocore.config import Config
 
 
+def get_latest_amazon_linux_ami(region="us-east-1", version="al2023"):
+    ec2_client = boto3.client("ec2", region_name=region)
+    filters = [
+        {"Name": "owner-alias", "Values": ["amazon"]},
+        {"Name": "name", "Values": [f"{version}-ami-*"]},  # Amazon Linux 2 or AL2023
+        {"Name": "state", "Values": ["available"]}
+    ]
+    response = ec2_client.describe_images(Filters=filters, Owners=["amazon"])
+    if not response["Images"]:
+        raise ValueError("No Amazon Linux AMI found!")
+
+    latest_ami = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)[0]
+    return latest_ami["ImageId"]
+
 def setup_sagemaker_session(
     config: Optional[Config] = None,
     connect_timeout: int = 60,
