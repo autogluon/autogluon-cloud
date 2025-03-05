@@ -19,6 +19,7 @@ def get_latest_amazon_linux_ami(region="us-east-1", version="al2023"):
     latest_ami = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)[0]
     return latest_ami["ImageId"]
 
+
 def setup_sagemaker_session(
     config: Optional[Config] = None,
     connect_timeout: int = 60,
