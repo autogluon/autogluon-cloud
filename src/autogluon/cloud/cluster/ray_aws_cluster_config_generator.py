@@ -1,6 +1,7 @@
 import os
 from typing import Any, Dict, List, Optional, Union
 
+from ..utils.aws_utils import get_latest_amazon_linux_ami
 from ..utils.utils import get_utc_timestamp_now
 from .cluster_config_generator import DEFAULT_CONFIG_LOCATION
 from .constants import (
@@ -26,7 +27,6 @@ from .constants import (
     VOLUME_SIZE,
 )
 from .ray_cluster_config_generator import RayClusterConfigGenerator
-from ..utils.aws_utils import get_latest_amazon_linux_ami
 
 
 class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):

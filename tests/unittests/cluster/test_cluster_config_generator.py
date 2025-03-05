@@ -5,7 +5,6 @@ import pytest
 import yaml
 
 from autogluon.cloud.cluster import ClusterConfigGenerator, RayAWSClusterConfigGenerator
-from autogluon.cloud.utils.aws_utils import get_latest_amazon_linux_ami
 from autogluon.cloud.cluster.constants import (
     AUTH,
     AVAILABLE_NODE_TYPES,
@@ -25,6 +24,7 @@ from autogluon.cloud.cluster.constants import (
     SSH_PRIVATE_KEY,
     VOLUME_SIZE,
 )
+from autogluon.cloud.utils.aws_utils import get_latest_amazon_linux_ami
 
 
 def _create_config_file(config):
