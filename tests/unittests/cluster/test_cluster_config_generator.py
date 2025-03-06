@@ -24,6 +24,7 @@ from autogluon.cloud.cluster.constants import (
     SSH_PRIVATE_KEY,
     VOLUME_SIZE,
 )
+from autogluon.cloud.utils.aws_utils import get_latest_amazon_linux_ami
 
 
 def _create_config_file(config):
@@ -47,10 +48,12 @@ def test_generate_config(config_generator, config):
 
 @pytest.mark.parametrize("config", [None, {"foo": "bar"}, "dummy.yaml"])
 def test_update_ray_aws_cluster_config(config):
+    latest_ami = get_latest_amazon_linux_ami()
+
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _create_config_file(config)
-        config_generator = RayAWSClusterConfigGenerator(config)
+        config_generator = RayAWSClusterConfigGenerator(config, use_latest_ami=False)
         # Test update
         dummy_config = {"cluster_name": "foo"}
         config_generator.update_config(dummy_config)
@@ -60,7 +63,7 @@ def test_update_ray_aws_cluster_config(config):
             instance_type="foo",
             instance_count=2,
             volumes_size=2,
-            ami="dummy_ami",
+            ami=latest_ami,
             custom_image_uri="bar",
             ssh_key_path="dummy.pem",
             initialization_commands=["abc"],
@@ -72,7 +75,7 @@ def test_update_ray_aws_cluster_config(config):
         assert node_config[BLOCK_DEVICE_MAPPINGS][0][EBS][VOLUME_SIZE] == 2
         assert config_generator.config[DOCKER][IMAGE] == "bar"
         assert config_generator.config[AUTH][SSH_PRIVATE_KEY] == os.path.abspath("dummy.pem")
-        assert node_config[IMAGE_ID] == "dummy_ami"
+        assert node_config[IMAGE_ID] == latest_ami
         assert node_config[KEY_NAME] == "dummy"
         assert config_generator.config[INITIALIZATION_COMMANDS] == ["abc"]
         config = config_generator.config
