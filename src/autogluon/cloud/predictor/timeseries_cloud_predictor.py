@@ -231,6 +231,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 
+        Note that batch prediction with `known_covariates` is currently not supported.  Please use `predict_real_time`
+        to predict with `known_covariates` instead.
+
         Parameters
         ----------
         test_data: str

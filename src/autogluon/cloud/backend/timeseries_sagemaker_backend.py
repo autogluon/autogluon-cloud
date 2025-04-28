@@ -238,11 +238,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             target=target,
             static_features=static_features,
         )
-        if "known_covariates" in kwargs:
-            raise ValueError(
-                "Batch prediction with `known_covariates` is not supported. "
-                "Please use `predict_real_time` to predict with `known_covariates` instead."
-            )
         pred, _ = super()._predict(
             test_data=test_data,
             split_pred_proba=False,
