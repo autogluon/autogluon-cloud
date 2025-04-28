@@ -166,7 +166,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         static_features: Optional[pd.DataFrame]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
-             https://auto.gluon.ai/stable/api/autogluon.predictor.html#timeseriesdataframe
+             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
         target: str
             Name of column that contains the target values to forecast
         accept: str, default = application/x-parquet
@@ -225,7 +225,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
-             https://auto.gluon.ai/stable/api/autogluon.predictor.html#timeseriesdataframe
+             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
         target: str
             Name of column that contains the target values to forecast
         kwargs:
