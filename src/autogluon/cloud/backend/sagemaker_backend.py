@@ -489,19 +489,20 @@ class SagemakerBackend(Backend):
         else:
             model_kwargs_env = {SAGEMAKER_MODEL_SERVER_WORKERS: "1"}
 
-        model = model_cls(
-            model_data=predictor_path,
-            role=self.role_arn,
-            region=self._region,
-            framework_version=framework_version,
-            py_version=py_version,
-            instance_type=instance_type,
-            custom_image_uri=custom_image_uri,
-            entry_point=entry_point,
-            predictor_cls=predictor_cls,
-            env=model_kwargs_env,
+        merged_model_kwargs = {
+            "model_data": predictor_path,
+            "role": self.role_arn,
+            "region": self._region,
+            "framework_version": framework_version,
+            "py_version": py_version,
+            "instance_type": instance_type,
+            "custom_image_uri": custom_image_uri,
+            "entry_point": entry_point,
+            "predictor_cls": predictor_cls,
+            "env": model_kwargs_env,
             **model_kwargs,
-        )
+        }
+        model = model_cls(**merged_model_kwargs)
         if deploy_kwargs is None:
             deploy_kwargs = {}
 
