@@ -6,7 +6,7 @@ max_workers: 1
 
 docker:
     # The image uri will be dynamically replaced by cloud predictor
-    image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/autogluon-training:1.1.0-cpu-py310-ubuntu20.04"
+    image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/autogluon-training:1.2.0-cpu-py311-ubuntu22.04"
     container_name: "ag_dlc"
 
 # Cloud-provider specific configuration.
