@@ -5,7 +5,7 @@ from setuptools import setup
 AUTOGLUON = "autogluon"
 CLOUD = "cloud"
 
-PYTHON_REQUIRES = ">=3.8, <3.12"
+PYTHON_REQUIRES = ">=3.9, <3.13"
 
 
 def create_version_file(*, version):
@@ -85,10 +85,10 @@ def default_setup_args(*, version):
             "Operating System :: POSIX",
             "Operating System :: Unix",
             "Programming Language :: Python :: 3",
-            "Programming Language :: Python :: 3.8",
             "Programming Language :: Python :: 3.9",
             "Programming Language :: Python :: 3.10",
             "Programming Language :: Python :: 3.11",
+            "Programming Language :: Python :: 3.12",
             "Topic :: Software Development",
             "Topic :: Scientific/Engineering :: Artificial Intelligence",
             "Topic :: Scientific/Engineering :: Information Analysis",
@@ -116,10 +116,10 @@ install_requires = [
     # updated sagemaker is required to fetch latest container info, so we don't want to cap the version too strict
     # otherwise cloud module needs to be released to support new container
     "sagemaker>=2.126.0,<3.0",
-    "pyarrow>=11.0,<11.1",
+    "pyarrow>=11.0,<21",
     "PyYAML~=6.0",
-    "Pillow>=10.2,<11",  # unlikely to introduce breaking changes in minor releases
-    "ray[default]>=2.10.0,<2.11",
+    "Pillow>=10.2,<12",  # unlikely to introduce breaking changes in minor releases
+    "ray[default]>=2.10.0,<2.46",
 ]
 
 extras_require = dict()

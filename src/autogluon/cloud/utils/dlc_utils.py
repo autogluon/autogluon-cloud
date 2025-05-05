@@ -1,6 +1,5 @@
-from distutils.version import StrictVersion
-
 from packaging import version
+from packaging.version import Version
 from sagemaker import image_uris
 
 
@@ -47,7 +46,7 @@ def retrieve_latest_framework_version(framework_type="training"):
             version number of latest autogluon framework, and its py_versions as a list
     """
     versions = retrieve_available_framework_versions(framework_type)
-    versions.sort(key=StrictVersion)
+    versions.sort(key=version.parse)
     versions = [(v, retrieve_py_versions(v, framework_type)) for v in versions]
     return versions[-1]
 
@@ -58,7 +57,7 @@ def parse_framework_version(framework_version, framework_type, py_version=None, 
         py_version = py_versions[0]
     else:
         # Cloud supports 0.6+ containers
-        if minimum_version is not None and version.parse(framework_version) < version.parse(minimum_version):
+        if minimum_version is not None and Version(framework_version) < Version(minimum_version):
             raise ValueError("Cloud module only supports 0.6+ containers.")
         valid_options = retrieve_available_framework_versions(framework_type)
         assert (
