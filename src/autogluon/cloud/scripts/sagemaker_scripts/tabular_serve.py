@@ -135,15 +135,23 @@ def _read_with_fallback(read_func, buf, expected_columns):
     """
     # Attempt to read with headers
     data = read_func(buf)
-    if set(data.columns) != set(expected_columns):
-        # Reset buffer and read without headers
-        buf.seek(0)
-        data = read_func(buf, header=None)
-        # Assign expected column names
-        data.columns = expected_columns
-    else:
+    data_cols, model_cols = set(data.columns), set(expected_columns)
+    required_fields_missing = model_cols.difference(data_cols)
+
+    if required_fields_missing:
+        raise ValueError("Missing required columns", required_fields_missing)
+
+    if data_cols == model_cols:
         # Reorder columns to match expected_columns
         data = data[expected_columns]
+        return data
+
+    # Reset buffer and read without headers
+    buf.seek(0)
+    data = read_func(buf, header=None)
+    # Assign expected column names
+    data.columns = expected_columns
+
     return data
 
 
