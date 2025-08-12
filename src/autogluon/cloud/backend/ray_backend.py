@@ -250,14 +250,18 @@ class RayBackend(Backend):
         )
         cluster_manager = self._cluster_manager(config=config, cloud_output_bucket=self.cloud_output_path)
         cluster_up = False
+        instances_launched = False
         job_submitted = False
         try:
             logger.log(20, "Launching up ray cluster")
             cluster_manager.up()
-            cluster_up = True
+            # If we get here, instances were likely launched even if setup fails later
+            instances_launched = True
             logger.log(20, "Waiting for 60s to give the cluster some buffer time")
             time.sleep(60)
             cluster_manager.setup_connection()
+            # Only mark cluster as up after successful setup and connection
+            cluster_up = True
             time.sleep(10)  # waiting for connection to setup
             if job_name is None:
                 job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
@@ -297,7 +301,8 @@ class RayBackend(Backend):
         finally:
             if wait:
                 if ephemeral_cluster:
-                    if cluster_up:
+                    # Always attempt cleanup if instances were launched, even if cluster setup failed
+                    if cluster_up or instances_launched:
                         self._tear_down_cluster(
                             cluster_manager,
                             key_name=key_name,
@@ -309,7 +314,7 @@ class RayBackend(Backend):
                         "Cluster not being destroyed because `ephemeral_cluster` set to False. Please destroy the cluster yourself.",
                     )
             else:
-                if ephemeral_cluster and cluster_up:
+                if ephemeral_cluster and (cluster_up or instances_launched):
                     if job_submitted:
                         logger.log(20, "Cluster will be destroyed after the job completes")
                     else:
@@ -506,7 +511,77 @@ class RayBackend(Backend):
         try:
             cluster_manager.down()
         except Exception as down_e:
-            logger.warning("Failed to tear down the cluster. Please go to the console to terminate instanecs manually")
-            raise down_e
+            logger.warning(f"Failed to tear down the cluster using ray down: {down_e}")
+            logger.warning("Attempting to manually terminate instances...")
+            try:
+                # Try to extract cluster info and manually terminate instances
+                self._manual_instance_cleanup(cluster_manager)
+            except Exception as manual_cleanup_e:
+                logger.error(f"Manual cleanup also failed: {manual_cleanup_e}")
+                logger.error("Please go to the AWS console to terminate instances manually")
+                logger.error(f"Look for instances with tags related to cluster: {cluster_manager.config}")
+            # Don't re-raise the exception to avoid masking the original error
         if key_name is not None:
             self._cleanup_key(key_name=key_name, local_path=key_local_path)
+
+    def _manual_instance_cleanup(self, cluster_manager: RayClusterManager):
+        """
+        Attempt to manually clean up EC2 instances when ray down fails.
+        This is a fallback mechanism for cases where SSH connectivity issues
+        prevent normal cluster teardown.
+        """
+        import boto3
+        from botocore.exceptions import ClientError
+        
+        logger.log(20, "Attempting manual EC2 instance cleanup")
+        
+        # Try to extract cluster name from config
+        cluster_name = None
+        try:
+            if hasattr(cluster_manager, 'config') and cluster_manager.config:
+                import yaml
+                with open(cluster_manager.config, 'r') as f:
+                    config_data = yaml.safe_load(f)
+                    cluster_name = config_data.get('cluster_name')
+        except Exception as e:
+            logger.warning(f"Could not extract cluster name from config: {e}")
+        
+        if not cluster_name:
+            logger.warning("No cluster name found, cannot perform targeted cleanup")
+            return
+            
+        try:
+            ec2 = boto3.client('ec2')
+            
+            # Find instances with the cluster name tag
+            response = ec2.describe_instances(
+                Filters=[
+                    {
+                        'Name': 'tag:Name',
+                        'Values': [f'*{cluster_name}*']
+                    },
+                    {
+                        'Name': 'instance-state-name',
+                        'Values': ['running', 'pending', 'stopping']
+                    }
+                ]
+            )
+            
+            instance_ids = []
+            for reservation in response['Reservations']:
+                for instance in reservation['Instances']:
+                    instance_ids.append(instance['InstanceId'])
+                    
+            if instance_ids:
+                logger.log(20, f"Found {len(instance_ids)} instances to terminate: {instance_ids}")
+                ec2.terminate_instances(InstanceIds=instance_ids)
+                logger.log(20, "Successfully initiated instance termination")
+            else:
+                logger.log(20, "No instances found matching cluster name")
+                
+        except ClientError as e:
+            logger.error(f"AWS API error during manual cleanup: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during manual cleanup: {e}")
+            raise
