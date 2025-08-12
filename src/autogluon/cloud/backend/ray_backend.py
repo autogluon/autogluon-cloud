@@ -530,41 +530,36 @@ class RayBackend(Backend):
         """
         import boto3
         from botocore.exceptions import ClientError
-        
+
         logger.log(20, "Attempting manual EC2 instance cleanup")
-        
+
         # Try to extract cluster name from config
         cluster_name = None
         try:
             if hasattr(cluster_manager, "config") and cluster_manager.config:
                 import yaml
+
                 with open(cluster_manager.config, "r") as f:
                     config_data = yaml.safe_load(f)
                     cluster_name = config_data.get("cluster_name")
         except Exception as e:
             logger.warning(f"Could not extract cluster name from config: {e}")
-        
+
         if not cluster_name:
             logger.warning("No cluster name found, cannot perform targeted cleanup")
             return
-            
+
         try:
             ec2 = boto3.client("ec2")
-            
+
             # Find instances with the cluster name tag
             response = ec2.describe_instances(
                 Filters=[
-                    {
-                        "Name": "tag:Name",
-                        "Values": [f"*{cluster_name}*"]
-                    },
-                    {
-                        "Name": "instance-state-name",
-                        "Values": ["running", "pending", "stopping"]
-                    }
+                    {"Name": "tag:Name", "Values": [f"*{cluster_name}*"]},
+                    {"Name": "instance-state-name", "Values": ["running", "pending", "stopping"]},
                 ]
             )
-            
+
             instance_ids = []
             for reservation in response["Reservations"]:
                 for instance in reservation["Instances"]:
@@ -576,7 +571,7 @@ class RayBackend(Backend):
                 logger.log(20, "Successfully initiated instance termination")
             else:
                 logger.log(20, "No instances found matching cluster name")
-                
+
         except ClientError as e:
             logger.error(f"AWS API error during manual cleanup: {e}")
             raise
