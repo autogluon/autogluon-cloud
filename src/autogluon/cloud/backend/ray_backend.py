@@ -255,7 +255,6 @@ class RayBackend(Backend):
         try:
             logger.log(20, "Launching up ray cluster")
             cluster_manager.up()
-            # If we get here, instances were likely launched even if setup fails later
             instances_launched = True
             logger.log(20, "Waiting for 60s to give the cluster some buffer time")
             time.sleep(60)
@@ -520,7 +519,6 @@ class RayBackend(Backend):
                 logger.error(f"Manual cleanup also failed: {manual_cleanup_e}")
                 logger.error("Please go to the AWS console to terminate instances manually")
                 logger.error(f"Look for instances with tags related to cluster: {cluster_manager.config}")
-            # Don't re-raise the exception to avoid masking the original error
         if key_name is not None:
             self._cleanup_key(key_name=key_name, local_path=key_local_path)
 
