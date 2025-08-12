@@ -536,11 +536,11 @@ class RayBackend(Backend):
         # Try to extract cluster name from config
         cluster_name = None
         try:
-            if hasattr(cluster_manager, 'config') and cluster_manager.config:
+            if hasattr(cluster_manager, "config") and cluster_manager.config:
                 import yaml
-                with open(cluster_manager.config, 'r') as f:
+                with open(cluster_manager.config, "r") as f:
                     config_data = yaml.safe_load(f)
-                    cluster_name = config_data.get('cluster_name')
+                    cluster_name = config_data.get("cluster_name")
         except Exception as e:
             logger.warning(f"Could not extract cluster name from config: {e}")
         
@@ -549,27 +549,27 @@ class RayBackend(Backend):
             return
             
         try:
-            ec2 = boto3.client('ec2')
+            ec2 = boto3.client("ec2")
             
             # Find instances with the cluster name tag
             response = ec2.describe_instances(
                 Filters=[
                     {
-                        'Name': 'tag:Name',
-                        'Values': [f'*{cluster_name}*']
+                        "Name": "tag:Name",
+                        "Values": [f"*{cluster_name}*"]
                     },
                     {
-                        'Name': 'instance-state-name',
-                        'Values': ['running', 'pending', 'stopping']
+                        "Name": "instance-state-name",
+                        "Values": ["running", "pending", "stopping"]
                     }
                 ]
             )
             
             instance_ids = []
-            for reservation in response['Reservations']:
-                for instance in reservation['Instances']:
-                    instance_ids.append(instance['InstanceId'])
-                    
+            for reservation in response["Reservations"]:
+                for instance in reservation["Instances"]:
+                    instance_ids.append(instance["InstanceId"])
+
             if instance_ids:
                 logger.log(20, f"Found {len(instance_ids)} instances to terminate: {instance_ids}")
                 ec2.terminate_instances(InstanceIds=instance_ids)
