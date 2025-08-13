@@ -48,14 +48,19 @@ def test_distributed_training(test_helper, framework_version):
                 framework_version=framework_version,
                 backend_kwargs={
                     "initialization_commands": [
-                        "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com",
-                        "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 369469875935.dkr.ecr.us-east-1.amazonaws.com",
+                        "aws ecr get-login-password --region us-east-1 | docker login --username AWS "
+                        "--password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com",
+                        "aws ecr get-login-password --region us-east-1 | docker login --username AWS "
+                        "--password-stdin 369469875935.dkr.ecr.us-east-1.amazonaws.com",
                         # Auto-terminate after 20 minutes as safety for CI
                         "echo '#!/bin/bash' > /tmp/auto_terminate.sh",
                         "echo 'sleep 1200' >> /tmp/auto_terminate.sh",  # 20 minutes
-                        'echo \'TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")\' >> /tmp/auto_terminate.sh',
-                        "echo 'INSTANCE_ID=$(curl -H \"X-aws-ec2-metadata-token: \$TOKEN\" -s http://169.254.169.254/latest/meta-data/instance-id)' >> /tmp/auto_terminate.sh",
-                        "echo 'aws ec2 terminate-instances --instance-ids \$INSTANCE_ID --region us-east-1' >> /tmp/auto_terminate.sh",
+                        'echo \'TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" '
+                        '-H "X-aws-ec2-metadata-token-ttl-seconds: 21600")\' >> /tmp/auto_terminate.sh',
+                        "echo 'INSTANCE_ID=$(curl -H \"X-aws-ec2-metadata-token: \\$TOKEN\" "
+                        "-s http://169.254.169.254/latest/meta-data/instance-id)' >> /tmp/auto_terminate.sh",
+                        "echo 'aws ec2 terminate-instances --instance-ids \\$INSTANCE_ID "
+                        "--region us-east-1' >> /tmp/auto_terminate.sh",
                         "chmod +x /tmp/auto_terminate.sh",
                         "nohup /tmp/auto_terminate.sh > /tmp/auto_terminate.log 2>&1 &",
                     ]
