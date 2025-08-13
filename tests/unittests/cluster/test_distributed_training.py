@@ -40,20 +40,37 @@ def test_distributed_training(test_helper, framework_version):
 
         image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
-        cp.fit(
-            predictor_init_args=predictor_init_args,
-            predictor_fit_args=predictor_fit_args,
-            custom_image_uri=image_uri,
-            framework_version=framework_version,
-            backend_kwargs={
-                "initialization_commands": [
-                    "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com",
-                    "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 369469875935.dkr.ecr.us-east-1.amazonaws.com",
-                ]
-            },
-        )
+        try:
+            cp.fit(
+                predictor_init_args=predictor_init_args,
+                predictor_fit_args=predictor_fit_args,
+                custom_image_uri=image_uri,
+                framework_version=framework_version,
+                backend_kwargs={
+                    "initialization_commands": [
+                        "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com",
+                        "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 369469875935.dkr.ecr.us-east-1.amazonaws.com",
+                        # Auto-terminate after 20 minutes as safety for CI
+                        "echo '#!/bin/bash' > /tmp/auto_terminate.sh",
+                        "echo 'sleep 1200' >> /tmp/auto_terminate.sh",  # 20 minutes
+                        'echo \'TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")\' >> /tmp/auto_terminate.sh',
+                        "echo 'INSTANCE_ID=$(curl -H \"X-aws-ec2-metadata-token: \$TOKEN\" -s http://169.254.169.254/latest/meta-data/instance-id)' >> /tmp/auto_terminate.sh",
+                        "echo 'aws ec2 terminate-instances --instance-ids \$INSTANCE_ID --region us-east-1' >> /tmp/auto_terminate.sh",
+                        "chmod +x /tmp/auto_terminate.sh",
+                        "nohup /tmp/auto_terminate.sh > /tmp/auto_terminate.log 2>&1 &",
+                    ]
+                },
+            )
 
-        model_artifact_path = cp.get_fit_job_output_path()
-        bucket, prefix = s3_path_to_bucket_prefix(model_artifact_path)
-        s3_client = boto3.client("s3")
-        s3_client.head_object(Bucket=bucket, Key=prefix)
+            model_artifact_path = cp.get_fit_job_output_path()
+            bucket, prefix = s3_path_to_bucket_prefix(model_artifact_path)
+            s3_client = boto3.client("s3")
+            s3_client.head_object(Bucket=bucket, Key=prefix)
+        except Exception as e:
+            # In case of any failure, try to cleanup the Ray cluster
+            try:
+                if hasattr(cp.backend, "_cluster_manager") and cp.backend._cluster_manager is not None:
+                    cp.backend._cluster_manager.down()
+            except Exception as cleanup_error:
+                print(f"Warning: Failed to cleanup cluster after test failure: {cleanup_error}")
+            raise e
