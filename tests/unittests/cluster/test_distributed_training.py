@@ -57,7 +57,7 @@ def test_distributed_training(test_helper, framework_version):
                         "echo 'sleep 1200' >> /tmp/auto_terminate.sh",  # 20 minutes
                         'echo \'TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" '
                         '-H "X-aws-ec2-metadata-token-ttl-seconds: 21600")\' >> /tmp/auto_terminate.sh',
-                        "echo 'INSTANCE_ID=$(curl -H \"X-aws-ec2-metadata-token: \\$TOKEN\" "
+                        'echo \'INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: \\$TOKEN" '
                         "-s http://169.254.169.254/latest/meta-data/instance-id)' >> /tmp/auto_terminate.sh",
                         "echo 'aws ec2 terminate-instances --instance-ids \\$INSTANCE_ID "
                         "--region us-east-1' >> /tmp/auto_terminate.sh",
