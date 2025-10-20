@@ -118,7 +118,7 @@ install_requires = [
     "sagemaker>=2.126.0,<3.0",
     "pyarrow>=11.0,<21",
     "PyYAML~=6.0",
-    "Pillow>=10.2,<12",  # unlikely to introduce breaking changes in minor releases
+    "Pillow>=10.2,<13",  # unlikely to introduce breaking changes in minor releases
     "ray[default]>=2.10.0,<2.46",
 ]
 
