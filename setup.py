@@ -115,7 +115,7 @@ install_requires = [
     "packaging>=23.0,<25.0",
     # updated sagemaker is required to fetch latest container info, so we don't want to cap the version too strict
     # otherwise cloud module needs to be released to support new container
-    "sagemaker>=2.126.0,<3.0",
+    "sagemaker>=2.126.0,<4.0",
     "pyarrow>=11.0,<21",
     "PyYAML~=6.0",
     "Pillow>=10.2,<12",  # unlikely to introduce breaking changes in minor releases
