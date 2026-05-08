@@ -17,7 +17,7 @@ provider:
 
 # How Ray will authenticate with newly launched nodes.
 auth:
-    ssh_user: ubuntu
+    ssh_user: ec2-user
 
 available_node_types:
   # Configurations for the head node.
