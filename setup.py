@@ -124,7 +124,7 @@ install_requires = [
 
 extras_require = dict()
 
-all_requires = ["autogluon>=0.7"]  # To allow user to pass ag objects
+all_requires = ["autogluon>=0.7,<1.6"]  # To allow user to pass ag objects
 extras_require["all"] = all_requires
 
 test_requirements = [
