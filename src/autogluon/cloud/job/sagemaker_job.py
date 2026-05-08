@@ -199,21 +199,26 @@ class SageMakerFitJob(SageMakerJob):
         **kwargs,
     ):
         self._local_mode = instance_type in (LOCAL_MODE, LOCAL_MODE_GPU)
-        sagemaker_estimator = AutoGluonSagemakerEstimator(
-            role=role,
-            entry_point=entry_point,
-            region=region,
-            instance_type=instance_type,
-            instance_count=instance_count,
-            volume_size=volume_size,
-            framework_version=framework_version,
-            py_version=py_version,
-            base_job_name=base_job_name,
-            output_path=output_path,
-            code_location=code_location,
-            image_uri=custom_image_uri,
+
+        merged_kwargs = {
+            "role": role,
+            "entry_point": entry_point,
+            "region": region,
+            "instance_type": instance_type,
+            "instance_count": instance_count,
+            "volume_size": volume_size,
+            "framework_version": framework_version,
+            "py_version": py_version,
+            "base_job_name": base_job_name,
+            "output_path": output_path,
+            "code_location": code_location,
+            "image_uri": custom_image_uri,
             **autogluon_sagemaker_estimator_kwargs,
+        }
+        sagemaker_estimator = AutoGluonSagemakerEstimator(
+            **merged_kwargs
         )
+
         logger.log(20, f"Start sagemaker training job `{job_name}`")
         try:
             sagemaker_estimator.fit(inputs=inputs, wait=wait, job_name=job_name, **kwargs)
