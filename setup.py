@@ -43,7 +43,7 @@ def update_version(version, use_file_if_exists=True, create_file=False):
 
 
 def default_setup_args(*, version):
-    from setuptools import find_packages
+    from setuptools import find_namespace_packages
 
     long_description = open("README.md").read()
     name = f"{AUTOGLUON}.{CLOUD}"
@@ -58,17 +58,13 @@ def default_setup_args(*, version):
         license="Apache-2.0",
         license_files=("LICENSE", "NOTICE"),
         # Package info
-        packages=find_packages("src"),
+        packages=find_namespace_packages("src"),
         package_dir={"": "src"},
-        namespace_packages=[AUTOGLUON],
         zip_safe=True,
         include_package_data=True,
         python_requires=PYTHON_REQUIRES,
         package_data={
-            AUTOGLUON: [
-                "LICENSE",
-            ],
-            "autogluon.cloud": ["default_cluster_configs/*.yaml"],
+            "autogluon.cloud": ["default_cluster_configs/*.yaml", "utils/autogluon_dlc.json"],
         },
         classifiers=[
             "Development Status :: 4 - Beta",
