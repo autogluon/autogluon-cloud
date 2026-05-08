@@ -61,13 +61,13 @@ def delete_key_pair(key_name: str, local_path: Optional[str]):
             os.remove(local_path)
 
 
-def get_latest_ami(ami_name: str = "Deep Learning AMI GPU PyTorch*Ubuntu*") -> str:
+def get_latest_ami(ami_name: str = "Deep Learning OSS Nvidia Driver AMI GPU PyTorch*Ubuntu*") -> str:
     """
     Get the latest ami id
 
     Parameter
     ---------
-    ami_name: str, default = Deep Learning AMI GPU PyTorch*Ubuntu*
+    ami_name: str, default = Deep Learning OSS Nvidia Driver AMI GPU PyTorch*Ubuntu*
         Name of the ami. Could be regex.
 
     Return
