@@ -109,17 +109,17 @@ version = update_version(version, use_file_if_exists=False, create_file=True)
 
 install_requires = [
     # common module provides utils with stable api across minor version
-    "autogluon.common>=0.7",
+    "autogluon.common>=0.7,<1.6",
     # <2 because unlikely to introduce breaking changes in minor releases. >=1.10 because 1.10 is 3 years old, no need to support older
-    "boto3>=1.10,<2.0",
-    "packaging>=23.0,<25.0",
+    "boto3>=1.10,<2",
+    "packaging>=23.0,<27",
     # updated sagemaker is required to fetch latest container info, so we don't want to cap the version too strict
     # otherwise cloud module needs to be released to support new container
-    "sagemaker>=2.126.0,<3.0",
-    "pyarrow>=11.0,<21",
+    "sagemaker>=2.126.0,<3",
+    "pyarrow>=11.0,<25",
     "PyYAML~=6.0",
-    "Pillow>=10.2,<12",  # unlikely to introduce breaking changes in minor releases
-    "ray[default]>=2.10.0,<2.46",
+    "Pillow>=10.2,<13",
+    "ray[default]>=2.10.0,<2.56",
 ]
 
 extras_require = dict()
