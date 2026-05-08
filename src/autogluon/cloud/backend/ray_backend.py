@@ -8,7 +8,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
-from sagemaker import image_uris
+from ..utils.dlc_utils import retrieve_image_uri
 
 from autogluon.common.utils.s3_utils import s3_bucket_prefix_to_path, s3_path_to_bucket_prefix
 
@@ -387,13 +387,12 @@ class RayBackend(Backend):
                 framework_version, "training", minimum_version="0.7.0"
             )
             logger.log(20, f"Training with framework_version=={framework_version}")
-            image_uri = image_uris.retrieve(
-                "autogluon",
+            image_uri = retrieve_image_uri(
+                framework_version=framework_version,
                 region=self.region,
-                version=framework_version,
-                py_version=py_version,
                 image_scope="training",
                 instance_type=instance_type,
+                py_version=py_version,
             )
         return image_uri
 

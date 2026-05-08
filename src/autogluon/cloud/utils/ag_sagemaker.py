@@ -2,14 +2,14 @@ import copy
 import os
 
 import sagemaker
-from sagemaker import fw_utils, image_uris, vpc_utils
+from sagemaker import fw_utils, vpc_utils
 from sagemaker.estimator import Estimator
 from sagemaker.model import DIR_PARAM_NAME, SCRIPT_PARAM_NAME, Model
 from sagemaker.predictor import Predictor
 from sagemaker.serializers import CSVSerializer
 
 from .deserializers import PandasDeserializer
-from .dlc_utils import retrieve_latest_framework_version
+from .dlc_utils import retrieve_image_uri, retrieve_latest_framework_version
 from .serializers import AutoGluonSerializer, MultiModalSerializer
 
 
@@ -31,13 +31,12 @@ class AutoGluonSagemakerEstimator(Estimator):
         self.py_version = py_version
         self.image_uri = image_uri
         if self.image_uri is None:
-            self.image_uri = image_uris.retrieve(
-                "autogluon",
+            self.image_uri = retrieve_image_uri(
+                framework_version=framework_version,
                 region=region,
-                version=framework_version,
-                py_version=py_version,
                 image_scope="training",
                 instance_type=instance_type,
+                py_version=py_version,
             )
         super().__init__(
             entry_point=entry_point,
@@ -66,13 +65,12 @@ class AutoGluonSagemakerEstimator(Estimator):
         repack=False,
         **kwargs,
     ):
-        image_uri = image_uris.retrieve(
-            "autogluon",
+        image_uri = retrieve_image_uri(
+            framework_version=framework_version,
             region=region,
-            version=framework_version,
-            py_version=py_version,
             image_scope="inference",
             instance_type=instance_type,
+            py_version=py_version,
         )
         if predictor_cls is None:
 
@@ -133,13 +131,12 @@ class AutoGluonSagemakerInferenceModel(Model):
     ):
         image_uri = custom_image_uri
         if image_uri is None:
-            image_uri = image_uris.retrieve(
-                "autogluon",
+            image_uri = retrieve_image_uri(
+                framework_version=framework_version,
                 region=region,
-                version=framework_version,
-                py_version=py_version,
                 image_scope="inference",
                 instance_type=instance_type,
+                py_version=py_version,
             )
         # setting PYTHONUNBUFFERED to disable output buffering for endpoints logging
         if env is None:
