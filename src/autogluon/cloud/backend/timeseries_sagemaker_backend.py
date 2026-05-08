@@ -60,6 +60,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
+        fit_predict: bool = False,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -136,6 +137,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
+            fit_predict=fit_predict,
         )
 
     def predict_real_time(

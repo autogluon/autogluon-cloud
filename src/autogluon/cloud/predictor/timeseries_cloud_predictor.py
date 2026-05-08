@@ -316,6 +316,126 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     ) -> Optional[pd.DataFrame]:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
+    def fit_predict(
+        self,
+        test_data: Optional[Union[str, pd.DataFrame]] = None,
+        *,
+        predictor_init_args: Dict[str, Any],
+        predictor_fit_args: Dict[str, Any],
+        id_column: str = "item_id",
+        timestamp_column: str = "timestamp",
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
+        framework_version: str = "latest",
+        job_name: Optional[str] = None,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
+        volume_size: int = 100,
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        save_path: Optional[str] = None,
+        backend_kwargs: Optional[Dict] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Fit and predict in a single SageMaker training job.
+
+        This is useful for foundation-model forecasting workflows (e.g. Chronos-2)
+        where "fit" is essentially loading a pretrained model. Running fit and
+        predict in the same job avoids paying the SageMaker startup cost twice.
+
+        Predictions are generated inside the training container against
+        ``predictor_fit_args["train_data"]`` (the standard time-series forecasting
+        flow where the last ``prediction_length`` steps of each series are
+        forecast), saved to the job's ``output.tar.gz``, then downloaded locally.
+
+        Parameters
+        ----------
+        test_data: Optional[Union[str, pd.DataFrame]]
+            Currently unused. Reserved for a future extension where separate
+            context data is passed through. For now, predictions are generated
+            against the training data.
+        predictor_init_args: dict
+            Init args for the predictor (must include ``prediction_length``).
+        predictor_fit_args: dict
+            Fit args for the predictor (must include ``train_data``).
+        id_column: str, default = "item_id"
+            Name of the item ID column.
+        timestamp_column: str, default = "timestamp"
+            Name of the timestamp column.
+        static_features: Optional[pd.DataFrame]
+            Optional metadata attributes per item.
+        framework_version, job_name, instance_type, instance_count, volume_size,
+        custom_image_uri, wait, backend_kwargs:
+            Same semantics as ``fit()``.
+        save_path: Optional[str]
+            Local directory to save the downloaded predictions. Defaults to
+            ``local_output_path``.
+
+        Returns
+        -------
+        Optional[pd.DataFrame]
+            Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
+        """
+        if test_data is not None:
+            logger.warning(
+                "`test_data` is not yet used by fit_predict; the training data is "
+                "forecasted in-job. Ignoring the provided `test_data`."
+            )
+        assert (
+            not self.backend.is_fit
+        ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        if backend_kwargs is None:
+            backend_kwargs = {}
+
+        self.target_column = predictor_init_args.get("target", "target")
+        self.id_column = id_column
+        self.timestamp_column = timestamp_column
+
+        predictor_metadata = {
+            "id_column": self.id_column,
+            "timestamp_column": self.timestamp_column,
+            "target_column": self.target_column,
+        }
+        backend_kwargs.setdefault("autogluon_sagemaker_estimator_kwargs", {}).setdefault("hyperparameters", {})[
+            "predictor_metadata"
+        ] = json.dumps(predictor_metadata)
+
+        backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
+        self.backend.fit(
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            static_features=static_features,
+            framework_version=framework_version,
+            job_name=job_name,
+            instance_type=instance_type,
+            instance_count=instance_count,
+            volume_size=volume_size,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            fit_predict=True,
+            **backend_kwargs,
+        )
+
+        if not wait:
+            logger.info(
+                "fit_predict job launched asynchronously. Use `get_fit_job_status()` "
+                "to poll, then `download_fit_predict_results()` to fetch predictions."
+            )
+            return None
+
+        predictions_path = self.download_fit_predict_results(save_path=save_path)
+        return pd.read_csv(predictions_path)
+
+    def download_fit_predict_results(self, save_path: Optional[str] = None) -> str:
+        """
+        Download the predictions produced by a completed ``fit_predict`` job.
+
+        Returns the path to ``predictions.csv`` extracted from the job's
+        ``output.tar.gz``.
+        """
+        return self.backend.download_fit_predict_results(save_path=save_path)
+
     def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
         """Attach to existing training job"""
         super().attach_job(job_name)

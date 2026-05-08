@@ -5,6 +5,7 @@ import os
 import tarfile
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import boto3
 import pandas as pd
 import sagemaker
 from botocore.exceptions import ClientError
@@ -212,6 +213,7 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
+        fit_predict: bool = False,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -317,6 +319,7 @@ class SagemakerBackend(Backend):
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             leaderboard=leaderboard,
+            fit_predict=fit_predict,
         )
         # Get the label from predictor_init_args
         label = predictor_init_args.get("label") or predictor_init_args.get("target") or None
@@ -949,6 +952,49 @@ class SagemakerBackend(Backend):
         logger.log(20, f"Batch results have been downloaded to {results_save_path}")
 
         return results_save_path
+
+    def download_fit_predict_results(self, save_path: Optional[str] = None) -> str:
+        """
+        Download predictions generated in-job by `fit_predict`.
+
+        Predictions are persisted to the training job's ``output_data`` channel as
+        ``predictions.csv`` (bundled into ``output.tar.gz`` by SageMaker).
+
+        Parameters
+        ----------
+        save_path: Optional[str], default = None
+            Local directory to save the downloaded predictions.
+            If None, a path under ``local_output_path`` is used.
+
+        Returns
+        -------
+        str
+            Path to the extracted ``predictions.csv`` file.
+        """
+        job_name = self._fit_job.job_name
+        assert job_name is not None, "No fit job found. Call `fit_predict()` first."
+        output_tarball = self.cloud_output_path + f"/model/{job_name}/output/output.tar.gz"
+        assert is_s3_url(output_tarball)
+        bucket, key = s3_path_to_bucket_prefix(output_tarball)
+
+        if not save_path:
+            save_path = self.local_output_path
+        save_path = os.path.abspath(os.path.expanduser(save_path))
+        results_dir = os.path.join(save_path, "fit_predict", job_name)
+        os.makedirs(results_dir, exist_ok=True)
+
+        tarball_local = os.path.join(results_dir, "output.tar.gz")
+        logger.log(20, f"Downloading fit_predict output from s3://{bucket}/{key}")
+        s3 = boto3.client("s3")
+        s3.download_file(bucket, key, tarball_local)
+        with tarfile.open(tarball_local) as tf:
+            tf.extractall(results_dir)
+        predictions_path = os.path.join(results_dir, "predictions.csv")
+        assert os.path.isfile(predictions_path), (
+            f"Could not find predictions.csv in {tarball_local}. " "Did the training job run with `fit_predict=True`?"
+        )
+        logger.log(20, f"fit_predict results downloaded to {predictions_path}")
+        return predictions_path
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(

@@ -1,6 +1,9 @@
 import os
 import tempfile
 
+import pandas as pd
+import pytest
+
 from autogluon.cloud import TimeSeriesCloudPredictor
 
 
@@ -51,3 +54,48 @@ def test_timeseries(test_helper, framework_version):
             ),
             predict_real_time_kwargs=dict(static_features=static_features),
         )
+
+
+# Chronos (T5-based) and Chronos-Bolt both live behind the ``Chronos`` key in
+# AutoGluon's hyperparameter dict; only ``model_path`` distinguishes them.
+@pytest.mark.parametrize(
+    "model_name, hyperparameters",
+    [
+        ("chronos", {"Chronos": {"model_path": "tiny"}}),
+        ("chronos_bolt", {"Chronos": {"model_path": "bolt_small"}}),
+    ],
+)
+def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters):
+    train_data = "timeseries_train.csv"
+    timestamp = test_helper.get_utc_timestamp_now()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        test_helper.prepare_data(train_data)
+
+        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
+
+        cloud_predictor = TimeSeriesCloudPredictor(
+            cloud_output_path=(
+                f"s3://autogluon-cloud-ci/test-timeseries-fit-predict-{model_name}/" f"{framework_version}/{timestamp}"
+            ),
+            local_output_path=f"test_timeseries_fit_predict_{model_name}_cloud_predictor",
+        )
+
+        predictions = cloud_predictor.fit_predict(
+            predictor_init_args=dict(target="target", prediction_length=3),
+            predictor_fit_args=dict(
+                train_data=train_data,
+                hyperparameters=hyperparameters,
+            ),
+            framework_version=framework_version,
+            custom_image_uri=training_custom_image_uri,
+        )
+
+        assert isinstance(predictions, pd.DataFrame)
+        assert not predictions.empty
+
+        info = cloud_predictor.info()
+        assert info["local_output_path"] is not None
+        assert info["cloud_output_path"] is not None
+        assert info["fit_job"]["name"] is not None
+        assert info["fit_job"]["status"] == "Completed"

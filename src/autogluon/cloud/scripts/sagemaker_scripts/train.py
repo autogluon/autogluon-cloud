@@ -168,6 +168,21 @@ if __name__ == "__main__":
             lb = predictor.leaderboard(silent=False)
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
 
+    # fit_predict: run prediction inside the same training job and persist results so
+    # the caller can download them alongside the model artifacts. This avoids paying
+    # the SageMaker startup cost twice.
+    if ag_args.get("fit_predict", False):
+        print("Running in-job prediction for fit_predict")
+        if predictor_type == "timeseries":
+            predictions = predictor.predict(training_data)
+            predictions = pd.DataFrame(predictions).reset_index()
+        else:
+            predictions = predictor.predict(training_data, as_pandas=True)
+            predictions = pd.DataFrame(predictions)
+        predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
+        predictions.to_csv(predictions_path, index=False)
+        print(f"Saved predictions to {predictions_path}")
+
     print("Saving serving script")
     serving_script_saving_path = os.path.join(save_path, "code")
     os.mkdir(serving_script_saving_path)
