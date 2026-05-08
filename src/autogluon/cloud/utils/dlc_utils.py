@@ -76,7 +76,15 @@ def retrieve_image_uri(framework_version, region, image_scope, instance_type, py
     processor = "gpu" if _is_gpu_instance(instance_type) else "cpu"
     if py_version is None:
         py_version = version_info["py_versions"][0]
-    tag = f"{framework_version}-{processor}-{py_version}"
+    os_suffix = version_info.get("os")
+    cuda_version = version_info.get("cuda_version")
+    if os_suffix:
+        if processor == "gpu" and cuda_version:
+            tag = f"{framework_version}-{processor}-{py_version}-{cuda_version}-{os_suffix}"
+        else:
+            tag = f"{framework_version}-{processor}-{py_version}-{os_suffix}"
+    else:
+        tag = f"{framework_version}-{processor}-{py_version}"
     return f"{registry}.dkr.ecr.{region}.amazonaws.com/{repository}:{tag}"
 
 

@@ -689,7 +689,9 @@
                 ],
                 "py_versions": [
                     "py311"
-                ]
+                ],
+                "os": "ubuntu22.04",
+                "cuda_version": "cu124"
             },
             "1.5.0": {
                 "registries": {
@@ -730,7 +732,9 @@
                 ],
                 "py_versions": [
                     "py312"
-                ]
+                ],
+                "os": "ubuntu22.04",
+                "cuda_version": "cu126"
             }
         }
     },
@@ -1457,7 +1461,9 @@
                 ],
                 "py_versions": [
                     "py311"
-                ]
+                ],
+                "os": "ubuntu22.04",
+                "cuda_version": "cu124"
             },
             "1.5.0": {
                 "registries": {
@@ -1500,7 +1506,9 @@
                 ],
                 "py_versions": [
                     "py312"
-                ]
+                ],
+                "os": "ubuntu22.04",
+                "cuda_version": "cu124"
             }
         }
     }
