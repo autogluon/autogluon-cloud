@@ -398,7 +398,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             backend_kwargs = {}
         else:
             backend_kwargs = dict(backend_kwargs)
-        backend_kwargs.setdefault("ag_args_extras", {})["fit_predict"] = True
+        backend_kwargs.setdefault("ag_args_extras", {})["predict_after_fit"] = True
         if known_covariates is not None:
             backend_kwargs["known_covariates"] = known_covariates
 

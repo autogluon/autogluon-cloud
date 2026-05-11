@@ -181,7 +181,7 @@ if __name__ == "__main__":
     # Currently scoped to the timeseries predictor, which is the only one that
     # exposes `fit_predict` from the client side. Tabular / multimodal support
     # (with explicit `test_data` plumbing) can land in a follow-up.
-    if ag_args.get("fit_predict", False):
+    if ag_args.get("predict_after_fit", False):
         if predictor_type != "timeseries":
             raise NotImplementedError(
                 f"`fit_predict` is only supported for predictor_type='timeseries', " f"got '{predictor_type}'."

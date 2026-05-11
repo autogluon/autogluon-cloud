@@ -141,10 +141,10 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         # columns `[id, timestamp, covariate1, ..., covariateN]`; no target.
         known_covariates_df = None
         if known_covariates is not None:
-            fit_predict_enabled = bool(ag_args_extras and ag_args_extras.get("fit_predict"))
-            if not fit_predict_enabled:
+            predict_after_fit_enabled = bool(ag_args_extras and ag_args_extras.get("predict_after_fit"))
+            if not predict_after_fit_enabled:
                 raise ValueError(
-                    "`known_covariates` is only meaningful when `fit_predict=True`; "
+                    "`known_covariates` is only meaningful for `fit_predict`; "
                     "use `predict()` for separate inference."
                 )
             if isinstance(known_covariates, str):
