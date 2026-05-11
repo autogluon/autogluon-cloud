@@ -69,12 +69,14 @@ jobs:
         if: steps.changes.outputs.other_than_docs == 'true'
         uses: astral-sh/ruff-action@v3
         with:
-          args: "format --check src tests"
+          args: "format --check"
+          src: "src tests"
       - name: Ruff Lint Check
         if: steps.changes.outputs.other_than_docs == 'true'
         uses: astral-sh/ruff-action@v3
         with:
-          args: "check src tests"
+          args: "check"
+          src: "src tests"
   test_general_cloud:
     strategy:
       fail-fast: false
