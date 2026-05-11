@@ -1,6 +1,20 @@
+import json
+from pathlib import Path
+
 from packaging import version
 from packaging.version import Version
-from sagemaker import image_uris
+
+_CONFIG_PATH = Path(__file__).parent / "autogluon_dlc.json"
+_GPU_INSTANCE_PREFIXES = ("ml.p", "ml.g")
+
+
+def _load_config():
+    with open(_CONFIG_PATH) as f:
+        return json.load(f)
+
+
+def _is_gpu_instance(instance_type):
+    return instance_type.startswith(_GPU_INSTANCE_PREFIXES)
 
 
 def retrieve_available_framework_versions(framework_type="training", details=False):
@@ -20,12 +34,11 @@ def retrieve_available_framework_versions(framework_type="training", details=Fal
             returns a dict containing information related to each version if detailed == True.
     """
     assert framework_type in ["training", "inference"]
-    config = image_uris.config_for_framework("autogluon")
+    config = _load_config()
     versions_details = config[framework_type]["versions"]
     if details:
         return versions_details
-    versions = list(config[framework_type]["versions"].keys())
-    return versions
+    return list(versions_details.keys())
 
 
 def retrieve_py_versions(framework_version, framework_type="training"):
@@ -51,12 +64,35 @@ def retrieve_latest_framework_version(framework_type="training"):
     return versions[-1]
 
 
+def retrieve_image_uri(framework_version, region, image_scope, instance_type, py_version=None):
+    """Construct the full ECR image URI for a given AG version/region/scope.
+
+    Drop-in replacement for sagemaker.image_uris.retrieve("autogluon", ...).
+    """
+    config = _load_config()
+    version_info = config[image_scope]["versions"][framework_version]
+    registry = version_info["registries"][region]
+    repository = version_info["repository"]
+    processor = "gpu" if _is_gpu_instance(instance_type) else "cpu"
+    if py_version is None:
+        py_version = version_info["py_versions"][0]
+    os_suffix = version_info.get("os")
+    cuda_version = version_info.get("cuda_version")
+    if os_suffix:
+        if processor == "gpu" and cuda_version:
+            tag = f"{framework_version}-{processor}-{py_version}-{cuda_version}-{os_suffix}"
+        else:
+            tag = f"{framework_version}-{processor}-{py_version}-{os_suffix}"
+    else:
+        tag = f"{framework_version}-{processor}-{py_version}"
+    return f"{registry}.dkr.ecr.{region}.amazonaws.com/{repository}:{tag}"
+
+
 def parse_framework_version(framework_version, framework_type, py_version=None, minimum_version=None):
     if framework_version == "latest":
         framework_version, py_versions = retrieve_latest_framework_version(framework_type)
         py_version = py_versions[0]
     else:
-        # Cloud supports 0.6+ containers
         if minimum_version is not None and Version(framework_version) < Version(minimum_version):
             raise ValueError("Cloud module only supports 0.6+ containers.")
         valid_options = retrieve_available_framework_versions(framework_type)
