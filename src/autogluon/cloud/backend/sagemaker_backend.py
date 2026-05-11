@@ -961,48 +961,37 @@ class SagemakerBackend(Backend):
 
         return results_save_path
 
-    def download_fit_predict_results(self, save_path: Optional[str] = None) -> str:
+    def get_fit_predict_results(self) -> pd.DataFrame:
         """
-        Download predictions generated in-job by `fit_predict`.
+        Download and load predictions produced by a completed ``fit_predict`` job.
 
-        Predictions are persisted to the training job's ``output_data`` channel as
-        ``predictions.csv`` (bundled into ``output.tar.gz`` by SageMaker).
-
-        Parameters
-        ----------
-        save_path: Optional[str], default = None
-            Local directory to save the downloaded predictions.
-            If None, a path under ``local_output_path`` is used.
-
-        Returns
-        -------
-        str
-            Path to the extracted ``predictions.csv`` file.
+        Predictions are persisted inside the training job's ``output.tar.gz``
+        under the key ``predictions.csv``. This method downloads the tarball,
+        extracts the predictions into a temporary directory, and returns them
+        as a DataFrame. Callers who want to persist the results on disk should
+        use ``TimeSeriesCloudPredictor.get_fit_predict_results(save_path=...)``.
         """
+        import tempfile
+
         job_name = self._fit_job.job_name
         assert job_name is not None, "No fit job found. Call `fit_predict()` first."
         output_tarball = self.cloud_output_path + f"/model/{job_name}/output/output.tar.gz"
         assert is_s3_url(output_tarball)
         bucket, key = s3_path_to_bucket_prefix(output_tarball)
 
-        if not save_path:
-            save_path = self.local_output_path
-        save_path = os.path.abspath(os.path.expanduser(save_path))
-        results_dir = os.path.join(save_path, "fit_predict", job_name)
-        os.makedirs(results_dir, exist_ok=True)
-
-        tarball_local = os.path.join(results_dir, "output.tar.gz")
-        logger.log(20, f"Downloading fit_predict output from s3://{bucket}/{key}")
-        s3 = boto3.client("s3")
-        s3.download_file(bucket, key, tarball_local)
-        with tarfile.open(tarball_local) as tf:
-            tf.extractall(results_dir)
-        predictions_path = os.path.join(results_dir, "predictions.csv")
-        assert os.path.isfile(predictions_path), (
-            f"Could not find predictions.csv in {tarball_local}. " "Did the training job run with `fit_predict=True`?"
-        )
-        logger.log(20, f"fit_predict results downloaded to {predictions_path}")
-        return predictions_path
+        with tempfile.TemporaryDirectory(prefix="ag_fit_predict_") as tmpdir:
+            tarball_local = os.path.join(tmpdir, "output.tar.gz")
+            logger.log(20, f"Downloading fit_predict output from s3://{bucket}/{key}")
+            s3 = boto3.client("s3")
+            s3.download_file(bucket, key, tarball_local)
+            with tarfile.open(tarball_local) as tf:
+                tf.extractall(tmpdir)
+            predictions_path = os.path.join(tmpdir, "predictions.csv")
+            assert os.path.isfile(predictions_path), (
+                f"Could not find predictions.csv in {tarball_local}. "
+                "Did the training job run with `fit_predict=True`?"
+            )
+            return pd.read_csv(predictions_path)
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(

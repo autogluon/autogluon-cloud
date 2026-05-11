@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
@@ -420,21 +421,35 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if not wait:
             logger.info(
                 "fit_predict job launched asynchronously. Use `get_fit_job_status()` "
-                "to poll, then `download_fit_predict_results()` to fetch predictions."
+                "to poll, then `get_fit_predict_results()` to fetch predictions."
             )
             return None
 
-        predictions_path = self.download_fit_predict_results(save_path=save_path)
-        return pd.read_csv(predictions_path)
+        return self.get_fit_predict_results(save_path=save_path)
 
-    def download_fit_predict_results(self, save_path: Optional[str] = None) -> str:
+    def get_fit_predict_results(self, save_path: Optional[str] = None) -> pd.DataFrame:
         """
-        Download the predictions produced by a completed ``fit_predict`` job.
+        Retrieve predictions produced by a completed ``fit_predict`` job.
 
-        Returns the path to ``predictions.csv`` extracted from the job's
-        ``output.tar.gz``.
+        Parameters
+        ----------
+        save_path: Optional[str], default = None
+            If set, the predictions are additionally written to this path as a
+            CSV (directories are created as needed). Regardless of this flag,
+            the predictions are returned in-memory.
+
+        Returns
+        -------
+        pd.DataFrame
+            Predictions for the forecast horizon.
         """
-        return self.backend.download_fit_predict_results(save_path=save_path)
+        predictions = self.backend.get_fit_predict_results()
+        if save_path is not None:
+            save_path = os.path.abspath(os.path.expanduser(save_path))
+            os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+            predictions.to_csv(save_path, index=False)
+            logger.log(20, f"fit_predict results saved to {save_path}")
+        return predictions
 
     def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
         """Attach to existing training job"""
