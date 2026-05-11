@@ -82,9 +82,9 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
         )
 
         predictions = cloud_predictor.fit_predict(
+            train_data=train_data,
             predictor_init_args=dict(target="target", prediction_length=3),
             predictor_fit_args=dict(
-                train_data=train_data,
                 hyperparameters=hyperparameters,
             ),
             framework_version=framework_version,

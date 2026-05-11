@@ -318,10 +318,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def fit_predict(
         self,
-        test_data: Optional[Union[str, pd.DataFrame]] = None,
+        train_data: Union[str, pd.DataFrame],
         *,
         predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Dict[str, Any],
+        predictor_fit_args: Optional[Dict[str, Any]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
         static_features: Optional[Union[str, pd.DataFrame]] = None,
@@ -343,20 +344,26 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predict in the same job avoids paying the SageMaker startup cost twice.
 
         Predictions are generated inside the training container against
-        ``predictor_fit_args["train_data"]`` (the standard time-series forecasting
-        flow where the last ``prediction_length`` steps of each series are
-        forecast), saved to the job's ``output.tar.gz``, then downloaded locally.
+        ``train_data`` (the standard time-series forecasting flow where the last
+        ``prediction_length`` steps of each series are forecast), saved to the
+        job's ``output.tar.gz``, then downloaded locally.
 
         Parameters
         ----------
-        test_data: Optional[Union[str, pd.DataFrame]]
-            Currently unused. Reserved for a future extension where separate
-            context data is passed through. For now, predictions are generated
-            against the training data.
+        train_data: Union[str, pd.DataFrame]
+            The historical time-series data to train on and forecast from.
+            Either a pandas DataFrame or a local / S3 path to a CSV.
         predictor_init_args: dict
             Init args for the predictor (must include ``prediction_length``).
-        predictor_fit_args: dict
-            Fit args for the predictor (must include ``train_data``).
+        predictor_fit_args: Optional[dict], default = None
+            Additional fit args for the predictor. Must not contain a
+            ``train_data`` key — pass ``train_data`` as the explicit argument
+            above.
+        known_covariates: Optional[Union[str, pd.DataFrame]], default = None
+            Values of the known covariates for each time series during the
+            forecast horizon. Forwarded to ``TimeSeriesPredictor.predict`` in
+            the container. For details, see:
+            https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
         id_column: str, default = "item_id"
             Name of the item ID column.
         timestamp_column: str, default = "timestamp"
@@ -375,11 +382,21 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Optional[pd.DataFrame]
             Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
         """
-        if test_data is not None:
-            logger.warning(
-                "`test_data` is not yet used by fit_predict; the training data is "
-                "forecasted in-job. Ignoring the provided `test_data`."
+        if predictor_fit_args is None:
+            predictor_fit_args = {}
+        else:
+            predictor_fit_args = dict(predictor_fit_args)
+        if "train_data" in predictor_fit_args:
+            raise ValueError(
+                "`train_data` must be passed as an explicit argument to `fit_predict`, "
+                "not via `predictor_fit_args`."
             )
+        predictor_fit_args["train_data"] = train_data
+
+        if known_covariates is not None:
+            # Container-side plumbing for `known_covariates` lands in a follow-up.
+            raise NotImplementedError("Passing `known_covariates` through fit_predict is not yet supported.")
+
         assert (
             not self.backend.is_fit
         ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
