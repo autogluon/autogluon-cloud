@@ -114,9 +114,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         -------
         `TimeSeriesCloudPredictor` object. Returns self.
         """
-        assert (
-            not self.backend.is_fit
-        ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        assert not self.backend.is_fit, (
+            "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        )
         if backend_kwargs is None:
             backend_kwargs = {}
 

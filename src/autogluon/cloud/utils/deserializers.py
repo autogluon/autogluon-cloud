@@ -62,9 +62,9 @@ class PandasDeserializeStrategyFactory:
 
     @staticmethod
     def get_strategy(content_type: str) -> PandasDeserializeStrategy:
-        assert (
-            content_type in PandasDeserializeStrategyFactory.__content_type_to_strategy
-        ), f"{content_type} not supported"
+        assert content_type in PandasDeserializeStrategyFactory.__content_type_to_strategy, (
+            f"{content_type} not supported"
+        )
         return PandasDeserializeStrategyFactory.__content_type_to_strategy[content_type]()
 
 

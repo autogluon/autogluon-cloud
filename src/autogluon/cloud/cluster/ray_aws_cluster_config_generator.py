@@ -164,9 +164,9 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
     def __update_node_config(self, content: Dict[str, Any]):
         for node in self.config[AVAILABLE_NODE_TYPES]:
             node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
-            assert (
-                node_config is not None
-            ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+            assert node_config is not None, (
+                f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+            )
             self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG].update(content)
 
     def _update_cluster_name(self, cluster_name):
@@ -187,9 +187,9 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             assert worker_instance_count >= 0
             self.config[MAX_WORKERS] = worker_instance_count
             self._set_available_node_types()
-            assert (
-                worker_node_name in self.config[AVAILABLE_NODE_TYPES]
-            ), f"Didn't find node definition for {worker_node_name}. Please make sure you provided the correct `worker_node_name`"
+            assert worker_node_name in self.config[AVAILABLE_NODE_TYPES], (
+                f"Didn't find node definition for {worker_node_name}. Please make sure you provided the correct `worker_node_name`"
+            )
             self.config[AVAILABLE_NODE_TYPES][worker_node_name].update({MIN_WORKERS: worker_instance_count})
 
     def _update_volume_size(self, volumes_size):
@@ -197,9 +197,9 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             self._set_available_node_types()
             for node in self.config[AVAILABLE_NODE_TYPES]:
                 node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
-                assert (
-                    node_config is not None
-                ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+                assert node_config is not None, (
+                    f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+                )
                 block_mappings = self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG][BLOCK_DEVICE_MAPPINGS]
                 if BLOCK_DEVICE_MAPPINGS not in node_config:
                     block_mappings = [{"DeviceName": "/dev/sda1", EBS: {VOLUME_SIZE: volumes_size}}]
@@ -232,16 +232,16 @@ class RayAWSClusterConfigGenerator(RayClusterConfigGenerator):
             self._set_available_node_types()
             assert node in self.config[AVAILABLE_NODE_TYPES], f"Specified node {node} is not available in the config."
             node_config: Dict[str, Any] = self.config[AVAILABLE_NODE_TYPES][node].get(NODE_CONFIG, None)
-            assert (
-                node_config is not None
-            ), f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+            assert node_config is not None, (
+                f"Detected node definition for {node} but there's no node_config specified. Please provide one."
+            )
             self.config[AVAILABLE_NODE_TYPES][node][NODE_CONFIG].update(
                 {IAM_INSTANCE_PROFILE: {ARN: instance_profile}}
             )
 
     def _update_initialization_commands(self, initialization_commands):
         if initialization_commands is not None:
-            assert isinstance(
-                initialization_commands, list
-            ), f"initialization_commands must be a list, but got type {type(initialization_commands)}"
+            assert isinstance(initialization_commands, list), (
+                f"initialization_commands must be a list, but got type {type(initialization_commands)}"
+            )
             self.config[INITIALIZATION_COMMANDS] = initialization_commands

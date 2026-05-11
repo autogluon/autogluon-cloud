@@ -5,7 +5,7 @@ from setuptools import setup
 AUTOGLUON = "autogluon"
 CLOUD = "cloud"
 
-PYTHON_REQUIRES = ">=3.9, <3.13"
+PYTHON_REQUIRES = ">=3.10, <3.13"
 
 
 def create_version_file(*, version):

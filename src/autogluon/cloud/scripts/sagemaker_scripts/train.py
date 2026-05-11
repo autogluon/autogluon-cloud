@@ -108,9 +108,9 @@ if __name__ == "__main__":
     predictor_init_args["path"] = save_path
     predictor_fit_args = ag_args["predictor_fit_args"]
     valid_predictor_types = ["tabular", "multimodal", "timeseries"]
-    assert (
-        predictor_type in valid_predictor_types
-    ), f"predictor_type {predictor_type} not supported. Valid options are {valid_predictor_types}"
+    assert predictor_type in valid_predictor_types, (
+        f"predictor_type {predictor_type} not supported. Valid options are {valid_predictor_types}"
+    )
     if predictor_type == "tabular":
         predictor_cls = TabularPredictor
     elif predictor_type == "multimodal":
@@ -129,9 +129,9 @@ if __name__ == "__main__":
 
     if predictor_type == "tabular" and "image_column" in ag_args:
         feature_metadata = predictor_fit_args.get("feature_metadata", None)
-        assert (
-            feature_metadata is not None
-        ), f"Detected image_column: {ag_args['image_column']} while feature metadata is not included"
+        assert feature_metadata is not None, (
+            f"Detected image_column: {ag_args['image_column']} while feature metadata is not included"
+        )
         feature_metadata = feature_metadata.add_special_types({ag_args["image_column"]: ["image_path"]})
         predictor_fit_args["feature_metadata"] = feature_metadata
 

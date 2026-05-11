@@ -417,9 +417,9 @@ class SagemakerBackend(Backend):
             Any extra arguments needed to pass to deploy.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
         """
-        assert (
-            self.endpoint is None
-        ), "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
+        assert self.endpoint is None, (
+            "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
+        )
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
             assert predictor_path, "No cloud trained model found."
@@ -534,9 +534,9 @@ class SagemakerBackend(Backend):
         endpoint: str or  :class:`SagemakerEndpoint`
             If str is passed, it should be the name of the endpoint being attached to.
         """
-        assert (
-            self.endpoint is None
-        ), "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
+        assert self.endpoint is None, (
+            "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
+        )
         if isinstance(endpoint, str):
             endpoint = self._realtime_predictor_cls(
                 endpoint_name=endpoint,

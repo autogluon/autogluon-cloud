@@ -65,10 +65,16 @@ jobs:
           filters: |
             other_than_docs:
               - '!(docs/**)**'
-      - name: Cloud Lint Check
+      - name: Ruff Format Check
         if: steps.changes.outputs.other_than_docs == 'true'
-        run: |
-          chmod +x ./.github/workflow_scripts/cloud_lint_check.sh && ./.github/workflow_scripts/cloud_lint_check.sh
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: "format --check src tests"
+      - name: Ruff Lint Check
+        if: steps.changes.outputs.other_than_docs == 'true'
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: "check src tests"
   test_general_cloud:
     strategy:
       fail-fast: false
