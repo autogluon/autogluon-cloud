@@ -177,26 +177,28 @@ if __name__ == "__main__":
     # fit_predict: run prediction inside the same training job and persist results so
     # the caller can download them alongside the model artifacts. This avoids paying
     # the SageMaker startup cost twice.
+    #
+    # Currently scoped to the timeseries predictor, which is the only one that
+    # exposes `fit_predict` from the client side. Tabular / multimodal support
+    # (with explicit `test_data` plumbing) can land in a follow-up.
     if ag_args.get("fit_predict", False):
+        if predictor_type != "timeseries":
+            raise NotImplementedError(
+                f"`fit_predict` is only supported for predictor_type='timeseries', " f"got '{predictor_type}'."
+            )
         print("Running in-job prediction for fit_predict")
-        if predictor_type == "timeseries":
-            predict_kwargs = {}
-            if args.known_covariates:
-                kc_file = get_input_path(args.known_covariates)
-                kc_df = pd.read_csv(kc_file)
-                # Column layout set by TimeSeriesSagemakerBackend: id, timestamp, cov1, ..., covN
-                id_col = kc_df.columns[0]
-                ts_col = kc_df.columns[1]
-                kc_df[ts_col] = pd.to_datetime(kc_df[ts_col])
-                known_covariates = TimeSeriesDataFrame.from_data_frame(
-                    kc_df, id_column=id_col, timestamp_column=ts_col
-                )
-                predict_kwargs["known_covariates"] = known_covariates
-            predictions = predictor.predict(training_data, **predict_kwargs)
-            predictions = pd.DataFrame(predictions).reset_index()
-        else:
-            predictions = predictor.predict(training_data, as_pandas=True)
-            predictions = pd.DataFrame(predictions)
+        predict_kwargs = {}
+        if args.known_covariates:
+            kc_file = get_input_path(args.known_covariates)
+            kc_df = pd.read_csv(kc_file)
+            # Column layout set by TimeSeriesSagemakerBackend: id, timestamp, cov1, ..., covN
+            id_col = kc_df.columns[0]
+            ts_col = kc_df.columns[1]
+            kc_df[ts_col] = pd.to_datetime(kc_df[ts_col])
+            known_covariates = TimeSeriesDataFrame.from_data_frame(kc_df, id_column=id_col, timestamp_column=ts_col)
+            predict_kwargs["known_covariates"] = known_covariates
+        predictions = predictor.predict(training_data, **predict_kwargs)
+        predictions = pd.DataFrame(predictions).reset_index()
         predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
         predictions.to_csv(predictions_path, index=False)
         print(f"Saved predictions to {predictions_path}")
