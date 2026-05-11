@@ -55,9 +55,9 @@ class RayAWSBackend(RayBackend):
         super().initialize(**kwargs)
         self._boto_session = boto3.session.Session()
         self.region = self._boto_session.region_name
-        assert (
-            self.region is not None
-        ), "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
+        assert self.region is not None, (
+            "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
+        )
 
     @staticmethod
     def generate_default_permission(**kwargs) -> Dict[str, str]:

@@ -264,9 +264,9 @@ class CloudPredictor(ABC):
         -------
         `CloudPredictor` object. Returns self.
         """  # noqa: E501
-        assert (
-            not self.backend.is_fit
-        ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        assert not self.backend.is_fit, (
+            "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
+        )
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
@@ -344,9 +344,9 @@ class CloudPredictor(ABC):
         path = predictor_path
         if not path:
             path = self.backend.get_fit_job_output_path()
-        assert (
-            path is not None
-        ), "No fit job associated with this CloudPredictor. Either attach to a fit job with `attach_job()` or start one with `fit()`"
+        assert path is not None, (
+            "No fit job associated with this CloudPredictor. Either attach to a fit job with `attach_job()` or start one with `fit()`"
+        )
         assert is_s3_url(path), "Please provide a valid s3 path to the predictor tarball."
         if not save_path:
             save_path = self.local_output_path

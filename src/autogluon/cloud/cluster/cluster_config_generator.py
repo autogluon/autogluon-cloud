@@ -66,9 +66,9 @@ class ClusterConfigGenerator(ABC):
         save_path, str
             Path to save the config. Must be a path pointing to a yaml file
         """
-        assert isinstance(
-            self.config, dict
-        ), f"Invalid config of type: {type(self.config)}. Please provide a dictionary instead"
+        assert isinstance(self.config, dict), (
+            f"Invalid config of type: {type(self.config)}. Please provide a dictionary instead"
+        )
         with open(save_path, "w") as yaml_file:
             yaml.safe_dump(self.config, yaml_file, default_flow_style=False)
 
