@@ -121,6 +121,7 @@ if __name__ == "__main__":
         from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
 
         predictor_cls = TimeSeriesPredictor
+        # Disable prediction caching to avoid errors on read-only filesystem
         predictor_init_args.setdefault("cache_predictions", False)
 
     train_file = get_input_path(args.train_dir)
