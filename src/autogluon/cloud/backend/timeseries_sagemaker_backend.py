@@ -51,6 +51,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         id_column: str,
         timestamp_column: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -125,6 +126,31 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             )
         predictor_fit_args["train_data"] = train_data
         predictor_fit_args["tuning_data"] = tuning_data
+
+        # Normalize known_covariates for the remote container. We only need the
+        # columns `[id, timestamp, covariate1, ..., covariateN]`; no target.
+        known_covariates_df = None
+        if known_covariates is not None:
+            if not fit_predict:
+                raise ValueError(
+                    "`known_covariates` is only meaningful when `fit_predict=True`; "
+                    "use `predict()` for separate inference."
+                )
+            if isinstance(known_covariates, str):
+                known_covariates_df = load_pd.load(known_covariates)
+            else:
+                known_covariates_df = known_covariates.copy()
+            cols = known_covariates_df.columns.to_list()
+            for required in (id_column, timestamp_column):
+                if required not in cols:
+                    raise ValueError(f"`known_covariates` must contain column '{required}'.")
+            # Reorder so id and timestamp come first (parity with _preprocess_data).
+            timestamp_index = cols.index(timestamp_column)
+            cols.insert(0, cols.pop(timestamp_index))
+            id_index = cols.index(id_column)
+            cols.insert(0, cols.pop(id_index))
+            known_covariates_df = known_covariates_df[cols]
+
         super().fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -138,6 +164,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
             fit_predict=fit_predict,
+            known_covariates=known_covariates_df,
         )
 
     def predict_real_time(

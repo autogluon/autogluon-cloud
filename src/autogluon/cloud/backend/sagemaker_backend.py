@@ -214,6 +214,7 @@ class SagemakerBackend(Backend):
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
         fit_predict: bool = False,
+        known_covariates: Optional[pd.DataFrame] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -336,6 +337,7 @@ class SagemakerBackend(Backend):
             serving_script=ScriptManager.get_serve_script(
                 backend_type=self.name, framework_version=framework_version
             ),  # Training and Inference should have the same framework_version
+            known_covariates=known_covariates,
         )
         if fit_kwargs is None:
             fit_kwargs = {}
@@ -1026,6 +1028,7 @@ class SagemakerBackend(Backend):
         ag_args,
         serving_script,
         image_column=None,
+        known_covariates=None,
     ):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
         util_key_prefix = cloud_key_prefix + "/utils"
@@ -1092,6 +1095,14 @@ class SagemakerBackend(Backend):
             inputs["train_images"] = train_images_input
         if tune_images_input is not None:
             inputs["tune_images"] = tune_images_input
+        if known_covariates is not None:
+            known_covariates_local = self._prepare_data(known_covariates, "known_covariates")
+            logger.log(20, "Uploading known_covariates...")
+            known_covariates_input = self.sagemaker_session.upload_data(
+                path=known_covariates_local, bucket=cloud_bucket, key_prefix=util_key_prefix
+            )
+            logger.log(20, "known_covariates uploaded successfully")
+            inputs["known_covariates"] = known_covariates_input
 
         return inputs
 

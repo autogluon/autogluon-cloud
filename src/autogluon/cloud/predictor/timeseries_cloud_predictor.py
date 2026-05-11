@@ -393,10 +393,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             )
         predictor_fit_args["train_data"] = train_data
 
-        if known_covariates is not None:
-            # Container-side plumbing for `known_covariates` lands in a follow-up.
-            raise NotImplementedError("Passing `known_covariates` through fit_predict is not yet supported.")
-
         assert (
             not self.backend.is_fit
         ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
@@ -423,6 +419,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             id_column=id_column,
             timestamp_column=timestamp_column,
             static_features=static_features,
+            known_covariates=known_covariates,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,

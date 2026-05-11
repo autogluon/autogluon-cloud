@@ -83,6 +83,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--ag_args", type=str, default=get_env_if_present("SM_CHANNEL_AG_ARGS"))
     parser.add_argument("--serving_script", type=str, default=get_env_if_present("SM_CHANNEL_SERVING"))
+    parser.add_argument(
+        "--known_covariates",
+        type=str,
+        required=False,
+        default=get_env_if_present("SM_CHANNEL_KNOWN_COVARIATES"),
+    )
 
     args, _ = parser.parse_known_args()
 
@@ -174,7 +180,19 @@ if __name__ == "__main__":
     if ag_args.get("fit_predict", False):
         print("Running in-job prediction for fit_predict")
         if predictor_type == "timeseries":
-            predictions = predictor.predict(training_data)
+            predict_kwargs = {}
+            if args.known_covariates:
+                kc_file = get_input_path(args.known_covariates)
+                kc_df = pd.read_csv(kc_file)
+                # Column layout set by TimeSeriesSagemakerBackend: id, timestamp, cov1, ..., covN
+                id_col = kc_df.columns[0]
+                ts_col = kc_df.columns[1]
+                kc_df[ts_col] = pd.to_datetime(kc_df[ts_col])
+                known_covariates = TimeSeriesDataFrame.from_data_frame(
+                    kc_df, id_column=id_col, timestamp_column=ts_col
+                )
+                predict_kwargs["known_covariates"] = known_covariates
+            predictions = predictor.predict(training_data, **predict_kwargs)
             predictions = pd.DataFrame(predictions).reset_index()
         else:
             predictions = predictor.predict(training_data, as_pandas=True)
