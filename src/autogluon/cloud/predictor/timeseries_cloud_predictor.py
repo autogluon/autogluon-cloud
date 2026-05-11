@@ -389,8 +389,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             predictor_fit_args = dict(predictor_fit_args)
         if "train_data" in predictor_fit_args:
             raise ValueError(
-                "`train_data` must be passed as an explicit argument to `fit_predict`, "
-                "not via `predictor_fit_args`."
+                "`train_data` must be passed as an explicit argument to `fit_predict`, not via `predictor_fit_args`."
             )
         predictor_fit_args["train_data"] = train_data
 

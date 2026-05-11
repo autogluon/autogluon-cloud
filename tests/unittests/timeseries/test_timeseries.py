@@ -76,7 +76,7 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
 
         cloud_predictor = TimeSeriesCloudPredictor(
             cloud_output_path=(
-                f"s3://autogluon-cloud-ci/test-timeseries-fit-predict-{model_name}/" f"{framework_version}/{timestamp}"
+                f"s3://autogluon-cloud-ci/test-timeseries-fit-predict-{model_name}/{framework_version}/{timestamp}"
             ),
             local_output_path=f"test_timeseries_fit_predict_{model_name}_cloud_predictor",
         )

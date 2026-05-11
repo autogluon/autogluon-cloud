@@ -144,8 +144,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             predict_after_fit_enabled = bool(ag_args_extras and ag_args_extras.get("predict_after_fit"))
             if not predict_after_fit_enabled:
                 raise ValueError(
-                    "`known_covariates` is only meaningful for `fit_predict`; "
-                    "use `predict()` for separate inference."
+                    "`known_covariates` is only meaningful for `fit_predict`; use `predict()` for separate inference."
                 )
             if isinstance(known_covariates, str):
                 known_covariates_df = load_pd.load(known_covariates)

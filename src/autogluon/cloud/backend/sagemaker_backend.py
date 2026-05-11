@@ -988,8 +988,7 @@ class SagemakerBackend(Backend):
                 tf.extractall(tmpdir)
             predictions_path = os.path.join(tmpdir, "predictions.csv")
             assert os.path.isfile(predictions_path), (
-                f"Could not find predictions.csv in {tarball_local}. "
-                "Did the training job run with `fit_predict=True`?"
+                f"Could not find predictions.csv in {tarball_local}. Did the training job run with `fit_predict=True`?"
             )
             return pd.read_csv(predictions_path)
 

@@ -184,7 +184,7 @@ if __name__ == "__main__":
     if ag_args.get("predict_after_fit", False):
         if predictor_type != "timeseries":
             raise NotImplementedError(
-                f"`fit_predict` is only supported for predictor_type='timeseries', " f"got '{predictor_type}'."
+                f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
             )
         print("Running in-job prediction for fit_predict")
         predict_kwargs = {}
