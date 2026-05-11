@@ -12,6 +12,16 @@ from .sagemaker_backend import SagemakerBackend
 class TimeSeriesSagemakerBackend(SagemakerBackend):
     name = TIMESERIES_SAGEMAKER
 
+    def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
+        """Parse backend specific kwargs and get them ready to be sent to fit call.
+
+        Extends the base by surfacing `known_covariates`, which is forwarded to
+        the fit-time container for the `fit_predict` flow.
+        """
+        parsed = super().parse_backend_fit_kwargs(kwargs)
+        parsed["known_covariates"] = kwargs.get("known_covariates", None)
+        return parsed
+
     def _preprocess_data(
         self,
         data: Union[pd.DataFrame, str],
@@ -61,7 +71,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
-        fit_predict: bool = False,
+        ag_args_extras: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -131,7 +141,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         # columns `[id, timestamp, covariate1, ..., covariateN]`; no target.
         known_covariates_df = None
         if known_covariates is not None:
-            if not fit_predict:
+            fit_predict_enabled = bool(ag_args_extras and ag_args_extras.get("fit_predict"))
+            if not fit_predict_enabled:
                 raise ValueError(
                     "`known_covariates` is only meaningful when `fit_predict=True`; "
                     "use `predict()` for separate inference."
@@ -163,7 +174,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
-            fit_predict=fit_predict,
+            ag_args_extras=ag_args_extras,
             known_covariates=known_covariates_df,
         )
 

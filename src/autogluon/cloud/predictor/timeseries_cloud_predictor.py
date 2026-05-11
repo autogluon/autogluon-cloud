@@ -393,33 +393,20 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             )
         predictor_fit_args["train_data"] = train_data
 
-        assert (
-            not self.backend.is_fit
-        ), "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         if backend_kwargs is None:
             backend_kwargs = {}
+        else:
+            backend_kwargs = dict(backend_kwargs)
+        backend_kwargs.setdefault("ag_args_extras", {})["fit_predict"] = True
+        if known_covariates is not None:
+            backend_kwargs["known_covariates"] = known_covariates
 
-        self.target_column = predictor_init_args.get("target", "target")
-        self.id_column = id_column
-        self.timestamp_column = timestamp_column
-
-        predictor_metadata = {
-            "id_column": self.id_column,
-            "timestamp_column": self.timestamp_column,
-            "target_column": self.target_column,
-        }
-        backend_kwargs.setdefault("autogluon_sagemaker_estimator_kwargs", {}).setdefault("hyperparameters", {})[
-            "predictor_metadata"
-        ] = json.dumps(predictor_metadata)
-
-        backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
-        self.backend.fit(
+        self.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             id_column=id_column,
             timestamp_column=timestamp_column,
             static_features=static_features,
-            known_covariates=known_covariates,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,
@@ -427,8 +414,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            fit_predict=True,
-            **backend_kwargs,
+            backend_kwargs=backend_kwargs,
         )
 
         if not wait:

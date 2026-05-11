@@ -142,8 +142,13 @@ class SagemakerBackend(Backend):
         """Parse backend specific kwargs and get them ready to be sent to fit call"""
         autogluon_sagemaker_estimator_kwargs = kwargs.get("autogluon_sagemaker_estimator_kwargs", None)
         fit_kwargs = kwargs.get("fit_kwargs", None)
+        ag_args_extras = kwargs.get("ag_args_extras", None)
 
-        return dict(autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs, fit_kwargs=fit_kwargs)
+        return dict(
+            autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
+            fit_kwargs=fit_kwargs,
+            ag_args_extras=ag_args_extras,
+        )
 
     def attach_job(self, job_name: str) -> None:
         """
@@ -213,7 +218,7 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
-        fit_predict: bool = False,
+        ag_args_extras: Optional[Dict[str, Any]] = None,
         known_covariates: Optional[pd.DataFrame] = None,
     ) -> None:
         """
@@ -320,8 +325,9 @@ class SagemakerBackend(Backend):
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             leaderboard=leaderboard,
-            fit_predict=fit_predict,
         )
+        if ag_args_extras:
+            ag_args.update(ag_args_extras)
         # Get the label from predictor_init_args
         label = predictor_init_args.get("label") or predictor_init_args.get("target") or None
         if image_column is not None:
