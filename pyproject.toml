@@ -9,3 +9,29 @@ per-file-ignores = {"*/__init__.py" = ["F401"]}
 
 [tool.ruff.lint.isort]
 known-first-party = ["autogluon"]
+
+[tool.mypy]
+warn_unused_configs = true
+show_error_context = true
+pretty = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["autogluon.cloud"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 80
+
+[tool.coverage.paths]
+source = [
+    "src/autogluon/cloud",
+    "*/site-packages/autogluon/cloud",
+]

@@ -1,8 +1,3 @@
-function setup_lint_env {
-    python3 -m pip install --upgrade pip
-    python3 -m pip install tox
-}
-
 function setup_build_contrib_env {
     python3 -m pip install --upgrade pip
     python3 -m pip install -r $(dirname "$0")/../../docs/requirements_doc.txt
