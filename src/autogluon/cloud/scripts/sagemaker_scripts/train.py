@@ -30,14 +30,26 @@ def get_env_if_present(name):
     return result
 
 
-def prepare_timeseries_dataframe(df, predictor_init_args):
-    target = predictor_init_args["target"]
+def prepare_timeseries_dataframe(df, predictor_init_args=None, target=None):
+    """Build a TimeSeriesDataFrame from a long-format ``df``.
+
+    ``df`` is expected to have its id column at position 0 and timestamp at
+    position 1 (layout set by ``TimeSeriesSagemakerBackend._preprocess_data``).
+
+    If ``target`` (or ``predictor_init_args['target']``) is provided, any
+    columns trailing the target column are treated as merged-in static
+    features and reattached as ``df.static_features``. If ``target`` is
+    ``None`` (e.g. a ``known_covariates`` frame), the static-features branch
+    is skipped entirely.
+    """
+    if target is None and predictor_init_args is not None:
+        target = predictor_init_args.get("target")
     cols = df.columns.to_list()
     id_column = cols[0]
     timestamp_column = cols[1]
     df[timestamp_column] = pd.to_datetime(df[timestamp_column])
     static_features = None
-    if target != cols[-1]:
+    if target is not None and target != cols[-1]:
         # target is not the last column, then there are static features being merged in
         target_index = cols.index(target)
         static_columns = cols[target_index + 1 :]
@@ -55,7 +67,7 @@ def prepare_data(data_file, predictor_type, predictor_init_args=None):
     if predictor_type == "timeseries":
         assert predictor_init_args is not None
         data = load_pd.load(data_file)
-        data = prepare_timeseries_dataframe(data, predictor_init_args)
+        data = prepare_timeseries_dataframe(data, predictor_init_args=predictor_init_args)
     else:
         data = TabularDataset(data_file)
     return data
@@ -191,12 +203,7 @@ if __name__ == "__main__":
         if args.known_covariates:
             kc_file = get_input_path(args.known_covariates)
             kc_df = pd.read_csv(kc_file)
-            # Column layout set by TimeSeriesSagemakerBackend: id, timestamp, cov1, ..., covN
-            id_col = kc_df.columns[0]
-            ts_col = kc_df.columns[1]
-            kc_df[ts_col] = pd.to_datetime(kc_df[ts_col])
-            known_covariates = TimeSeriesDataFrame.from_data_frame(kc_df, id_column=id_col, timestamp_column=ts_col)
-            predict_kwargs["known_covariates"] = known_covariates
+            predict_kwargs["known_covariates"] = prepare_timeseries_dataframe(kc_df, target=None)
         predictions = predictor.predict(training_data, **predict_kwargs)
         predictions = pd.DataFrame(predictions).reset_index()
         predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
