@@ -5,7 +5,6 @@ import os
 import tarfile
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import boto3
 import pandas as pd
 import sagemaker
 from botocore.exceptions import ClientError
@@ -960,30 +959,31 @@ class SagemakerBackend(Backend):
         return results_save_path
 
     def get_fit_predict_results(self) -> pd.DataFrame:
-        """
-        Download and load predictions produced by a completed ``fit_predict`` job.
+        """Download and load predictions produced by a completed ``fit_predict`` job.
 
-        Predictions are persisted inside the training job's ``output.tar.gz``
-        under the key ``predictions.csv``. This method downloads the tarball,
-        extracts the predictions into a temporary directory, and returns them
-        as a DataFrame. Callers who want to persist the results on disk should
-        use ``TimeSeriesCloudPredictor.get_fit_predict_results(save_path=...)``.
+        The fit_predict flow persists ``predictions.csv`` inside the training
+        job's ``output.tar.gz``. This method downloads the tarball, extracts
+        the CSV, and returns it as a DataFrame.
         """
         import tempfile
 
         job_name = self._fit_job.job_name
         assert job_name is not None, "No fit job found. Call `fit_predict()` first."
         output_tarball = self.cloud_output_path + f"/model/{job_name}/output/output.tar.gz"
-        assert is_s3_url(output_tarball)
-        bucket, key = s3_path_to_bucket_prefix(output_tarball)
+        assert is_s3_url(output_tarball), f"Expected an S3 URL, got {output_tarball!r}"
 
         with tempfile.TemporaryDirectory(prefix="ag_fit_predict_") as tmpdir:
-            tarball_local = os.path.join(tmpdir, "output.tar.gz")
-            logger.log(20, f"Downloading fit_predict output from s3://{bucket}/{key}")
-            s3 = boto3.client("s3")
-            s3.download_file(bucket, key, tarball_local)
+            bucket, key = s3_path_to_bucket_prefix(output_tarball)
+            self.sagemaker_session.download_data(path=tmpdir, bucket=bucket, key_prefix=key)
+            tarball_local = os.path.join(tmpdir, os.path.basename(key))
             with tarfile.open(tarball_local) as tf:
-                tf.extractall(tmpdir)
+                # `filter="data"` (CVE-2007-4559 mitigation) is available on
+                # Python 3.12+ and recent 3.9/3.10/3.11 patch releases. Fall
+                # back to the unfiltered call on older interpreters.
+                try:
+                    tf.extractall(tmpdir, filter="data")
+                except TypeError:
+                    tf.extractall(tmpdir)
             predictions_path = os.path.join(tmpdir, "predictions.csv")
             assert os.path.isfile(predictions_path), (
                 f"Could not find predictions.csv in {tarball_local}. Did the training job run with `fit_predict=True`?"
