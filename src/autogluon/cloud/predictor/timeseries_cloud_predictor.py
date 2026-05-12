@@ -358,8 +358,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Additional fit args for the predictor. Must not contain a ``train_data`` key — pass ``train_data`` as the
             explicit argument above.
         known_covariates: Optional[Union[str, pd.DataFrame]], default = None
-            Values of the known covariates for each time series during the forecast horizon. Forwarded to
-            ``TimeSeriesPredictor.predict`` in the container. For details, see:
+            Values of the known covariates for each time series during the forecast horizon. Either a pandas
+            DataFrame or a local / S3 path to a CSV. Forwarded to ``TimeSeriesPredictor.predict`` in the container.
+            For details, see:
             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
         id_column: str, default = "item_id"
             Name of the item ID column.
