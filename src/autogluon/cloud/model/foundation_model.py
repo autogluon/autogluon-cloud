@@ -64,8 +64,8 @@ class FoundationModel:
         mode: Literal["realtime", "serverless", "async"] = "realtime",
         endpoint_name: Optional[str] = None,
         model_artifact_path: Optional[str] = None,
-        model_config: Optional[Dict[str, Any]] = None,
         wait: bool = True,
+        **backend_kwargs,
     ) -> Endpoint:
         """
         Deploy model to an endpoint.
@@ -81,12 +81,13 @@ class FoundationModel:
             Custom endpoint name.
             If None, will auto-generate a unique name.
         model_artifact_path
-            S3 path to pre-cached model weights (for VPC / fast cold start).
-            If None, weights are downloaded from HuggingFace on cold start.
-        model_config
-            Override default inference config (prediction_length, quantile_levels, etc.)
+            S3 path to pre-cached model weights (for VPC use).
+            If None, weights are downloaded from HuggingFace at startup.
         wait
             Whether to block until the endpoint is ready.
+        **backend_kwargs
+            Additional backend-specific arguments (e.g. framework_version, custom_image_uri,
+            volume_size).
 
         Returns
         -------
@@ -132,10 +133,10 @@ class FoundationModel:
 
     def cache_model_artifact(self, s3_path: str) -> str:
         """
-        Pre-cache model weights to S3 for VPC or production use.
+        Pre-cache model weights to S3 (for VPC-deployed endpoints).
 
         Launches a small job that downloads weights from HuggingFace
-        and writes them to S3, avoiding large local downloads.
+        and uploads them to S3.
 
         Parameters
         ----------
@@ -161,11 +162,12 @@ class TimeSeriesFoundationModel(FoundationModel):
         timestamp_column: str = "timestamp",
         known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
-        prediction_length: Optional[int] = None,
+        prediction_length: int = 64,
         quantile_levels: Optional[List[float]] = None,
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         wait: bool = True,
+        **backend_kwargs,
     ) -> Union[pd.DataFrame, RemoteJob]:
         """
         Run batch prediction for time series.
@@ -186,10 +188,8 @@ class TimeSeriesFoundationModel(FoundationModel):
             Metadata attributes of individual items (DataFrame or S3 path).
         prediction_length
             Number of time steps to forecast.
-            If None, will use the default from the model registry.
         quantile_levels
             Quantiles to predict.
-            If None, will use the default from the model registry.
         output_path
             S3 path to store predictions.
             If None, will auto-generate under s3_output_path.
@@ -198,6 +198,9 @@ class TimeSeriesFoundationModel(FoundationModel):
             If None, will use the default from the model registry.
         wait
             If True, block and return DataFrame. If False, return the job handle.
+        **backend_kwargs
+            Additional backend-specific arguments (e.g. job_name, custom_image_uri,
+            framework_version, volume_size).
 
         Returns
         -------
@@ -217,6 +220,7 @@ class TabularFoundationModel(FoundationModel):
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         wait: bool = True,
+        **backend_kwargs,
     ) -> Union[pd.DataFrame, RemoteJob]:
         """
         Run batch prediction for tabular tasks.
@@ -237,6 +241,9 @@ class TabularFoundationModel(FoundationModel):
             If None, will use the default from the model registry.
         wait
             If True, block and return DataFrame. If False, return the job handle.
+        **backend_kwargs
+            Additional backend-specific arguments (e.g. job_name, custom_image_uri,
+            framework_version, volume_size).
 
         Returns
         -------
@@ -252,6 +259,7 @@ class TabularFoundationModel(FoundationModel):
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         wait: bool = True,
+        **backend_kwargs,
     ) -> Union[pd.DataFrame, RemoteJob]:
         """
         Run batch prediction returning class probabilities.
@@ -272,6 +280,9 @@ class TabularFoundationModel(FoundationModel):
             If None, will use the default from the model registry.
         wait
             If True, block and return DataFrame. If False, return the job handle.
+        **backend_kwargs
+            Additional backend-specific arguments (e.g. job_name, custom_image_uri,
+            framework_version, volume_size).
 
         Returns
         -------
