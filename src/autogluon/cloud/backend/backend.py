@@ -177,9 +177,5 @@ class Backend(ABC):
         """
         Retrieve predictions produced by a completed ``fit_predict`` job.
 
-        Implementations decide how to materialize the predictions. For SageMaker
-        this downloads ``predictions.csv`` from the training job's output
-        artifact; a future Lambda/Batch backend may return the invocation
-        payload directly.
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support `fit_predict`.")
