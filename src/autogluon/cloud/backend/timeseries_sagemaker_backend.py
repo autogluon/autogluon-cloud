@@ -12,37 +12,43 @@ from .sagemaker_backend import SagemakerBackend
 class TimeSeriesSagemakerBackend(SagemakerBackend):
     name = TIMESERIES_SAGEMAKER
 
-    def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
-        """Parse backend specific kwargs and get them ready to be sent to fit call.
-
-        Extends the base by surfacing `known_covariates`, which is forwarded to
-        the fit-time container for the `fit_predict` flow.
-        """
-        parsed = super().parse_backend_fit_kwargs(kwargs)
-        parsed["known_covariates"] = kwargs.get("known_covariates", None)
-        return parsed
-
     def _preprocess_data(
         self,
         data: Union[pd.DataFrame, str],
         id_column: str,
         timestamp_column: str,
-        target: str,
+        target: Optional[str] = None,
         static_features: Optional[Union[pd.DataFrame, str]] = None,
     ) -> pd.DataFrame:
+        """Normalize a long-format time-series frame for the remote container.
+
+        Reorders columns so that id and timestamp are the first two positions.
+        When ``target`` is provided, the target column is moved to the last
+        position (so any trailing columns can be treated as merged-in static
+        features by the container). When ``static_features`` is provided,
+        they are merged on ``id_column``.
+
+        With ``target=None`` and no static features, the frame is treated as
+        a ``known_covariates`` layout (``[id, timestamp, cov1, ..., covN]``).
+        """
         if isinstance(data, str):
             data = load_pd.load(data)
         else:
             data = copy.copy(data)
         cols = data.columns.to_list()
-        # Make sure id and timestamp columns are the first two columns, and target column is in the end
-        # This is to ensure in the container we know how to find id and timestamp columns, and whether there are static features being merged
+        for required in (id_column, timestamp_column):
+            if required not in cols:
+                raise ValueError(f"data must contain column '{required}'.")
+        # Make sure id and timestamp columns are the first two columns.
         timestamp_index = cols.index(timestamp_column)
         cols.insert(0, cols.pop(timestamp_index))
         id_index = cols.index(id_column)
         cols.insert(0, cols.pop(id_index))
-        target_index = cols.index(target)
-        cols.append(cols.pop(target_index))
+        if target is not None:
+            # Move the target column to the last position so that any trailing
+            # columns can be picked up as static features by the container.
+            target_index = cols.index(target)
+            cols.append(cols.pop(target_index))
         data = data[cols]
 
         if static_features is not None:
@@ -53,6 +59,26 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
         return data
 
+    def _preprocess_known_covariates(
+        self,
+        data: Union[pd.DataFrame, str],
+        id_column: str,
+        timestamp_column: str,
+    ) -> pd.DataFrame:
+        """Normalize ``known_covariates`` for the remote container.
+
+        Thin wrapper over ``_preprocess_data`` with ``target=None`` and no
+        static features, so the frame keeps layout ``[id, timestamp, cov1,
+        ..., covN]``.
+        """
+        return self._preprocess_data(
+            data=data,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            target=None,
+            static_features=None,
+        )
+
     def fit(
         self,
         *,
@@ -61,7 +87,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         id_column: str,
         timestamp_column: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -71,7 +96,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
-        ag_args_extras: Optional[Dict[str, Any]] = None,
+        predict_after_fit: bool = False,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -118,6 +143,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
         tuning_data = predictor_fit_args.pop("tuning_data", None)
+        known_covariates = predictor_fit_args.pop("known_covariates", None)
         target = predictor_init_args.get("target")
         train_data = self._preprocess_data(
             data=train_data,
@@ -137,29 +163,16 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         predictor_fit_args["train_data"] = train_data
         predictor_fit_args["tuning_data"] = tuning_data
 
-        # Normalize known_covariates for the remote container. We only need the
-        # columns `[id, timestamp, covariate1, ..., covariateN]`; no target.
-        known_covariates_df = None
         if known_covariates is not None:
-            predict_after_fit_enabled = bool(ag_args_extras and ag_args_extras.get("predict_after_fit"))
-            if not predict_after_fit_enabled:
+            if not predict_after_fit:
                 raise ValueError(
                     "`known_covariates` is only meaningful for `fit_predict`; use `predict()` for separate inference."
                 )
-            if isinstance(known_covariates, str):
-                known_covariates_df = load_pd.load(known_covariates)
-            else:
-                known_covariates_df = known_covariates.copy()
-            cols = known_covariates_df.columns.to_list()
-            for required in (id_column, timestamp_column):
-                if required not in cols:
-                    raise ValueError(f"`known_covariates` must contain column '{required}'.")
-            # Reorder so id and timestamp come first (parity with _preprocess_data).
-            timestamp_index = cols.index(timestamp_column)
-            cols.insert(0, cols.pop(timestamp_index))
-            id_index = cols.index(id_column)
-            cols.insert(0, cols.pop(id_index))
-            known_covariates_df = known_covariates_df[cols]
+            predictor_fit_args["known_covariates"] = self._preprocess_known_covariates(
+                data=known_covariates,
+                id_column=id_column,
+                timestamp_column=timestamp_column,
+            )
 
         super().fit(
             predictor_init_args=predictor_init_args,
@@ -173,8 +186,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
-            ag_args_extras=ag_args_extras,
-            known_covariates=known_covariates_df,
+            predict_after_fit=predict_after_fit,
         )
 
     def predict_real_time(

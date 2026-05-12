@@ -341,7 +341,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Fit and predict in a single SageMaker training job.
 
         This is useful for foundation-model forecasting workflows (e.g. Chronos-2)
-        where "fit" is essentially loading a pretrained model. Running fit and predict 
+        where "fit" is essentially loading a pretrained model. Running fit and predict
         in the same job avoids the SageMaker startup overhead twice.
 
         Predictions are generated inside the training container against
@@ -391,15 +391,20 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             raise ValueError(
                 "`train_data` must be passed as an explicit argument to `fit_predict`, not via `predictor_fit_args`."
             )
+        if "known_covariates" in predictor_fit_args:
+            raise ValueError(
+                "`known_covariates` must be passed as an explicit argument to `fit_predict`, "
+                "not via `predictor_fit_args`."
+            )
         predictor_fit_args["train_data"] = train_data
+        if known_covariates is not None:
+            predictor_fit_args["known_covariates"] = known_covariates
 
         if backend_kwargs is None:
             backend_kwargs = {}
         else:
             backend_kwargs = dict(backend_kwargs)
-        backend_kwargs.setdefault("ag_args_extras", {})["predict_after_fit"] = True
-        if known_covariates is not None:
-            backend_kwargs["known_covariates"] = known_covariates
+        backend_kwargs["predict_after_fit"] = True
 
         self.fit(
             predictor_init_args=predictor_init_args,
