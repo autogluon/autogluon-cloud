@@ -33,9 +33,9 @@ class FoundationModel:
             return super().__new__(cls)
         config = get_model_config(model_id)
         task = config["task"]
-        if task == "timeseries":
+        if task == "forecasting":
             return super().__new__(TimeSeriesFoundationModel)
-        elif task == "tabular":
+        elif task in ("classification", "regression"):
             return super().__new__(TabularFoundationModel)
         raise ValueError(f"Unsupported task: {task}")
 
@@ -156,7 +156,11 @@ class TimeSeriesFoundationModel(FoundationModel):
     def predict(
         self,
         data: Union[str, pd.DataFrame],
+        target: str = "target",
+        id_column: str = "item_id",
+        timestamp_column: str = "timestamp",
         known_covariates: Optional[Union[str, pd.DataFrame]] = None,
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
         prediction_length: Optional[int] = None,
         quantile_levels: Optional[List[float]] = None,
         output_path: Optional[str] = None,
@@ -170,8 +174,16 @@ class TimeSeriesFoundationModel(FoundationModel):
         ----------
         data
             Historical time series in long format (DataFrame or S3 path).
+        target
+            Name of the target column to forecast.
+        id_column
+            Name of the item ID column.
+        timestamp_column
+            Name of the timestamp column.
         known_covariates
             Future values of known covariates (DataFrame or S3 path).
+        static_features
+            Metadata attributes of individual items (DataFrame or S3 path).
         prediction_length
             Number of time steps to forecast.
             If None, will use the default from the model registry.
@@ -208,6 +220,41 @@ class TabularFoundationModel(FoundationModel):
     ) -> Union[pd.DataFrame, RemoteJob]:
         """
         Run batch prediction for tabular tasks.
+
+        Parameters
+        ----------
+        train_data
+            Labeled few-shot context for the foundation model.
+        test_data
+            Unlabeled data to predict on.
+        label
+            Target column name in train_data.
+        output_path
+            S3 path to store predictions.
+            If None, will auto-generate under s3_output_path.
+        instance_type
+            Instance type for the prediction job.
+            If None, will use the default from the model registry.
+        wait
+            If True, block and return DataFrame. If False, return the job handle.
+
+        Returns
+        -------
+        Union[pd.DataFrame, RemoteJob]
+        """
+        raise NotImplementedError
+
+    def predict_proba(
+        self,
+        train_data: Union[str, pd.DataFrame],
+        test_data: Union[str, pd.DataFrame],
+        label: str = "target",
+        output_path: Optional[str] = None,
+        instance_type: Optional[str] = None,
+        wait: bool = True,
+    ) -> Union[pd.DataFrame, RemoteJob]:
+        """
+        Run batch prediction returning class probabilities.
 
         Parameters
         ----------
