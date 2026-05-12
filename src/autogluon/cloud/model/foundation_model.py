@@ -54,7 +54,7 @@ class FoundationModel:
         self.s3_output_path = s3_output_path
         self._config = get_model_config(model_id)
         # Merge user overrides on top of registry defaults
-        self.model_config = {**self._config.get("model_config", {}), **(model_config or {})}
+        self.model_config = self._config.get("model_config", {}) | (model_config or {})
         # TODO: instantiate backend via BackendFactory
         self._backend_type = backend
 
