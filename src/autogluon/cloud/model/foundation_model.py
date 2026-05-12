@@ -162,7 +162,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         timestamp_column: str = "timestamp",
         known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
-        prediction_length: int = 64,
+        prediction_length: int = 1,
         quantile_levels: Optional[List[float]] = None,
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
