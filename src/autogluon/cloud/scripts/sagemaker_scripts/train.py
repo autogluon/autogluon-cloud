@@ -186,13 +186,6 @@ if __name__ == "__main__":
             lb = predictor.leaderboard(silent=False)
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
 
-    # fit_predict: run prediction inside the same training job and persist results so
-    # the caller can download them alongside the model artifacts. This avoids paying
-    # the SageMaker startup cost twice.
-    #
-    # Currently scoped to the timeseries predictor, which is the only one that
-    # exposes `fit_predict` from the client side. Tabular / multimodal support
-    # (with explicit `test_data` plumbing) can land in a follow-up.
     if ag_args.get("predict_after_fit", False):
         if predictor_type != "timeseries":
             raise NotImplementedError(
