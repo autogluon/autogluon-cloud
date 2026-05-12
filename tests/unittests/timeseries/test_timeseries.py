@@ -56,13 +56,16 @@ def test_timeseries(test_helper, framework_version):
         )
 
 
-# Chronos (T5-based) and Chronos-Bolt both live behind the ``Chronos`` key in
-# AutoGluon's hyperparameter dict; only ``model_path`` distinguishes them.
+# Chronos (T5-based), Chronos-Bolt, and Chronos-2 are all exposed through
+# the TimeSeries predictor's hyperparameters dict under slightly different
+# keys; the parametrization below exercises the ``fit_predict`` plumbing for
+# each.
 @pytest.mark.parametrize(
     "model_name, hyperparameters",
     [
         ("chronos", {"Chronos": {"model_path": "tiny"}}),
         ("chronos_bolt", {"Chronos": {"model_path": "bolt_small"}}),
+        ("chronos2", {"Chronos2": {"model_path": "autogluon/chronos-2-small"}}),
     ],
 )
 def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters):
