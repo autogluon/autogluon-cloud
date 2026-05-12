@@ -961,9 +961,8 @@ class SagemakerBackend(Backend):
     def get_fit_predict_results(self) -> pd.DataFrame:
         """Download and load predictions produced by a completed ``fit_predict`` job.
 
-        The fit_predict flow persists ``predictions.csv`` inside the training
-        job's ``output.tar.gz``. This method downloads the tarball, extracts
-        the CSV, and returns it as a DataFrame.
+        The fit_predict flow persists ``predictions.csv`` inside the training job's ``output.tar.gz``. This method
+        downloads the tarball, extracts the CSV, and returns it as a DataFrame.
         """
         import tempfile
 
@@ -977,9 +976,8 @@ class SagemakerBackend(Backend):
             self.sagemaker_session.download_data(path=tmpdir, bucket=bucket, key_prefix=key)
             tarball_local = os.path.join(tmpdir, os.path.basename(key))
             with tarfile.open(tarball_local) as tf:
-                # `filter="data"` (CVE-2007-4559 mitigation) is available on
-                # Python 3.12+ and recent 3.9/3.10/3.11 patch releases. Fall
-                # back to the unfiltered call on older interpreters.
+                # `filter="data"` (CVE-2007-4559 mitigation) is available on Python 3.12+ and recent 3.9/3.10/3.11
+                # patch releases. Fall back to the unfiltered call on older interpreters.
                 try:
                     tf.extractall(tmpdir, filter="data")
                 except TypeError:

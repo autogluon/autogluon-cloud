@@ -33,14 +33,12 @@ def get_env_if_present(name):
 def prepare_timeseries_dataframe(df, predictor_init_args=None, target=None):
     """Build a TimeSeriesDataFrame from a long-format ``df``.
 
-    ``df`` is expected to have its id column at position 0 and timestamp at
-    position 1 (layout set by ``TimeSeriesSagemakerBackend._preprocess_data``).
+    ``df`` is expected to have its id column at position 0 and timestamp at position 1 (layout set by
+    ``TimeSeriesSagemakerBackend._preprocess_data``).
 
-    If ``target`` (or ``predictor_init_args['target']``) is provided, any
-    columns trailing the target column are treated as merged-in static
-    features and reattached as ``df.static_features``. If ``target`` is
-    ``None`` (e.g. a ``known_covariates`` frame), the static-features branch
-    is skipped entirely.
+    If ``target`` (or ``predictor_init_args['target']``) is provided, any columns trailing the target column are
+    treated as merged-in static features and reattached as ``df.static_features``. If ``target`` is ``None`` (e.g. a
+    ``known_covariates`` frame), the static-features branch is skipped entirely.
     """
     if target is None and predictor_init_args is not None:
         target = predictor_init_args.get("target")

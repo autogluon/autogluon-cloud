@@ -340,30 +340,26 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         Fit and predict in a single SageMaker training job.
 
-        This is useful for foundation-model forecasting workflows (e.g. Chronos-2)
-        where "fit" is essentially loading a pretrained model. Running fit and predict
-        in the same job avoids the SageMaker startup overhead twice.
+        This is useful for foundation-model forecasting workflows (e.g. Chronos-2) where "fit" is essentially loading
+        a pretrained model. Running fit and predict in the same job avoids the SageMaker startup overhead twice.
 
-        Predictions are generated inside the training container against
-        ``train_data`` (the standard time-series forecasting flow where the last
-        ``prediction_length`` steps of each series are forecast), saved to the
-        job's ``output.tar.gz``, then downloaded locally.
+        Predictions are generated inside the training container against ``train_data`` (the standard time-series
+        forecasting flow where the last ``prediction_length`` steps of each series are forecast), saved to the job's
+        ``output.tar.gz``, then downloaded locally.
 
         Parameters
         ----------
         train_data: Union[str, pd.DataFrame]
-            The historical time-series data to train on and forecast from.
-            Either a pandas DataFrame or a local / S3 path to a CSV.
+            The historical time-series data to train on and forecast from. Either a pandas DataFrame or a local / S3
+            path to a CSV.
         predictor_init_args: dict
             Init args for the predictor (must include ``prediction_length``).
         predictor_fit_args: Optional[dict], default = None
-            Additional fit args for the predictor. Must not contain a
-            ``train_data`` key — pass ``train_data`` as the explicit argument
-            above.
+            Additional fit args for the predictor. Must not contain a ``train_data`` key — pass ``train_data`` as the
+            explicit argument above.
         known_covariates: Optional[Union[str, pd.DataFrame]], default = None
-            Values of the known covariates for each time series during the
-            forecast horizon. Forwarded to ``TimeSeriesPredictor.predict`` in
-            the container. For details, see:
+            Values of the known covariates for each time series during the forecast horizon. Forwarded to
+            ``TimeSeriesPredictor.predict`` in the container. For details, see:
             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
         id_column: str, default = "item_id"
             Name of the item ID column.
@@ -371,12 +367,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Name of the timestamp column.
         static_features: Optional[pd.DataFrame]
             Optional metadata attributes per item.
-        framework_version, job_name, instance_type, instance_count, volume_size,
-        custom_image_uri, wait, backend_kwargs:
+        framework_version, job_name, instance_type, instance_count, volume_size, custom_image_uri, wait,
+        backend_kwargs:
             Same semantics as ``fit()``.
         save_path: Optional[str]
-            Local directory to save the downloaded predictions. Defaults to
-            ``local_output_path``.
+            Local directory to save the downloaded predictions. Defaults to ``local_output_path``.
 
         Returns
         -------
@@ -438,9 +433,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         save_path: Optional[str], default = None
-            If set, the predictions are additionally written to this path as a
-            CSV (directories are created as needed). Regardless of this flag,
-            the predictions are returned in-memory.
+            If set, the predictions are additionally written to this path as a CSV (directories are created as
+            needed). Regardless of this flag, the predictions are returned in-memory.
 
         Returns
         -------

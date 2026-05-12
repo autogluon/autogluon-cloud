@@ -22,14 +22,12 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     ) -> pd.DataFrame:
         """Normalize a long-format time-series frame for the remote container.
 
-        Reorders columns so that id and timestamp are the first two positions.
-        When ``target`` is provided, the target column is moved to the last
-        position (so any trailing columns can be treated as merged-in static
-        features by the container). When ``static_features`` is provided,
-        they are merged on ``id_column``.
+        Reorders columns so that id and timestamp are the first two positions. When ``target`` is provided, the
+        target column is moved to the last position (so any trailing columns can be treated as merged-in static
+        features by the container). When ``static_features`` is provided, they are merged on ``id_column``.
 
-        With ``target=None`` and no static features, the frame is treated as
-        a ``known_covariates`` layout (``[id, timestamp, cov1, ..., covN]``).
+        With ``target=None`` and no static features, the frame is treated as a ``known_covariates`` layout
+        (``[id, timestamp, cov1, ..., covN]``).
         """
         if isinstance(data, str):
             data = load_pd.load(data)
@@ -67,9 +65,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     ) -> pd.DataFrame:
         """Normalize ``known_covariates`` for the remote container.
 
-        Thin wrapper over ``_preprocess_data`` with ``target=None`` and no
-        static features, so the frame keeps layout ``[id, timestamp, cov1,
-        ..., covN]``.
+        Thin wrapper over ``_preprocess_data`` with ``target=None`` and no static features, so the frame keeps
+        layout ``[id, timestamp, cov1, ..., covN]``.
         """
         return self._preprocess_data(
             data=data,
