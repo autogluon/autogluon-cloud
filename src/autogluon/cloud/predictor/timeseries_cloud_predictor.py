@@ -341,8 +341,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Fit and predict in a single SageMaker training job.
 
         This is useful for foundation-model forecasting workflows (e.g. Chronos-2)
-        where "fit" is essentially loading a pretrained model. Running fit and
-        predict in the same job avoids paying the SageMaker startup cost twice.
+        where "fit" is essentially loading a pretrained model. Running fit and predict 
+        in the same job avoids the SageMaker startup overhead twice.
 
         Predictions are generated inside the training container against
         ``train_data`` (the standard time-series forecasting flow where the last
