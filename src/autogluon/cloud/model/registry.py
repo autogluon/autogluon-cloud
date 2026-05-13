@@ -43,19 +43,20 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         "training_hyperparameters": {"model_path": "amazon/chronos-2", "fine_tune": True},
         "default_instance_type": "ml.g5.xlarge",
     },
+    # TODO: Replace dummy configs with real values
     "mitra-classification": {
         "task": "classification",
         "model_name": "Mitra",
         "inference_hyperparameters": {"model_path": "TODO"},
         "training_hyperparameters": {"model_path": "TODO"},
-        "default_instance_type": "ml.m5.xlarge",
+        "default_instance_type": "ml.g5.xlarge",
     },
     "mitra-regression": {
         "task": "regression",
         "model_name": "Mitra",
         "inference_hyperparameters": {"model_path": "TODO"},
         "training_hyperparameters": {"model_path": "TODO"},
-        "default_instance_type": "ml.m5.xlarge",
+        "default_instance_type": "ml.g5.xlarge",
     },
 }
 
