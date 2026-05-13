@@ -56,34 +56,30 @@ def test_timeseries(test_helper, framework_version):
         )
 
 
-def _build_deterministic_known_covariates(
-    train_df: pd.DataFrame, prediction_length: int
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Augment ``train_df`` with a deterministic per-item covariate and build a matching future-horizon frame.
+# Chronos (T5-based), Chronos-Bolt, and Chronos-2 are all exposed through the TimeSeries predictor's hyperparameters
+# dict under slightly different keys; the parametrization below exercises the ``fit_predict`` plumbing for each.
+# The ``with_covariates`` flag opts a case into the ``known_covariates`` code path (Chronos-2 only — covariates
+# support is most relevant there). When set, the test pulls a public retail-sales fixture from the AutoGluon S3
+# bucket; otherwise it uses the small CI csv fixture.
+def _load_retail_sales_with_covariates() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """Fetch the public retail-sales fixture and split it into train + future-covariates frames.
 
-    Returns ``(train_with_cov, known_covariates)``. The covariate is not expected to actually help forecasting; the
-    point is to exercise the known_covariates upload / serialization / in-container predict path without depending
-    on randomness.
+    Returns ``(train_df, known_covariates_df, known_covariates_names)``. ``known_covariates_df`` shares the schema
+    of ``train_df`` minus the target column, so it carries the future values of the known covariates over the
+    forecast horizon.
     """
-    train_with_cov = train_df.copy()
-    train_with_cov["cov_trend"] = train_with_cov.groupby("item_id").cumcount().astype(float)
-    future_rows = []
-    for item_id, g in train_with_cov.groupby("item_id"):
-        last_ts = g["timestamp"].max()
-        last_cov = g["cov_trend"].max()
-        freq = pd.infer_freq(g["timestamp"]) or "D"
-        future_ts = pd.date_range(last_ts, periods=prediction_length + 1, freq=freq)[1:]
-        future_cov = [last_cov + i for i in range(1, prediction_length + 1)]
-        future_rows.append(pd.DataFrame({"item_id": item_id, "timestamp": future_ts, "cov_trend": future_cov}))
-    known_covariates = pd.concat(future_rows, ignore_index=True)
-    return train_with_cov, known_covariates
+    target = "Sales"
+    id_column = "id"
+    timestamp_column = "timestamp"
+    train_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/train.parquet")
+    train_df[timestamp_column] = pd.to_datetime(train_df[timestamp_column])
+    test_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/test.parquet")
+    test_df[timestamp_column] = pd.to_datetime(test_df[timestamp_column])
+    known_covariates_df = test_df.drop(columns=target)
+    known_covariates_names = [c for c in known_covariates_df.columns if c not in (id_column, timestamp_column)]
+    return train_df, known_covariates_df, known_covariates_names
 
 
-# Chronos (T5-based), Chronos-Bolt, and Chronos-2 are all exposed through
-# the TimeSeries predictor's hyperparameters dict under slightly different
-# keys; the parametrization below exercises the ``fit_predict`` plumbing for
-# each. The ``with_covariates`` flag opts a case into the ``known_covariates``
-# code path (Chronos-2 only — covariates support is most relevant there).
 @pytest.mark.parametrize(
     "model_name, hyperparameters, with_covariates",
     [
@@ -94,24 +90,37 @@ def _build_deterministic_known_covariates(
     ],
 )
 def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters, with_covariates):
-    train_data_csv = "timeseries_train.csv"
     timestamp = test_helper.get_utc_timestamp_now()
-    prediction_length = 3
+    if with_covariates:
+        target = "Sales"
+        id_column = "id"
+        timestamp_column = "timestamp"
+        prediction_length = 13
+        train_data, known_covariates, known_covariates_names = _load_retail_sales_with_covariates()
+        train_df = train_data
+        predictor_init_args = dict(
+            target=target,
+            prediction_length=prediction_length,
+            known_covariates_names=known_covariates_names,
+        )
+    else:
+        target = "target"
+        id_column = "item_id"
+        timestamp_column = "timestamp"
+        prediction_length = 3
+        train_data_csv = "timeseries_train.csv"
+        train_data = train_data_csv
+        known_covariates = None
+        predictor_init_args = dict(target=target, prediction_length=prediction_length)
+
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        test_helper.prepare_data(train_data_csv)
-        train_df = pd.read_csv(train_data_csv, parse_dates=["timestamp"]).sort_values(["item_id", "timestamp"])
-        expected_item_ids = sorted(train_df["item_id"].unique())
-
-        predictor_init_args = dict(target="target", prediction_length=prediction_length)
-
-        if with_covariates:
-            train_df, known_covariates = _build_deterministic_known_covariates(train_df, prediction_length)
-            train_data = train_df
-            predictor_init_args["known_covariates_names"] = ["cov_trend"]
-        else:
-            train_data = train_data_csv
-            known_covariates = None
+        if not with_covariates:
+            test_helper.prepare_data(train_data_csv)
+            train_df = pd.read_csv(train_data_csv, parse_dates=[timestamp_column]).sort_values(
+                [id_column, timestamp_column]
+            )
+        expected_item_ids = sorted(train_df[id_column].unique())
 
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
@@ -127,6 +136,8 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
             known_covariates=known_covariates,
             predictor_init_args=predictor_init_args,
             predictor_fit_args=dict(hyperparameters=hyperparameters),
+            id_column=id_column,
+            timestamp_column=timestamp_column,
             framework_version=framework_version,
             custom_image_uri=training_custom_image_uri,
         )
@@ -134,14 +145,14 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
         assert isinstance(predictions, pd.DataFrame), (
             f"Expected predictions to be a DataFrame, got {type(predictions).__name__}"
         )
-        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns), (
+        assert {id_column, timestamp_column, "mean"} <= set(predictions.columns), (
             f"predictions is missing required columns; got {sorted(predictions.columns)}"
         )
-        assert sorted(predictions["item_id"].unique()) == expected_item_ids, (
-            f"predictions item_ids do not match train_data; "
-            f"expected {expected_item_ids}, got {sorted(predictions['item_id'].unique())}"
+        assert sorted(predictions[id_column].unique()) == expected_item_ids, (
+            f"predictions ids do not match train_data; "
+            f"expected {expected_item_ids}, got {sorted(predictions[id_column].unique())}"
         )
-        counts = predictions.groupby("item_id").size()
+        counts = predictions.groupby(id_column).size()
         assert (counts == prediction_length).all(), (
             f"Expected {prediction_length} rows per item, got {counts.to_dict()}"
         )
