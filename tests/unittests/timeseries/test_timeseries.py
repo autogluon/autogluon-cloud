@@ -76,6 +76,8 @@ def _load_retail_sales_with_covariates() -> tuple[pd.DataFrame, pd.DataFrame, li
     test_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/test.parquet")
     test_df[timestamp_column] = pd.to_datetime(test_df[timestamp_column])
     known_covariates_df = test_df.drop(columns=target)
+    train_df[id_column] = pd.to_numeric(train_df[id_column])
+    known_covariates_df[id_column] = pd.to_numeric(known_covariates_df[id_column])
     known_covariates_names = [c for c in known_covariates_df.columns if c not in (id_column, timestamp_column)]
     return train_df, known_covariates_df, known_covariates_names
 
