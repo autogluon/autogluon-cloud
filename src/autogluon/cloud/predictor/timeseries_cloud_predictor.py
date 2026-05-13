@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
+from autogluon.common.loaders import load_pd
+
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from .cloud_predictor import CloudPredictor
 
@@ -394,6 +396,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             )
         predictor_fit_args["train_data"] = train_data
         if known_covariates is not None:
+            known_covariates = self._validate_known_covariates(
+                known_covariates=known_covariates,
+                train_data=train_data,
+                predictor_init_args=predictor_init_args,
+                id_column=id_column,
+                timestamp_column=timestamp_column,
+            )
             predictor_fit_args["known_covariates"] = known_covariates
 
         if backend_kwargs is None:
@@ -426,6 +435,62 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             return None
 
         return self.get_fit_predict_results(save_path=save_path)
+
+    def _validate_known_covariates(
+        self,
+        *,
+        known_covariates: Union[str, pd.DataFrame],
+        train_data: Union[str, pd.DataFrame],
+        predictor_init_args: Dict[str, Any],
+        id_column: str,
+        timestamp_column: str,
+    ) -> pd.DataFrame:
+        """Validate ``known_covariates`` against ``predictor_init_args`` and ``train_data``.
+
+        Loads str paths via ``load_pd.load`` so column checks can run client-side before the SageMaker job launches.
+        Returns the (possibly loaded) DataFrame so the caller can reuse it.
+        """
+        names = predictor_init_args.get("known_covariates_names")
+        if not names:
+            raise ValueError(
+                "`known_covariates` was passed but `predictor_init_args['known_covariates_names']` is missing or "
+                "empty. Add the covariate column names so the predictor knows which columns to treat as covariates."
+            )
+        if isinstance(names, str) or not isinstance(names, (list, tuple)):
+            raise ValueError(
+                f"`predictor_init_args['known_covariates_names']` must be a list or tuple of strings, got {type(names).__name__}."
+            )
+
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+
+        kc_cols = known_covariates.columns.tolist()
+        for required in (id_column, timestamp_column):
+            if required not in kc_cols:
+                raise ValueError(f"`known_covariates` must contain column '{required}'.")
+        missing_in_covs = [n for n in names if n not in kc_cols]
+        if missing_in_covs:
+            raise ValueError(
+                f"`known_covariates` is missing columns listed in `known_covariates_names`: {missing_in_covs}."
+            )
+        extra_in_covs = [c for c in kc_cols if c not in names and c not in (id_column, timestamp_column)]
+        if extra_in_covs:
+            logger.warning(
+                f"`known_covariates` has columns not listed in `known_covariates_names`: {extra_in_covs}. "
+                "These will be ignored by the predictor."
+            )
+
+        # If train_data is already in memory, also check that covariate columns exist there. Skip the check when
+        # train_data is a str path to avoid forcing a potentially large download just for validation.
+        if isinstance(train_data, pd.DataFrame):
+            train_cols = train_data.columns.tolist()
+            missing_in_train = [n for n in names if n not in train_cols]
+            if missing_in_train:
+                raise ValueError(
+                    f"`train_data` is missing columns listed in `known_covariates_names`: {missing_in_train}."
+                )
+
+        return known_covariates
 
     def get_fit_predict_results(self, save_path: Optional[str] = None) -> pd.DataFrame:
         """
