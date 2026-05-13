@@ -976,17 +976,18 @@ class SagemakerBackend(Backend):
             self.sagemaker_session.download_data(path=tmpdir, bucket=bucket, key_prefix=key)
             tarball_local = os.path.join(tmpdir, os.path.basename(key))
             with tarfile.open(tarball_local) as tf:
-                # `filter="data"` (CVE-2007-4559 mitigation) is available on Python 3.12+ and recent 3.9/3.10/3.11
-                # patch releases. Fall back to the unfiltered call on older interpreters.
-                try:
-                    tf.extractall(tmpdir, filter="data")
-                except TypeError:
-                    tf.extractall(tmpdir)
-            predictions_path = os.path.join(tmpdir, "predictions.csv")
-            assert os.path.isfile(predictions_path), (
-                f"Could not find predictions.csv in {tarball_local}. Did the training job run with `fit_predict=True`?"
-            )
-            return pd.read_csv(predictions_path)
+                # We only need predictions.csv, so stream it directly from the archive without
+                # writing any archive members to disk.
+                csv_member = next(
+                    (m for m in tf.getmembers() if m.isfile() and os.path.basename(m.name) == "predictions.csv"),
+                    None,
+                )
+                assert csv_member is not None, (
+                    f"Could not find predictions.csv in {tarball_local}. "
+                    "Did the training job run with `fit_predict=True`?"
+                )
+                with tf.extractfile(csv_member) as fp:
+                    return pd.read_csv(fp)
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(
