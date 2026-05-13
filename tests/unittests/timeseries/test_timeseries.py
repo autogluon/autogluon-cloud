@@ -71,9 +71,12 @@ def test_timeseries(test_helper, framework_version):
 def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters):
     train_data = "timeseries_train.csv"
     timestamp = test_helper.get_utc_timestamp_now()
+    prediction_length = 3
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         test_helper.prepare_data(train_data)
+        train_df = pd.read_csv(train_data, parse_dates=["timestamp"])
+        expected_item_ids = sorted(train_df["item_id"].unique())
 
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
@@ -86,7 +89,7 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
 
         predictions = cloud_predictor.fit_predict(
             train_data=train_data,
-            predictor_init_args=dict(target="target", prediction_length=3),
+            predictor_init_args=dict(target="target", prediction_length=prediction_length),
             predictor_fit_args=dict(
                 hyperparameters=hyperparameters,
             ),
@@ -94,11 +97,28 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
             custom_image_uri=training_custom_image_uri,
         )
 
-        assert isinstance(predictions, pd.DataFrame)
-        assert not predictions.empty
+        assert isinstance(predictions, pd.DataFrame), (
+            f"Expected predictions to be a DataFrame, got {type(predictions).__name__}"
+        )
+        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns), (
+            f"predictions is missing required columns; got {sorted(predictions.columns)}"
+        )
+        assert sorted(predictions["item_id"].unique()) == expected_item_ids, (
+            f"predictions item_ids do not match train_data; "
+            f"expected {expected_item_ids}, got {sorted(predictions['item_id'].unique())}"
+        )
+        counts = predictions.groupby("item_id").size()
+        assert (counts == prediction_length).all(), (
+            f"Expected {prediction_length} rows per item, got {counts.to_dict()}"
+        )
+        assert len(predictions) == len(expected_item_ids) * prediction_length, (
+            f"Expected {len(expected_item_ids) * prediction_length} rows total, got {len(predictions)}"
+        )
 
         info = cloud_predictor.info()
-        assert info["local_output_path"] is not None
-        assert info["cloud_output_path"] is not None
-        assert info["fit_job"]["name"] is not None
-        assert info["fit_job"]["status"] == "Completed"
+        assert info["local_output_path"] is not None, "info()['local_output_path'] is unexpectedly None"
+        assert info["cloud_output_path"] is not None, "info()['cloud_output_path'] is unexpectedly None"
+        assert info["fit_job"]["name"] is not None, "info()['fit_job']['name'] is unexpectedly None"
+        assert info["fit_job"]["status"] == "Completed", (
+            f"Expected fit_job status 'Completed', got {info['fit_job']['status']!r}"
+        )
