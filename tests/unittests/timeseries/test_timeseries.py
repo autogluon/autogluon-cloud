@@ -56,27 +56,62 @@ def test_timeseries(test_helper, framework_version):
         )
 
 
+def _build_deterministic_known_covariates(
+    train_df: pd.DataFrame, prediction_length: int
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Augment ``train_df`` with a deterministic per-item covariate and build a matching future-horizon frame.
+
+    Returns ``(train_with_cov, known_covariates)``. The covariate is not expected to actually help forecasting; the
+    point is to exercise the known_covariates upload / serialization / in-container predict path without depending
+    on randomness.
+    """
+    train_with_cov = train_df.copy()
+    train_with_cov["cov_trend"] = train_with_cov.groupby("item_id").cumcount().astype(float)
+    future_rows = []
+    for item_id, g in train_with_cov.groupby("item_id"):
+        last_ts = g["timestamp"].max()
+        last_cov = g["cov_trend"].max()
+        freq = pd.infer_freq(g["timestamp"]) or "D"
+        future_ts = pd.date_range(last_ts, periods=prediction_length + 1, freq=freq)[1:]
+        future_cov = [last_cov + i for i in range(1, prediction_length + 1)]
+        future_rows.append(pd.DataFrame({"item_id": item_id, "timestamp": future_ts, "cov_trend": future_cov}))
+    known_covariates = pd.concat(future_rows, ignore_index=True)
+    return train_with_cov, known_covariates
+
+
 # Chronos (T5-based), Chronos-Bolt, and Chronos-2 are all exposed through
 # the TimeSeries predictor's hyperparameters dict under slightly different
 # keys; the parametrization below exercises the ``fit_predict`` plumbing for
-# each.
+# each. The ``with_covariates`` flag opts a case into the ``known_covariates``
+# code path (Chronos-2 only — covariates support is most relevant there).
 @pytest.mark.parametrize(
-    "model_name, hyperparameters",
+    "model_name, hyperparameters, with_covariates",
     [
-        ("chronos", {"Chronos": {"model_path": "tiny"}}),
-        ("chronos_bolt", {"Chronos": {"model_path": "bolt_small"}}),
-        ("chronos2", {"Chronos2": {"model_path": "autogluon/chronos-2-small"}}),
+        ("chronos", {"Chronos": {"model_path": "tiny"}}, False),
+        ("chronos_bolt", {"Chronos": {"model_path": "bolt_small"}}, False),
+        ("chronos2", {"Chronos2": {"model_path": "autogluon/chronos-2-small"}}, False),
+        ("chronos2_with_covs", {"Chronos2": {"model_path": "autogluon/chronos-2-small"}}, True),
     ],
 )
-def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters):
-    train_data = "timeseries_train.csv"
+def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters, with_covariates):
+    train_data_csv = "timeseries_train.csv"
     timestamp = test_helper.get_utc_timestamp_now()
     prediction_length = 3
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        test_helper.prepare_data(train_data)
-        train_df = pd.read_csv(train_data, parse_dates=["timestamp"])
+        test_helper.prepare_data(train_data_csv)
+        train_df = pd.read_csv(train_data_csv, parse_dates=["timestamp"]).sort_values(["item_id", "timestamp"])
         expected_item_ids = sorted(train_df["item_id"].unique())
+
+        predictor_init_args = dict(target="target", prediction_length=prediction_length)
+
+        if with_covariates:
+            train_df, known_covariates = _build_deterministic_known_covariates(train_df, prediction_length)
+            train_data = train_df
+            predictor_init_args["known_covariates_names"] = ["cov_trend"]
+        else:
+            train_data = train_data_csv
+            known_covariates = None
 
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
@@ -89,10 +124,9 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
 
         predictions = cloud_predictor.fit_predict(
             train_data=train_data,
-            predictor_init_args=dict(target="target", prediction_length=prediction_length),
-            predictor_fit_args=dict(
-                hyperparameters=hyperparameters,
-            ),
+            known_covariates=known_covariates,
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=dict(hyperparameters=hyperparameters),
             framework_version=framework_version,
             custom_image_uri=training_custom_image_uri,
         )
