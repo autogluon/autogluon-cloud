@@ -22,7 +22,7 @@ class FoundationModel:
 
     Examples
     --------
-    >>> model = FoundationModel("chronos-bolt-base", role_arn="arn:...")
+    >>> model = FoundationModel("chronos-bolt-base", role_arn="arn:...", hyperparameters={"model_path": "s3://cached/"})
     >>> endpoint = model.deploy()
     >>> predictions = endpoint.predict(data)
     >>> endpoint.delete_endpoint()
@@ -46,24 +46,29 @@ class FoundationModel:
         role_arn: Optional[str] = None,
         region: Optional[str] = None,
         s3_output_path: Optional[str] = None,
-        model_config: Optional[Dict[str, Any]] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
     ):
         self.model_id = model_id
         self.role_arn = role_arn
         self.region = region
         self.s3_output_path = s3_output_path
         self._config = get_model_config(model_id)
-        # Merge user overrides on top of registry defaults
-        self.model_config = self._config.get("model_config", {}) | (model_config or {})
+        self._hyperparameter_overrides = hyperparameters or {}
         # TODO: instantiate backend via BackendFactory
         self._backend_type = backend
+
+    def _get_hyperparameters(
+        self, context: Literal["inference", "training"], overrides: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        config_key = "inference_hyperparameters" if context == "inference" else "training_hyperparameters"
+        return self._config.get(config_key, {}) | self._hyperparameter_overrides | (overrides or {})
 
     def deploy(
         self,
         instance_type: Optional[str] = None,
         mode: Literal["realtime", "serverless", "async"] = "realtime",
         endpoint_name: Optional[str] = None,
-        model_artifact_path: Optional[str] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
         wait: bool = True,
         **backend_kwargs,
     ) -> Endpoint:
@@ -80,9 +85,9 @@ class FoundationModel:
         endpoint_name
             Custom endpoint name.
             If None, will auto-generate a unique name.
-        model_artifact_path
-            S3 path to pre-cached model weights (for VPC use).
-            If None, weights are downloaded from HuggingFace at startup.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
         wait
             Whether to block until the endpoint is ready.
         **backend_kwargs
@@ -105,6 +110,7 @@ class FoundationModel:
         train_data: Union[str, pd.DataFrame],
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
         wait: bool = True,
         **kwargs,
     ) -> "FoundationModel":
@@ -121,13 +127,16 @@ class FoundationModel:
         instance_type
             Instance type for the training job.
             If None, will use the default from the model registry.
+        hyperparameters
+            Model hyperparameters for training. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
         wait
             If True, block until training completes.
 
         Returns
         -------
         FoundationModel
-            New instance with model_config pointing to the fine-tuned artifact.
+            New instance with hyperparameters pointing to the fine-tuned artifact.
         """
         raise NotImplementedError
 
@@ -164,6 +173,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         prediction_length: int = 1,
         quantile_levels: Optional[List[float]] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         wait: bool = True,
@@ -190,6 +200,9 @@ class TimeSeriesFoundationModel(FoundationModel):
             Number of time steps to forecast.
         quantile_levels
             Quantiles to predict.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
         output_path
             S3 path to store predictions.
             If None, will auto-generate under s3_output_path.
@@ -217,6 +230,7 @@ class TabularFoundationModel(FoundationModel):
         train_data: Union[str, pd.DataFrame],
         test_data: Union[str, pd.DataFrame],
         label: str = "target",
+        hyperparameters: Optional[Dict[str, Any]] = None,
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         wait: bool = True,
@@ -233,6 +247,9 @@ class TabularFoundationModel(FoundationModel):
             Unlabeled data to predict on.
         label
             Target column name in train_data.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
         output_path
             S3 path to store predictions.
             If None, will auto-generate under s3_output_path.
@@ -256,6 +273,7 @@ class TabularFoundationModel(FoundationModel):
         train_data: Union[str, pd.DataFrame],
         test_data: Union[str, pd.DataFrame],
         label: str = "target",
+        hyperparameters: Optional[Dict[str, Any]] = None,
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         wait: bool = True,
@@ -272,6 +290,9 @@ class TabularFoundationModel(FoundationModel):
             Unlabeled data to predict on.
         label
             Target column name in train_data.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
         output_path
             S3 path to store predictions.
             If None, will auto-generate under s3_output_path.
