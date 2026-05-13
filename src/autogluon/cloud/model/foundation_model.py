@@ -66,7 +66,6 @@ class FoundationModel:
     def deploy(
         self,
         instance_type: Optional[str] = None,
-        mode: Literal["realtime", "serverless", "async"] = "realtime",
         endpoint_name: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         wait: bool = True,
@@ -80,8 +79,6 @@ class FoundationModel:
         instance_type
             Instance type for the endpoint.
             If None, will use the default from the model registry.
-        mode
-            Endpoint type.
         endpoint_name
             Custom endpoint name.
             If None, will auto-generate a unique name.
@@ -91,8 +88,8 @@ class FoundationModel:
         wait
             Whether to block until the endpoint is ready.
         **backend_kwargs
-            Additional backend-specific arguments (e.g. framework_version, custom_image_uri,
-            volume_size).
+            Backend-specific arguments. Use these to configure serverless, async, or
+            autoscaling (e.g. memory_size_in_mb, max_concurrency, initial_instance_count).
 
         Returns
         -------
