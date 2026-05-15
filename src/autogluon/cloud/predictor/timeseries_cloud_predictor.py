@@ -511,7 +511,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predictions = self.backend.get_fit_predict_results()
         if save_path is not None:
             save_path = os.path.abspath(os.path.expanduser(save_path))
-            os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
             predictions.to_csv(save_path, index=False)
             logger.log(20, f"fit_predict results saved to {save_path}")
         return predictions
