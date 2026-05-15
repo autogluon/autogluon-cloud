@@ -93,6 +93,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--ag_args", type=str, default=get_env_if_present("SM_CHANNEL_AG_ARGS"))
     parser.add_argument("--serving_script", type=str, default=get_env_if_present("SM_CHANNEL_SERVING"))
+    parser.add_argument(
+        "--known_covariates", type=str, required=False, default=get_env_if_present("SM_CHANNEL_KNOWN_COVARIATES")
+    )
 
     args, _ = parser.parse_known_args()
 
@@ -166,17 +169,10 @@ if __name__ == "__main__":
         image_column = ag_args["image_column"]
         tuning_data[image_column] = tuning_data[image_column].apply(lambda path: os.path.join(tune_images_dir, path))
 
-    # `known_covariates` rides through predictor_fit_args for the in-job predict
-    # step of `fit_predict`. TimeSeriesPredictor.fit doesn't accept it, so pop
-    # it here and keep for the predict call below.
-    known_covariates_df = predictor_fit_args.pop("known_covariates", None)
-
-    if known_covariates_df is not None and predictor_type == "timeseries":
-        # train_data went through a CSV roundtrip so pandas may have re-inferred the id column dtype, while pickled
-        # known_covariates kept its original dtype. Align them so item_ids match during the predict call below.
-        train_item_id_dtype = training_data.index.get_level_values("item_id").dtype
-        kc_id_col = known_covariates_df.columns[0]
-        known_covariates_df[kc_id_col] = known_covariates_df[kc_id_col].astype(train_item_id_dtype)
+    known_covariates_df = None
+    if args.known_covariates:
+        kc_file = get_input_path(args.known_covariates)
+        known_covariates_df = load_pd.load(kc_file)
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 

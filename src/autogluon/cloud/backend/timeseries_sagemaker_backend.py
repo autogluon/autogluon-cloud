@@ -146,7 +146,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
                 raise ValueError(
                     "`known_covariates` should only be provided if `predict_after_fit=True`."
                 )
-            predictor_fit_args["known_covariates"] = self._preprocess_data(
+            known_covariates = self._preprocess_data(
                 data=known_covariates,
                 id_column=id_column,
                 timestamp_column=timestamp_column,
@@ -167,6 +167,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
             predict_after_fit=predict_after_fit,
+            known_covariates=known_covariates,
         )
 
     def predict_real_time(

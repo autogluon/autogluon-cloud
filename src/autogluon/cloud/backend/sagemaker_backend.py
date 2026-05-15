@@ -218,6 +218,7 @@ class SagemakerBackend(Backend):
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
         predict_after_fit: bool = False,
+        known_covariates: Optional[pd.DataFrame] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -262,6 +263,10 @@ class SagemakerBackend(Backend):
         fit_kwargs:
             Any extra arguments needed to pass to fit.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
+        predict_after_fit: bool, default = False
+            If True, run prediction inside the training job and persist results for later retrieval.
+        known_covariates: Optional[pd.DataFrame], default = None
+            Known covariates over the forecast horizon. Used only when ``predict_after_fit=True``.
         """
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
@@ -338,6 +343,7 @@ class SagemakerBackend(Backend):
             label=label,
             ag_args=ag_args_path,
             image_column=image_column,
+            known_covariates=known_covariates,
             serving_script=ScriptManager.get_serve_script(
                 backend_type=self.name, framework_version=framework_version
             ),  # Training and Inference should have the same framework_version
@@ -1000,6 +1006,15 @@ class SagemakerBackend(Backend):
         converter = FormatConverterFactory.get_converter(output_type)
         return converter.convert(data, path, filename)
 
+    def _prepare_and_upload_data(self, data, filename, bucket, key_prefix, output_type="csv"):
+        """Convert ``data`` to a local CSV via ``_prepare_data`` and upload it under ``key_prefix``.
+
+        Returns the S3 URI of the uploaded file.
+        """
+        local_path = self._prepare_data(data, filename, output_type=output_type)
+        logger.log(20, f"Uploading {filename} data...")
+        return self.sagemaker_session.upload_data(path=local_path, bucket=bucket, key_prefix=key_prefix)
+
     def _find_common_path_and_replace_image_column(self, data, image_column):
         common_path = os.path.commonpath(data[image_column].tolist())
         common_path_head = os.path.split(common_path)[0]  # we keep the base dir to match zipping behavior
@@ -1015,6 +1030,7 @@ class SagemakerBackend(Backend):
         ag_args,
         serving_script,
         image_column=None,
+        known_covariates=None,
     ):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
         util_key_prefix = cloud_key_prefix + "/utils"
@@ -1044,21 +1060,20 @@ class SagemakerBackend(Backend):
         if isinstance(train_data, str):
             train_data = load_pd.load(train_data)
         self.original_features = [col for col in train_data.columns if col != label]
-        train_data = self._prepare_data(train_data, "train")
-        logger.log(20, "Uploading train data...")
-        train_input = self.sagemaker_session.upload_data(
-            path=train_data, bucket=cloud_bucket, key_prefix=util_key_prefix
-        )
+        train_input = self._prepare_and_upload_data(train_data, "train", cloud_bucket, util_key_prefix)
         logger.log(20, "Train data uploaded successfully")
 
-        tune_input = tune_data
+        tune_input = None
         if tune_data is not None:
-            tune_data = self._prepare_data(tune_data, "tune")
-            logger.log(20, "Uploading tune data...")
-            tune_input = self.sagemaker_session.upload_data(
-                path=tune_data, bucket=cloud_bucket, key_prefix=util_key_prefix
-            )
+            tune_input = self._prepare_and_upload_data(tune_data, "tune", cloud_bucket, util_key_prefix)
             logger.log(20, "Tune data uploaded successfully")
+
+        known_covariates_input = None
+        if known_covariates is not None:
+            known_covariates_input = self._prepare_and_upload_data(
+                known_covariates, "known_covariates", cloud_bucket, util_key_prefix
+            )
+            logger.log(20, "Known covariates uploaded successfully")
 
         ag_args_input = self.sagemaker_session.upload_data(
             path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix
@@ -1077,6 +1092,8 @@ class SagemakerBackend(Backend):
         inputs = dict(train=train_input, ag_args=ag_args_input, serving=serving_input)
         if tune_input is not None:
             inputs["tune"] = tune_input
+        if known_covariates_input is not None:
+            inputs["known_covariates"] = known_covariates_input
         if train_images_input is not None:
             inputs["train_images"] = train_images_input
         if tune_images_input is not None:
