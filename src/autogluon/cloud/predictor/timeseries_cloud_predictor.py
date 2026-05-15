@@ -353,7 +353,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         ----------
         train_data: Union[str, pd.DataFrame]
             The historical time-series data to train on and forecast from. Either a pandas DataFrame or a local / S3
-            path to a CSV.
+            path to a data file (CSV or Parquet).
         predictor_init_args: dict
             Init args for the predictor (must include ``prediction_length``).
         predictor_fit_args: Optional[dict], default = None
@@ -361,7 +361,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             explicit argument above.
         known_covariates: Optional[Union[str, pd.DataFrame]], default = None
             Values of the known covariates for each time series during the forecast horizon. Either a pandas
-            DataFrame or a local / S3 path to a CSV. Forwarded to ``TimeSeriesPredictor.predict`` in the container.
+            DataFrame or a local / S3 path to a data file (CSV or Parquet). Forwarded to
+            ``TimeSeriesPredictor.predict`` in the container.
             For details, see:
             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
         id_column: str, default = "item_id"
