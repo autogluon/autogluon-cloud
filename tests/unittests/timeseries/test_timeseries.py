@@ -56,11 +56,6 @@ def test_timeseries(test_helper, framework_version):
         )
 
 
-# Chronos (T5-based), Chronos-Bolt, and Chronos-2 are all exposed through the TimeSeries predictor's hyperparameters
-# dict under slightly different keys; the parametrization below exercises the ``fit_predict`` plumbing for each.
-# The ``with_covariates`` flag opts a case into the ``known_covariates`` code path (Chronos-2 only — covariates
-# support is most relevant there). When set, the test pulls a public retail-sales fixture from the AutoGluon S3
-# bucket; otherwise it uses the small CI csv fixture.
 def _load_retail_sales_with_covariates() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     """Fetch the public retail-sales fixture and split it into train + future-covariates frames.
 
