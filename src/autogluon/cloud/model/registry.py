@@ -12,6 +12,7 @@ class FoundationModelConfig(TypedDict):
     inference_hyperparameters: Dict[str, Any]  # defaults for deploy() and predict()
     training_hyperparameters: Dict[str, Any]  # defaults for fit()
     default_instance_type: str
+    fine_tunable: bool  # whether .fit() is supported
 
 
 FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
@@ -21,6 +22,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-tiny"},
         "training_hyperparameters": {"model_path": "amazon/chronos-bolt-tiny"},
         "default_instance_type": "ml.g5.xlarge",
+        "fine_tunable": False,
     },
     "chronos-bolt-small": {
         "task": "forecasting",
@@ -28,6 +30,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-small"},
         "training_hyperparameters": {"model_path": "amazon/chronos-bolt-small"},
         "default_instance_type": "ml.g5.xlarge",
+        "fine_tunable": False,
     },
     "chronos-bolt-base": {
         "task": "forecasting",
@@ -35,6 +38,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-base"},
         "training_hyperparameters": {"model_path": "amazon/chronos-bolt-base"},
         "default_instance_type": "ml.g5.xlarge",
+        "fine_tunable": False,
     },
     "chronos-2": {
         "task": "forecasting",
@@ -42,6 +46,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         "inference_hyperparameters": {"model_path": "amazon/chronos-2"},
         "training_hyperparameters": {"model_path": "amazon/chronos-2", "fine_tune": True},
         "default_instance_type": "ml.g5.xlarge",
+        "fine_tunable": True,
     },
     # TODO: Replace dummy configs with real values
     "mitra-classification": {
@@ -50,6 +55,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         "inference_hyperparameters": {"model_path": "TODO"},
         "training_hyperparameters": {"model_path": "TODO"},
         "default_instance_type": "ml.g5.xlarge",
+        "fine_tunable": False,
     },
     "mitra-regression": {
         "task": "regression",
@@ -57,6 +63,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         "inference_hyperparameters": {"model_path": "TODO"},
         "training_hyperparameters": {"model_path": "TODO"},
         "default_instance_type": "ml.g5.xlarge",
+        "fine_tunable": False,
     },
 }
 

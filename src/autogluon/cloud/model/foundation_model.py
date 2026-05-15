@@ -135,6 +135,8 @@ class FoundationModel:
         FoundationModel
             New instance with hyperparameters pointing to the fine-tuned artifact.
         """
+        if not self._config.get("fine_tunable", False):
+            raise ValueError(f"Model '{self.model_id}' does not support fine-tuning.")
         raise NotImplementedError
 
     def cache_model_artifact(self, s3_path: str) -> str:
