@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import pickle
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
@@ -92,6 +93,7 @@ class Backend(ABC):
         """
         assert self.predictor_type is not None
         config = self._construct_ag_args(**kwargs)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
             pickle.dump(config, f)
 

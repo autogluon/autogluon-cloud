@@ -105,6 +105,7 @@ class FoundationModel:
         return {
             "train_data": train_data,
             "hyperparameters": {model_name: merged_hp},
+            "skip_model_selection": True,
         }
 
     def deploy(
