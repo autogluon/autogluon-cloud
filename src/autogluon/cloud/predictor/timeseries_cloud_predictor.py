@@ -375,7 +375,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         backend_kwargs:
             Same semantics as ``fit()``.
         save_path: Optional[str]
-            Local directory to save the downloaded predictions. Defaults to ``local_output_path``.
+            If set, the predictions are additionally written to ``<save_path>/predictions.csv``. If not set,
+            predictions are only returned in-memory.
 
         Returns
         -------
@@ -500,8 +501,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         save_path: Optional[str], default = None
-            If set, the predictions are additionally written to this path as a CSV (directories are created as
-            needed). Regardless of this flag, the predictions are returned in-memory.
+            If set, the predictions are additionally written to ``<save_path>/predictions.csv``. The directory is
+            created if it does not exist. Regardless of this flag, the predictions are returned in-memory.
 
         Returns
         -------
@@ -511,9 +512,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predictions = self.backend.get_fit_predict_results()
         if save_path is not None:
             save_path = os.path.abspath(os.path.expanduser(save_path))
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            predictions.to_csv(save_path, index=False)
-            logger.log(20, f"fit_predict results saved to {save_path}")
+            os.makedirs(save_path, exist_ok=True)
+            output_file = os.path.join(save_path, "predictions.csv")
+            predictions.to_csv(output_file, index=False)
+            logger.log(20, f"fit_predict results saved to {output_file}")
         return predictions
 
     def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
