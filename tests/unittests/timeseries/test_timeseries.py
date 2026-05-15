@@ -56,23 +56,24 @@ def test_timeseries(test_helper, framework_version):
         )
 
 
-def _load_retail_sales_with_covariates() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
-    """Fetch the public retail-sales fixture and split it into train + future-covariates frames.
-
-    Returns ``(train_df, known_covariates_df, known_covariates_names)``. ``known_covariates_df`` shares the schema
-    of ``train_df`` minus the target column, so it carries the future values of the known covariates over the
-    forecast horizon.
-    """
+def _load_retail_sales_with_covariates():
+    """Fetch the public retail-sales fixture and split it into train + future-covariates frames."""
     target = "Sales"
     id_column = "id"
     timestamp_column = "timestamp"
+    prediction_length = 13
     train_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/train.parquet")
     train_df[timestamp_column] = pd.to_datetime(train_df[timestamp_column])
     test_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/test.parquet")
     test_df[timestamp_column] = pd.to_datetime(test_df[timestamp_column])
     known_covariates_df = test_df.drop(columns=target)
     known_covariates_names = [c for c in known_covariates_df.columns if c not in (id_column, timestamp_column)]
-    return train_df, known_covariates_df, known_covariates_names
+    predictor_init_args = dict(
+        target=target,
+        prediction_length=prediction_length,
+        known_covariates_names=known_covariates_names,
+    )
+    return train_df, known_covariates_df, predictor_init_args, id_column, timestamp_column, prediction_length
 
 
 @pytest.mark.parametrize(
@@ -86,36 +87,16 @@ def _load_retail_sales_with_covariates() -> tuple[pd.DataFrame, pd.DataFrame, li
 )
 def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters, with_covariates):
     timestamp = test_helper.get_utc_timestamp_now()
-    if with_covariates:
-        target = "Sales"
-        id_column = "id"
-        timestamp_column = "timestamp"
-        prediction_length = 13
-        train_data, known_covariates, known_covariates_names = _load_retail_sales_with_covariates()
-        train_df = train_data
-        predictor_init_args = dict(
-            target=target,
-            prediction_length=prediction_length,
-            known_covariates_names=known_covariates_names,
-        )
-    else:
-        target = "target"
-        id_column = "item_id"
-        timestamp_column = "timestamp"
-        prediction_length = 3
-        train_data_csv = "timeseries_train.csv"
-        train_data = train_data_csv
+    train_data, known_covariates, predictor_init_args, id_column, timestamp_column, prediction_length = (
+        _load_retail_sales_with_covariates()
+    )
+    if not with_covariates:
         known_covariates = None
-        predictor_init_args = dict(target=target, prediction_length=prediction_length)
+        predictor_init_args.pop("known_covariates_names")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        if not with_covariates:
-            test_helper.prepare_data(train_data_csv)
-            train_df = pd.read_csv(train_data_csv, parse_dates=[timestamp_column]).sort_values(
-                [id_column, timestamp_column]
-            )
-        expected_item_ids = sorted(train_df[id_column].unique())
+        expected_item_ids = sorted(train_data[id_column].unique())
 
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
