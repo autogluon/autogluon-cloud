@@ -171,6 +171,13 @@ if __name__ == "__main__":
     # it here and keep for the predict call below.
     known_covariates_df = predictor_fit_args.pop("known_covariates", None)
 
+    if known_covariates_df is not None and predictor_type == "timeseries":
+        # train_data went through a CSV roundtrip so pandas may have re-inferred the id column dtype, while pickled
+        # known_covariates kept its original dtype. Align them so item_ids match during the predict call below.
+        train_item_id_dtype = training_data.index.get_level_values("item_id").dtype
+        kc_id_col = known_covariates_df.columns[0]
+        known_covariates_df[kc_id_col] = known_covariates_df[kc_id_col].astype(train_item_id_dtype)
+
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
     # When use automm backend, predictor needs to be saved with standalone flag to avoid need of internet access when loading

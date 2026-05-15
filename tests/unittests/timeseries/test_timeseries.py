@@ -71,8 +71,6 @@ def _load_retail_sales_with_covariates() -> tuple[pd.DataFrame, pd.DataFrame, li
     test_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/test.parquet")
     test_df[timestamp_column] = pd.to_datetime(test_df[timestamp_column])
     known_covariates_df = test_df.drop(columns=target)
-    train_df[id_column] = pd.to_numeric(train_df[id_column])
-    known_covariates_df[id_column] = pd.to_numeric(known_covariates_df[id_column])
     known_covariates_names = [c for c in known_covariates_df.columns if c not in (id_column, timestamp_column)]
     return train_df, known_covariates_df, known_covariates_names
 
@@ -142,14 +140,16 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
         assert isinstance(predictions, pd.DataFrame), (
             f"Expected predictions to be a DataFrame, got {type(predictions).__name__}"
         )
-        assert {id_column, timestamp_column, "mean"} <= set(predictions.columns), (
+        # fit_predict returns predictions with AutoGluon's normalized "item_id" / "timestamp" column names,
+        # matching the contract of real-time and batch transform endpoints.
+        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns), (
             f"predictions is missing required columns; got {sorted(predictions.columns)}"
         )
-        assert sorted(predictions[id_column].unique()) == expected_item_ids, (
+        assert sorted(predictions["item_id"].astype(str).unique()) == sorted(map(str, expected_item_ids)), (
             f"predictions ids do not match train_data; "
-            f"expected {expected_item_ids}, got {sorted(predictions[id_column].unique())}"
+            f"expected {expected_item_ids}, got {sorted(predictions['item_id'].unique())}"
         )
-        counts = predictions.groupby(id_column).size()
+        counts = predictions.groupby("item_id").size()
         assert (counts == prediction_length).all(), (
             f"Expected {prediction_length} rows per item, got {counts.to_dict()}"
         )
