@@ -5,6 +5,31 @@ import pandas as pd
 import pytest
 
 from autogluon.cloud import TimeSeriesCloudPredictor
+from autogluon.cloud.model import FoundationModel
+
+
+@pytest.fixture(scope="module")
+def retail_sales_dataset():
+    """Public retail-sales dataset with train data and known covariates."""
+    target = "Sales"
+    id_column = "id"
+    timestamp_column = "timestamp"
+    prediction_length = 13
+    train_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/train.parquet")
+    train_df[timestamp_column] = pd.to_datetime(train_df[timestamp_column])
+    test_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/test.parquet")
+    test_df[timestamp_column] = pd.to_datetime(test_df[timestamp_column])
+    known_covariates_df = test_df.drop(columns=target)
+    known_covariates_names = [c for c in known_covariates_df.columns if c not in (id_column, timestamp_column)]
+    return {
+        "train_data": train_df,
+        "known_covariates": known_covariates_df,
+        "known_covariates_names": known_covariates_names,
+        "target": target,
+        "id_column": id_column,
+        "timestamp_column": timestamp_column,
+        "prediction_length": prediction_length,
+    }
 
 
 def test_timeseries(test_helper, framework_version):
@@ -56,26 +81,6 @@ def test_timeseries(test_helper, framework_version):
         )
 
 
-def _load_retail_sales_with_covariates():
-    """Fetch the public retail-sales fixture and split it into train + future-covariates frames."""
-    target = "Sales"
-    id_column = "id"
-    timestamp_column = "timestamp"
-    prediction_length = 13
-    train_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/train.parquet")
-    train_df[timestamp_column] = pd.to_datetime(train_df[timestamp_column])
-    test_df = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/test.parquet")
-    test_df[timestamp_column] = pd.to_datetime(test_df[timestamp_column])
-    known_covariates_df = test_df.drop(columns=target)
-    known_covariates_names = [c for c in known_covariates_df.columns if c not in (id_column, timestamp_column)]
-    predictor_init_args = dict(
-        target=target,
-        prediction_length=prediction_length,
-        known_covariates_names=known_covariates_names,
-    )
-    return train_df, known_covariates_df, predictor_init_args, id_column, timestamp_column, prediction_length
-
-
 @pytest.mark.parametrize(
     "model_name, hyperparameters, with_covariates",
     [
@@ -85,18 +90,19 @@ def _load_retail_sales_with_covariates():
         ("chronos2_with_covs", {"Chronos2": {"model_path": "autogluon/chronos-2-small"}}, True),
     ],
 )
-def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_name, hyperparameters, with_covariates):
+def test_timeseries_fit_predict_chronos(
+    test_helper, framework_version, retail_sales_dataset, model_name, hyperparameters, with_covariates
+):
+    ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
-    train_data, known_covariates, predictor_init_args, id_column, timestamp_column, prediction_length = (
-        _load_retail_sales_with_covariates()
-    )
-    if not with_covariates:
-        known_covariates = None
-        predictor_init_args.pop("known_covariates_names")
+    known_covariates = ds["known_covariates"] if with_covariates else None
+    predictor_init_args = dict(target=ds["target"], prediction_length=ds["prediction_length"])
+    if with_covariates:
+        predictor_init_args["known_covariates_names"] = ds["known_covariates_names"]
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        expected_item_ids = sorted(train_data[id_column].unique())
+        expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
 
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
@@ -108,40 +114,78 @@ def test_timeseries_fit_predict_chronos(test_helper, framework_version, model_na
         )
 
         predictions = cloud_predictor.fit_predict(
-            train_data=train_data,
+            train_data=ds["train_data"],
             known_covariates=known_covariates,
             predictor_init_args=predictor_init_args,
             predictor_fit_args=dict(hyperparameters=hyperparameters),
-            id_column=id_column,
-            timestamp_column=timestamp_column,
+            id_column=ds["id_column"],
+            timestamp_column=ds["timestamp_column"],
             framework_version=framework_version,
             custom_image_uri=training_custom_image_uri,
         )
 
-        assert isinstance(predictions, pd.DataFrame), (
-            f"Expected predictions to be a DataFrame, got {type(predictions).__name__}"
-        )
-        # fit_predict returns predictions with AutoGluon's normalized "item_id" / "timestamp" column names,
-        # matching the contract of real-time and batch transform endpoints.
-        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns), (
-            f"predictions is missing required columns; got {sorted(predictions.columns)}"
-        )
-        assert sorted(predictions["item_id"].astype(str).unique()) == sorted(map(str, expected_item_ids)), (
-            f"predictions ids do not match train_data; "
-            f"expected {expected_item_ids}, got {sorted(predictions['item_id'].unique())}"
-        )
+        assert isinstance(predictions, pd.DataFrame)
+        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns)
+        assert sorted(predictions["item_id"].astype(str).unique()) == sorted(map(str, expected_item_ids))
         counts = predictions.groupby("item_id").size()
-        assert (counts == prediction_length).all(), (
-            f"Expected {prediction_length} rows per item, got {counts.to_dict()}"
-        )
-        assert len(predictions) == len(expected_item_ids) * prediction_length, (
-            f"Expected {len(expected_item_ids) * prediction_length} rows total, got {len(predictions)}"
-        )
+        assert (counts == ds["prediction_length"]).all()
+        assert len(predictions) == len(expected_item_ids) * ds["prediction_length"]
 
         info = cloud_predictor.info()
-        assert info["local_output_path"] is not None, "info()['local_output_path'] is unexpectedly None"
-        assert info["cloud_output_path"] is not None, "info()['cloud_output_path'] is unexpectedly None"
-        assert info["fit_job"]["name"] is not None, "info()['fit_job']['name'] is unexpectedly None"
-        assert info["fit_job"]["status"] == "Completed", (
-            f"Expected fit_job status 'Completed', got {info['fit_job']['status']!r}"
+        assert info["local_output_path"] is not None
+        assert info["cloud_output_path"] is not None
+        assert info["fit_job"]["name"] is not None
+        assert info["fit_job"]["status"] == "Completed"
+
+
+def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset):
+    """Test FoundationModel batch prediction via the fit_predict training job pattern."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
+
+        model = FoundationModel(
+            "chronos-2",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-predict/{framework_version}/{timestamp}",
         )
+
+        predictions = model.predict(
+            data=ds["train_data"],
+            target=ds["target"],
+            id_column=ds["id_column"],
+            timestamp_column=ds["timestamp_column"],
+            prediction_length=ds["prediction_length"],
+            known_covariates=ds["known_covariates"],
+        )
+
+        assert isinstance(predictions, pd.DataFrame)
+        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns)
+        assert sorted(predictions["item_id"].astype(str).unique()) == sorted(map(str, expected_item_ids))
+        counts = predictions.groupby("item_id").size()
+        assert (counts == ds["prediction_length"]).all()
+        assert len(predictions) == len(expected_item_ids) * ds["prediction_length"]
+
+
+def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset):
+    """Test FoundationModel deploy to a real-time endpoint and invoke it."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+
+        model = FoundationModel(
+            "chronos-bolt-tiny",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy/{framework_version}/{timestamp}",
+        )
+
+        endpoint = model.deploy()
+
+        try:
+            pred = endpoint.predict(ds["train_data"])
+            assert isinstance(pred, pd.DataFrame)
+        finally:
+            endpoint.delete_endpoint()
