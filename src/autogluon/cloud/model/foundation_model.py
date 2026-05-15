@@ -54,22 +54,15 @@ class FoundationModel:
         self,
         model_id: str,
         backend: Literal["sagemaker"] = "sagemaker",
-        role_arn: Optional[str] = None,
-        region: Optional[str] = None,
-        s3_output_path: Optional[str] = None,
+        cloud_output_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
     ):
         self.model_id = model_id
-        self.role_arn = role_arn
-        self.region = region
-        self.s3_output_path = s3_output_path
+        self.cloud_output_path = cloud_output_path
         self._config = get_model_config(model_id)
         self._hyperparameter_overrides = hyperparameters or {}
-        self._backend_type = backend
-
         self._tmpdir = tempfile.TemporaryDirectory(prefix="ag_fm_")
 
-        # Instantiate the backend
         backend_name = self._backend_map.get(backend)
         if backend_name is None:
             raise ValueError(
@@ -79,7 +72,7 @@ class FoundationModel:
         self._backend = BackendFactory.get_backend(
             backend=backend_name,
             local_output_path=self._tmpdir.name,
-            cloud_output_path=s3_output_path,
+            cloud_output_path=cloud_output_path,
             predictor_type=self._predictor_type,
         )
 
@@ -90,13 +83,14 @@ class FoundationModel:
         config_key = "inference_hyperparameters" if context == "inference" else "training_hyperparameters"
         return self._config.get(config_key, {}) | self._hyperparameter_overrides | (overrides or {})
 
+    @abstractmethod
     def _build_predictor_init_args(self, **user_kwargs) -> Dict[str, Any]:
         """Build predictor_init_args dict from user-provided kwargs.
 
         Subclasses override to map their public API kwargs (e.g., prediction_length,
         target, known_covariates_names) to the dict that TimeSeriesPredictor/TabularPredictor expects.
         """
-        raise NotImplementedError
+        ...
 
     def _build_predictor_fit_args(
         self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
@@ -223,7 +217,6 @@ class TimeSeriesFoundationModel(FoundationModel):
         prediction_length: int = 1,
         quantile_levels: Optional[List[float]] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
-        output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
@@ -258,8 +251,6 @@ class TimeSeriesFoundationModel(FoundationModel):
             Quantiles to predict.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
-        output_path
-            S3 path to store predictions. If None, auto-generates under s3_output_path.
         instance_type
             Instance type for the prediction job. If None, uses registry default.
         framework_version
@@ -284,8 +275,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         if known_covariates is not None and isinstance(known_covariates, pd.DataFrame):
             known_covariates_names = [c for c in known_covariates.columns if c not in (id_column, timestamp_column)]
 
-        # Build the AG predictor args from user-facing kwargs
-        predictor_init_args = self._build_predictor_init_args(  # noqa: F841
+        predictor_init_args = self._build_predictor_init_args(
             target=target,
             prediction_length=prediction_length,
             known_covariates_names=known_covariates_names,
@@ -294,33 +284,27 @@ class TimeSeriesFoundationModel(FoundationModel):
 
         predictor_fit_args = self._build_predictor_fit_args(data, hyperparameters)
 
-        # Add known_covariates to fit_args (handled by train.py's predict_after_fit branch)
         if known_covariates is not None:
             predictor_fit_args["known_covariates"] = known_covariates
 
-        # TODO: call backend.fit() with predict_after_fit=True
-        # This reuses the existing fit_predict pattern from the fit_predict branch.
-        # self._backend.fit(
-        #     predictor_init_args=predictor_init_args,
-        #     predictor_fit_args=predictor_fit_args,
-        #     id_column=id_column,
-        #     timestamp_column=timestamp_column,
-        #     static_features=static_features,
-        #     framework_version=framework_version,
-        #     instance_type=instance_type,
-        #     custom_image_uri=custom_image_uri,
-        #     wait=wait,
-        #     predict_after_fit=True,
-        #     **backend_kwargs,
-        # )
-        #
-        # if not wait:
-        #     # TODO: return a RemoteJob handle that can retrieve predictions later
-        #     return self._backend._fit_job  # or wrap in a RemoteJob adapter
-        #
-        # return self._backend.get_fit_predict_results()
+        self._backend.fit(
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            static_features=static_features,
+            framework_version=framework_version,
+            instance_type=instance_type,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            predict_after_fit=True,
+            **backend_kwargs,
+        )
 
-        raise NotImplementedError
+        if not wait:
+            return self._backend._fit_job
+
+        return self._backend.get_fit_predict_results()
 
 
 class TabularFoundationModel(FoundationModel):
@@ -340,7 +324,6 @@ class TabularFoundationModel(FoundationModel):
         test_data: Union[str, pd.DataFrame],
         label: str = "target",
         hyperparameters: Optional[Dict[str, Any]] = None,
-        output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
@@ -363,8 +346,6 @@ class TabularFoundationModel(FoundationModel):
             Target column name in train_data.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
-        output_path
-            S3 path to store predictions. If None, auto-generates under s3_output_path.
         instance_type
             Instance type for the prediction job. If None, uses registry default.
         framework_version
@@ -393,7 +374,6 @@ class TabularFoundationModel(FoundationModel):
         test_data: Union[str, pd.DataFrame],
         label: str = "target",
         hyperparameters: Optional[Dict[str, Any]] = None,
-        output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,

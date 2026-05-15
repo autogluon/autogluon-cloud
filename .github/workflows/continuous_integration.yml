@@ -272,6 +272,38 @@ jobs:
         with:
           submodule-to-test: timeseries
           ag_version: '${{ matrix.AG_VERSION }}'
+  test_foundation_model_cloud:
+    strategy:
+      fail-fast: false
+      matrix:
+        AG_VERSION: ["1.5.0"]
+    needs: cloud_lint_check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        if: ${{ github.event_name != 'pull_request_target' }}
+        uses: actions/checkout@v5
+      - name: Checkout repository(Pull Request Target)
+        if: ${{ github.event_name == 'pull_request_target' }}
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Check if changes beside docs
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            other_than_docs:
+              - '!(docs/**)**'
+      - name: Test Foundation Model Cloud
+        if: steps.changes.outputs.other_than_docs == 'true'
+        uses: ./.github/actions/test-cloud
+        with:
+          submodule-to-test: foundation_model
+          ag_version: '${{ matrix.AG_VERSION }}'
   test_cluster:
     if: false
     strategy:
@@ -312,7 +344,7 @@ jobs:
           ./.github/workflow_scripts/test_cluster.sh '${{ matrix.AG_VERSION }}'
   build_doc:
     if: ${{ github.event_name != 'schedule' }}
-    needs: [test_general_cloud, test_tabular_cloud, test_text_cloud, test_image_cloud, test_multimodal_cloud, test_timeseries_cloud, test_cluster]
+    needs: [test_general_cloud, test_tabular_cloud, test_text_cloud, test_image_cloud, test_multimodal_cloud, test_timeseries_cloud, test_foundation_model_cloud, test_cluster]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
