@@ -6,6 +6,7 @@ import pytest
 
 from autogluon.cloud import TimeSeriesCloudPredictor
 from autogluon.cloud.model import FoundationModel
+from autogluon.cloud.utils.serializers import AutoGluonSerializationWrapper
 
 
 @pytest.fixture(scope="module")
@@ -185,7 +186,8 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
         endpoint = model.deploy()
 
         try:
-            pred = endpoint.predict(ds["train_data"])
+            payload = AutoGluonSerializationWrapper(data=ds["train_data"], inference_kwargs={})
+            pred = endpoint.predict(payload)
             assert isinstance(pred, pd.DataFrame)
         finally:
             endpoint.delete_endpoint()
