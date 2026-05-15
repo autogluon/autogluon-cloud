@@ -17,22 +17,36 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         data: Union[pd.DataFrame, str],
         id_column: str,
         timestamp_column: str,
-        target: str,
+        target: Optional[str] = None,
         static_features: Optional[Union[pd.DataFrame, str]] = None,
     ) -> pd.DataFrame:
+        """Normalize a long-format time-series frame for the remote container.
+
+        Reorders columns so that id and timestamp are the first two positions. When ``target`` is provided, the
+        target column is moved to the last position (so any trailing columns can be treated as merged-in static
+        features by the container). When ``static_features`` is provided, they are merged on ``id_column``.
+
+        With ``target=None`` and no static features, the frame is treated as a ``known_covariates`` layout
+        (``[id, timestamp, cov1, ..., covN]``).
+        """
         if isinstance(data, str):
             data = load_pd.load(data)
         else:
             data = copy.copy(data)
         cols = data.columns.to_list()
-        # Make sure id and timestamp columns are the first two columns, and target column is in the end
-        # This is to ensure in the container we know how to find id and timestamp columns, and whether there are static features being merged
+        for required in (id_column, timestamp_column):
+            if required not in cols:
+                raise ValueError(f"data must contain column '{required}'.")
+        # Make sure id and timestamp columns are the first two columns.
         timestamp_index = cols.index(timestamp_column)
         cols.insert(0, cols.pop(timestamp_index))
         id_index = cols.index(id_column)
         cols.insert(0, cols.pop(id_index))
-        target_index = cols.index(target)
-        cols.append(cols.pop(target_index))
+        if target is not None:
+            # Move the target column to the last position so that any trailing
+            # columns can be picked up as static features by the container.
+            target_index = cols.index(target)
+            cols.append(cols.pop(target_index))
         data = data[cols]
 
         if static_features is not None:
@@ -60,6 +74,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
+        predict_after_fit: bool = False,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -106,6 +121,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
         tuning_data = predictor_fit_args.pop("tuning_data", None)
+        known_covariates = predictor_fit_args.pop("known_covariates", None)
         target = predictor_init_args.get("target")
         train_data = self._preprocess_data(
             data=train_data,
@@ -124,6 +140,18 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             )
         predictor_fit_args["train_data"] = train_data
         predictor_fit_args["tuning_data"] = tuning_data
+
+        if known_covariates is not None:
+            if not predict_after_fit:
+                raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
+            known_covariates = self._preprocess_data(
+                data=known_covariates,
+                id_column=id_column,
+                timestamp_column=timestamp_column,
+                target=None,
+                static_features=None,
+            )
+
         super().fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -136,6 +164,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
+            predict_after_fit=predict_after_fit,
+            known_covariates=known_covariates,
         )
 
     def predict_real_time(

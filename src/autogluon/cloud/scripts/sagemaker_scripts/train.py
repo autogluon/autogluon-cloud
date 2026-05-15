@@ -30,14 +30,24 @@ def get_env_if_present(name):
     return result
 
 
-def prepare_timeseries_dataframe(df, predictor_init_args):
-    target = predictor_init_args["target"]
+def prepare_timeseries_dataframe(df, predictor_init_args=None, target=None):
+    """Build a TimeSeriesDataFrame from a long-format ``df``.
+
+    ``df`` is expected to have its id column at position 0 and timestamp at position 1 (layout set by
+    ``TimeSeriesSagemakerBackend._preprocess_data``).
+
+    If ``target`` (or ``predictor_init_args['target']``) is provided, any columns trailing the target column are
+    treated as merged-in static features and reattached as ``df.static_features``. If ``target`` is ``None`` (e.g. a
+    ``known_covariates`` frame), the static-features branch is skipped entirely.
+    """
+    if target is None and predictor_init_args is not None:
+        target = predictor_init_args.get("target")
     cols = df.columns.to_list()
     id_column = cols[0]
     timestamp_column = cols[1]
     df[timestamp_column] = pd.to_datetime(df[timestamp_column])
     static_features = None
-    if target != cols[-1]:
+    if target is not None and target != cols[-1]:
         # target is not the last column, then there are static features being merged in
         target_index = cols.index(target)
         static_columns = cols[target_index + 1 :]
@@ -55,7 +65,7 @@ def prepare_data(data_file, predictor_type, predictor_init_args=None):
     if predictor_type == "timeseries":
         assert predictor_init_args is not None
         data = load_pd.load(data_file)
-        data = prepare_timeseries_dataframe(data, predictor_init_args)
+        data = prepare_timeseries_dataframe(data, predictor_init_args=predictor_init_args)
     else:
         data = TabularDataset(data_file)
     return data
@@ -83,6 +93,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--ag_args", type=str, default=get_env_if_present("SM_CHANNEL_AG_ARGS"))
     parser.add_argument("--serving_script", type=str, default=get_env_if_present("SM_CHANNEL_SERVING"))
+    parser.add_argument(
+        "--known_covariates", type=str, required=False, default=get_env_if_present("SM_CHANNEL_KNOWN_COVARIATES")
+    )
 
     args, _ = parser.parse_known_args()
 
@@ -156,6 +169,11 @@ if __name__ == "__main__":
         image_column = ag_args["image_column"]
         tuning_data[image_column] = tuning_data[image_column].apply(lambda path: os.path.join(tune_images_dir, path))
 
+    known_covariates_df = None
+    if args.known_covariates:
+        kc_file = get_input_path(args.known_covariates)
+        known_covariates_df = load_pd.load(kc_file)
+
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
     # When use automm backend, predictor needs to be saved with standalone flag to avoid need of internet access when loading
@@ -167,6 +185,21 @@ if __name__ == "__main__":
         if ag_args.get("leaderboard", False):
             lb = predictor.leaderboard(silent=False)
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
+
+    if ag_args.get("predict_after_fit", False):
+        if predictor_type != "timeseries":
+            raise NotImplementedError(
+                f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
+            )
+        print("Running in-job prediction for fit_predict")
+        predict_kwargs = {}
+        if known_covariates_df is not None:
+            predict_kwargs["known_covariates"] = prepare_timeseries_dataframe(known_covariates_df, target=None)
+        predictions = predictor.predict(training_data, **predict_kwargs)
+        predictions = pd.DataFrame(predictions).reset_index()
+        predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
+        predictions.to_csv(predictions_path, index=False)
+        print(f"Saved predictions to {predictions_path}")
 
     print("Saving serving script")
     serving_script_saving_path = os.path.join(save_path, "code")

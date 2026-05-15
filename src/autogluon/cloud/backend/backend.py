@@ -172,3 +172,10 @@ class Backend(ABC):
     def predict_proba(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Batch inference probability"""
         raise NotImplementedError
+
+    def get_fit_predict_results(self) -> pd.DataFrame:
+        """
+        Retrieve predictions produced by a completed ``fit_predict`` job.
+
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support `fit_predict`.")

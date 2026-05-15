@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
+
+from autogluon.common.loaders import load_pd
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from .cloud_predictor import CloudPredictor
@@ -315,6 +318,205 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
+
+    def fit_predict(
+        self,
+        train_data: Union[str, pd.DataFrame],
+        *,
+        predictor_init_args: Dict[str, Any],
+        predictor_fit_args: Optional[Dict[str, Any]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
+        id_column: str = "item_id",
+        timestamp_column: str = "timestamp",
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
+        framework_version: str = "latest",
+        job_name: Optional[str] = None,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
+        volume_size: int = 100,
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        save_path: Optional[str] = None,
+        backend_kwargs: Optional[Dict] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Fit and predict in a single SageMaker training job.
+
+        This is useful for foundation-model forecasting workflows (e.g. Chronos-2) where "fit" is essentially loading
+        a pretrained model. Running fit and predict in the same job avoids the SageMaker startup overhead twice.
+
+        Predictions are generated inside the training container against ``train_data`` (the standard time-series
+        forecasting flow where the last ``prediction_length`` steps of each series are forecast), saved to the job's
+        ``output.tar.gz``, then downloaded locally.
+
+        Parameters
+        ----------
+        train_data: Union[str, pd.DataFrame]
+            The historical time-series data to train on and forecast from. Either a pandas DataFrame or a local / S3
+            path to a data file (CSV or Parquet).
+        predictor_init_args: dict
+            Init args for the predictor (must include ``prediction_length``).
+        predictor_fit_args: Optional[dict], default = None
+            Additional fit args for the predictor. Must not contain a ``train_data`` key — pass ``train_data`` as the
+            explicit argument above.
+        known_covariates: Optional[Union[str, pd.DataFrame]], default = None
+            Values of the known covariates for each time series during the forecast horizon. Either a pandas
+            DataFrame or a local / S3 path to a data file (CSV or Parquet). Forwarded to
+            ``TimeSeriesPredictor.predict`` in the container.
+            For details, see:
+            https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
+        id_column: str, default = "item_id"
+            Name of the item ID column.
+        timestamp_column: str, default = "timestamp"
+            Name of the timestamp column.
+        static_features: Optional[pd.DataFrame]
+            Optional metadata attributes per item.
+        framework_version, job_name, instance_type, instance_count, volume_size, custom_image_uri, wait,
+        backend_kwargs:
+            Same semantics as ``fit()``.
+        save_path: Optional[str]
+            If set, the predictions are additionally written to ``<save_path>/predictions.csv``. If not set,
+            predictions are only returned in-memory.
+
+        Returns
+        -------
+        Optional[pd.DataFrame]
+            Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
+        """
+        if predictor_fit_args is None:
+            predictor_fit_args = {}
+        else:
+            predictor_fit_args = dict(predictor_fit_args)
+        if "train_data" in predictor_fit_args:
+            raise ValueError(
+                "`train_data` must be passed as an explicit argument to `fit_predict`, not via `predictor_fit_args`."
+            )
+        if "known_covariates" in predictor_fit_args:
+            raise ValueError(
+                "`known_covariates` must be passed as an explicit argument to `fit_predict`, "
+                "not via `predictor_fit_args`."
+            )
+        predictor_fit_args["train_data"] = train_data
+        if known_covariates is not None:
+            known_covariates = self._validate_known_covariates(
+                known_covariates=known_covariates,
+                train_data=train_data,
+                predictor_init_args=predictor_init_args,
+                id_column=id_column,
+                timestamp_column=timestamp_column,
+            )
+            predictor_fit_args["known_covariates"] = known_covariates
+
+        if backend_kwargs is None:
+            backend_kwargs = {}
+        else:
+            backend_kwargs = dict(backend_kwargs)
+        backend_kwargs["predict_after_fit"] = True
+
+        self.fit(
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            static_features=static_features,
+            framework_version=framework_version,
+            job_name=job_name,
+            instance_type=instance_type,
+            instance_count=instance_count,
+            volume_size=volume_size,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            backend_kwargs=backend_kwargs,
+        )
+
+        if not wait:
+            logger.info(
+                "fit_predict job launched asynchronously. Use `get_fit_job_status()` "
+                "to poll, then `get_fit_predict_results()` to fetch predictions."
+            )
+            return None
+
+        return self.get_fit_predict_results(save_path=save_path)
+
+    def _validate_known_covariates(
+        self,
+        *,
+        known_covariates: Union[str, pd.DataFrame],
+        train_data: Union[str, pd.DataFrame],
+        predictor_init_args: Dict[str, Any],
+        id_column: str,
+        timestamp_column: str,
+    ) -> pd.DataFrame:
+        """Validate ``known_covariates`` against ``predictor_init_args`` and ``train_data``.
+
+        Loads str paths via ``load_pd.load`` so column checks can run client-side before the SageMaker job launches.
+        Returns the (possibly loaded) DataFrame so the caller can reuse it.
+        """
+        names = predictor_init_args.get("known_covariates_names")
+        if not names:
+            raise ValueError(
+                "`known_covariates` was passed but `predictor_init_args['known_covariates_names']` is missing or "
+                "empty. Add the covariate column names so the predictor knows which columns to treat as covariates."
+            )
+        if isinstance(names, str) or not isinstance(names, (list, tuple)):
+            raise ValueError(
+                f"`predictor_init_args['known_covariates_names']` must be a list or tuple of strings, got {type(names).__name__}."
+            )
+
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+
+        kc_cols = known_covariates.columns.tolist()
+        for required in (id_column, timestamp_column):
+            if required not in kc_cols:
+                raise ValueError(f"`known_covariates` must contain column '{required}'.")
+        missing_in_covs = [n for n in names if n not in kc_cols]
+        if missing_in_covs:
+            raise ValueError(
+                f"`known_covariates` is missing columns listed in `known_covariates_names`: {missing_in_covs}."
+            )
+        extra_in_covs = [c for c in kc_cols if c not in names and c not in (id_column, timestamp_column)]
+        if extra_in_covs:
+            logger.warning(
+                f"`known_covariates` has columns not listed in `known_covariates_names`: {extra_in_covs}. "
+                "These will be ignored by the predictor."
+            )
+
+        # If train_data is already in memory, also check that covariate columns exist there. Skip the check when
+        # train_data is a str path to avoid forcing a potentially large download just for validation.
+        if isinstance(train_data, pd.DataFrame):
+            train_cols = train_data.columns.tolist()
+            missing_in_train = [n for n in names if n not in train_cols]
+            if missing_in_train:
+                raise ValueError(
+                    f"`train_data` is missing columns listed in `known_covariates_names`: {missing_in_train}."
+                )
+
+        return known_covariates
+
+    def get_fit_predict_results(self, save_path: Optional[str] = None) -> pd.DataFrame:
+        """
+        Retrieve predictions produced by a completed ``fit_predict`` job.
+
+        Parameters
+        ----------
+        save_path: Optional[str], default = None
+            If set, the predictions are additionally written to ``<save_path>/predictions.csv``. The directory is
+            created if it does not exist. Regardless of this flag, the predictions are returned in-memory.
+
+        Returns
+        -------
+        pd.DataFrame
+            Predictions for the forecast horizon.
+        """
+        predictions = self.backend.get_fit_predict_results()
+        if save_path is not None:
+            save_path = os.path.abspath(os.path.expanduser(save_path))
+            os.makedirs(save_path, exist_ok=True)
+            output_file = os.path.join(save_path, "predictions.csv")
+            predictions.to_csv(output_file, index=False)
+            logger.log(20, f"fit_predict results saved to {output_file}")
+        return predictions
 
     def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
         """Attach to existing training job"""
