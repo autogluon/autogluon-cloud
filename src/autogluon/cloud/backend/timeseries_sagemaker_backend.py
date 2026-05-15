@@ -57,25 +57,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
         return data
 
-    def _preprocess_known_covariates(
-        self,
-        data: Union[pd.DataFrame, str],
-        id_column: str,
-        timestamp_column: str,
-    ) -> pd.DataFrame:
-        """Normalize ``known_covariates`` for the remote container.
-
-        Thin wrapper over ``_preprocess_data`` with ``target=None`` and no static features, so the frame keeps
-        layout ``[id, timestamp, cov1, ..., covN]``.
-        """
-        return self._preprocess_data(
-            data=data,
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-            target=None,
-            static_features=None,
-        )
-
     def fit(
         self,
         *,
@@ -165,10 +146,12 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
                 raise ValueError(
                     "`known_covariates` is only meaningful for `fit_predict`; use `predict()` for separate inference."
                 )
-            predictor_fit_args["known_covariates"] = self._preprocess_known_covariates(
+            predictor_fit_args["known_covariates"] = self._preprocess_data(
                 data=known_covariates,
                 id_column=id_column,
                 timestamp_column=timestamp_column,
+                target=None,
+                static_features=None,
             )
 
         super().fit(
