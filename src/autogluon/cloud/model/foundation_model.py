@@ -99,7 +99,12 @@ class FoundationModel:
 
     @abstractmethod
     def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Union[pd.DataFrame, RemoteJob]:
-        """Subclasses override with task-specific signature."""
+        """Subclasses override with task-specific signature.
+
+        When wait=False, returns a RemoteJob handle. Use job.get_job_status() to poll
+        and job.get_output_path() to get the S3 path to predictions once complete.
+        """
+        # TODO: consider adding a .result() method to RemoteJob that downloads + parses output
         ...
 
     def fit(
