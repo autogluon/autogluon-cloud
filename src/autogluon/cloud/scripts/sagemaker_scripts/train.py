@@ -3,7 +3,6 @@
 # The import order of autogluon sub module here could cause seg fault. Ignore isort for now
 # https://github.com/autogluon/autogluon/issues/2042
 import argparse
-import json
 import os
 import pandas as pd
 import shutil
@@ -195,16 +194,6 @@ if __name__ == "__main__":
             predict_kwargs["known_covariates"] = prepare_timeseries_dataframe(known_covariates_df, target=None)
         predictions = predictor.predict(training_data, **predict_kwargs)
         predictions = pd.DataFrame(predictions).reset_index()
-        # AutoGluon's TimeSeriesDataFrame normalizes the id column to "item_id". Restore the user's original
-        # id column name so the predictions DataFrame matches the input schema.
-        sm_predictor_metadata = os.environ.get("SM_HP_PREDICTOR_METADATA")
-        if sm_predictor_metadata:
-            try:
-                user_id_column = json.loads(sm_predictor_metadata).get("id_column")
-            except (TypeError, ValueError):
-                user_id_column = None
-            if user_id_column and user_id_column != "item_id" and "item_id" in predictions.columns:
-                predictions = predictions.rename(columns={"item_id": user_id_column})
         predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
         predictions.to_csv(predictions_path, index=False)
         print(f"Saved predictions to {predictions_path}")
