@@ -390,6 +390,8 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
+        serve_script: Optional[str] = None,
+        serve_config: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -430,17 +432,28 @@ class SagemakerBackend(Backend):
         deploy_kwargs:
             Any extra arguments needed to pass to deploy.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
+        serve_script: Optional[str], default = None
+            Path to a custom serve script to use as the entry point.
+            If provided, overrides the default serve script selected by ScriptManager.
+        serve_config: Optional[Dict[str, Any]], default = None
+            Configuration dict to pass to the serve script. The backend will make this
+            available to the script at runtime (e.g., via environment variables on SageMaker).
         """
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
-        if not predictor_path:
-            predictor_path = self._fit_job.get_output_path()
-            assert predictor_path, "No cloud trained model found."
-        predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
-
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
+
+        # Resolve predictor_path: None means no model artifact (e.g., foundation models
+        # that download weights at startup via the serve script + env vars).
+        if predictor_path is None:
+            fit_output = self._fit_job.get_output_path()
+            if fit_output:
+                predictor_path = fit_output
+        if predictor_path is not None:
+            predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
+
         if custom_image_uri:
             framework_version, py_version = None, None
             logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
@@ -456,10 +469,13 @@ class SagemakerBackend(Backend):
             )
             volume_size = None
 
-        self._serve_script_path = ScriptManager.get_serve_script(
-            backend_type=self.name, framework_version=framework_version
-        )
-        entry_point = self._serve_script_path
+        if serve_script is not None:
+            entry_point = serve_script
+        else:
+            self._serve_script_path = ScriptManager.get_serve_script(
+                backend_type=self.name, framework_version=framework_version
+            )
+            entry_point = self._serve_script_path
         if model_kwargs is None:
             model_kwargs = {}
         model_kwargs = copy.deepcopy(model_kwargs)
@@ -471,10 +487,9 @@ class SagemakerBackend(Backend):
             entry_point = user_entry_point
 
         repack_model = False
-        if predictor_path != self._fit_job.get_output_path() or user_entry_point is not None:
-            # Not inference on cloud trained model or not using inference on cloud trained model
-            # Need to repack the code into model. This will slow down batch inference and deployment
-            repack_model = True
+        if predictor_path is not None:
+            if predictor_path != self._fit_job.get_output_path() or user_entry_point is not None:
+                repack_model = True
         predictor_cls = self._realtime_predictor_cls
         user_predictor_cls = model_kwargs.pop("predictor_cls", None)
         if user_predictor_cls:
@@ -502,6 +517,9 @@ class SagemakerBackend(Backend):
                 model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] = "1"
         else:
             model_kwargs_env = {SAGEMAKER_MODEL_SERVER_WORKERS: "1"}
+
+        if serve_config is not None:
+            model_kwargs_env["AG_SERVE_CONFIG"] = json.dumps(serve_config)
 
         model = model_cls(
             model_data=predictor_path,
