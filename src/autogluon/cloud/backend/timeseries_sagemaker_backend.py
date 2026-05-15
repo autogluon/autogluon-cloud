@@ -144,7 +144,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         if known_covariates is not None:
             if not predict_after_fit:
                 raise ValueError(
-                    "`known_covariates` is only meaningful for `fit_predict`; use `predict()` for separate inference."
+                    "`known_covariates` should only be provided if `predict_after_fit=True`."
                 )
             predictor_fit_args["known_covariates"] = self._preprocess_data(
                 data=known_covariates,
