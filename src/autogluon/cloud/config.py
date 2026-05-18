@@ -8,7 +8,6 @@ are ever written to disk.
 
 from __future__ import annotations
 
-import logging
 import os
 import stat
 from dataclasses import asdict, dataclass, field
@@ -16,8 +15,6 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import yaml
-
-logger = logging.getLogger(__name__)
 
 CONFIG_VERSION = 1
 DEFAULT_PROFILE = "default"
@@ -72,7 +69,9 @@ def load_config() -> Optional[CloudConfig]:
         return None
     with path.open("r") as f:
         raw = yaml.safe_load(f) or {}
-    profiles = {name: Profile(**data) for name, data in (raw.get("profiles") or {}).items()}
+    profiles = {
+        name: Profile(**data) for name, data in (raw.get("profiles") or {}).items()
+    }
     return CloudConfig(
         version=raw.get("version", CONFIG_VERSION),
         active_profile=raw.get("active_profile", DEFAULT_PROFILE),
