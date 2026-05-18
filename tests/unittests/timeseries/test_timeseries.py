@@ -159,6 +159,7 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
             timestamp_column=ds["timestamp_column"],
             prediction_length=ds["prediction_length"],
             known_covariates=ds["known_covariates"],
+            instance_type="ml.m5.2xlarge",
         )
 
         assert isinstance(predictions, pd.DataFrame)

@@ -282,7 +282,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         Optional[pd.DataFrame]
         """
         if instance_type is None:
-            instance_type = self._config["inference_instance_type"]
+            instance_type = self._config["predict_instance_type"]
 
         # Derive known_covariates_names from the DataFrame columns
         known_covariates_names: Optional[List[str]] = None
