@@ -83,21 +83,12 @@ class FoundationModel:
         """
         ...
 
+    @abstractmethod
     def _build_predictor_fit_args(
         self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Build predictor_fit_args dict.
-
-        Wraps the model hyperparameters into the AG hyperparameters format:
-            {"ModelName": {"model_path": "...", ...}}
-        """
-        model_name = self._config["model_name"]
-        merged_hp = self._get_hyperparameters("inference", hyperparameters)
-        return {
-            "train_data": train_data,
-            "hyperparameters": {model_name: merged_hp},
-            "skip_model_selection": True,
-        }
+        """Build predictor_fit_args dict. Subclasses override with task-specific logic."""
+        ...
 
     def deploy(
         self,
@@ -200,6 +191,17 @@ class TimeSeriesFoundationModel(FoundationModel):
 
     _backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
     _predictor_type = "timeseries"
+
+    def _build_predictor_fit_args(
+        self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        model_name = self._config["model_name"]
+        merged_hp = self._get_hyperparameters("inference", hyperparameters)
+        return {
+            "train_data": train_data,
+            "hyperparameters": {model_name: merged_hp},
+            "skip_model_selection": True,
+        }
 
     def _build_predictor_init_args(
         self,
