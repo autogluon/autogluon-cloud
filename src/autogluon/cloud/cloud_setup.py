@@ -2,162 +2,190 @@
 
 Usage::
 
-    import autogluon.cloud as agc
+    from autogluon.cloud import bootstrap, register, status, teardown
 
-    agc.initialize(backend="sagemaker", region="us-east-1")   # deploy CFN + save config
-    agc.initialize(role_arn=..., bucket=...)                  # save config, skip CFN
-    agc.status()                                             # dict of health checks
-    agc.teardown(delete_bucket_contents=True)                # delete CFN + config
+    bootstrap()                                          # deploy CFN + save config
+    register(role_arn=..., bucket=..., region=...)       # save existing resources
+    status()                                             # dict of health checks
+    teardown(delete_bucket_contents=True)                # delete CFN + config
 """
 
 from __future__ import annotations
 
-import typing
 from importlib import resources
 from typing import Any, Dict, Literal, Optional
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
+from .backend.constant import RAY_AWS, SAGEMAKER, SUPPORTED_SETUP_BACKENDS
 from .config import (
-    Profile,
-    delete_profile,
+    CloudConfig,
+    delete_config,
     get_config_path,
     load_config,
-    upsert_profile,
+    save_config,
 )
 
-__all__ = ["initialize", "status", "teardown"]
+__all__ = ["bootstrap", "register", "status", "teardown"]
 
-Backend = Literal["sagemaker", "ray_aws"]
-_SUPPORTED_BACKENDS = typing.get_args(Backend)
+BackendName = Literal[SAGEMAKER, RAY_AWS]
 
 
-def initialize(
+def bootstrap(
     *,
-    backend: Backend = "sagemaker",
-    region: Optional[str] = None,
+    backend: BackendName = "sagemaker",
     stack_name: Optional[str] = None,
-    role_arn: Optional[str] = None,
-    bucket: Optional[str] = None,
-    aws_profile: Optional[str] = None,
-    profile_name: str = "default",
+    session: Optional[boto3.Session] = None,
 ) -> None:
-    """Provision AG-Cloud resources and save a config profile.
+    """Deploy the CloudFormation stack and persist resource identifiers.
 
-    Either deploy a CloudFormation stack (creates an IAM role + S3 bucket
-    from scratch) or persist pre-existing resources — pass ``role_arn`` and
-    ``bucket`` together to skip CloudFormation. The persisted profile is the
-    canonical record; call :func:`status` to inspect it.
+    On completion the IAM role and S3 bucket created by the stack are saved
+    to ``~/.autogluon/cloud.yaml`` via :func:`register`. If you
+    already have an IAM role and bucket in place, call :func:`register`
+    directly and skip this function entirely.
 
     Parameters
     ----------
     backend
         Which AG-Cloud backend to provision.
-    region
-        AWS region. Falls back to the boto3-configured region, then ``us-east-1``.
     stack_name
         CloudFormation stack name. Auto-generated as ``ag-cloud-<backend>``
         if not given.
-    role_arn, bucket
-        If BOTH are given, skip CloudFormation and record these pre-existing
-        resources.
-    aws_profile
-        Local AWS profile name (from ``~/.aws/credentials`` or SSO) to use as
-        the base identity. Defaults to the standard boto3 credential chain.
-    profile_name
-        Name of the AG-Cloud profile entry in ``~/.autogluon/cloud.yaml``.
+    session
+        A ``boto3.Session`` to use for AWS calls. If ``None``, a default
+        session is constructed from the standard credential chain
+        (env vars, ``~/.aws/credentials``, SSO, instance profile).
 
     Raises
     ------
     ValueError
-        If ``role_arn`` and ``bucket`` aren't both provided together, or if
-        an unknown backend is passed.
+        If an unknown backend is passed.
     RuntimeError
         If AWS credentials can't be detected.
     """
-    if (role_arn is None) ^ (bucket is None):
-        raise ValueError("`role_arn` and `bucket` must be provided together.")
-    if backend not in _SUPPORTED_BACKENDS:
-        raise ValueError(f"Unsupported backend {backend!r}. Choose from {_SUPPORTED_BACKENDS}.")
+    if backend not in SUPPORTED_SETUP_BACKENDS:
+        raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_SETUP_BACKENDS}.")
 
-    session = _verified_session(aws_profile=aws_profile, region=region)
-    region = session.region_name or "us-east-1"
+    session, account = _verified_session(session)
+    region = session.region_name
+    if region is None:
+        raise RuntimeError(
+            "AWS region not configured. Set AWS_DEFAULT_REGION, run `aws configure`, "
+            "or pass `session=boto3.Session(region_name=...)`."
+        )
+    stack_name = stack_name or f"ag-cloud-{backend.replace('_', '-')}"
 
-    if role_arn is None:
-        stack_name = stack_name or f"ag-cloud-{backend.replace('_', '-')}"
-        print(f"Deploying CloudFormation stack {stack_name!r} (this typically takes ~1 minute)...")
-        role_arn, bucket = _provision_stack(session, stack_name=stack_name, backend=backend)
-        print(f"Stack {stack_name!r} deployed.")
+    print(f"Deploying CloudFormation stack {stack_name!r} (account {account}, region {region}, ~1 minute)...")
+    role_arn, bucket = _provision_stack(session, stack_name=stack_name, backend=backend)
+    print(f"Stack {stack_name!r} deployed.")
 
-    profile = Profile(
+    register(
+        role_arn=role_arn,
+        bucket=bucket,
+        region=region,
+        backend=backend,
+        stack_name=stack_name,
+    )
+
+
+def register(
+    *,
+    role_arn: str,
+    bucket: str,
+    region: str,
+    backend: BackendName = "sagemaker",
+    stack_name: Optional[str] = None,
+) -> None:
+    """Persist resource identifiers to ``~/.autogluon/cloud.yaml``.
+
+    Use this when you already have an IAM role and S3 bucket — for example,
+    centrally provisioned by your platform team — and just want AG-Cloud to
+    remember them. Pure file I/O; no AWS calls.
+
+    Parameters
+    ----------
+    role_arn
+        ARN of an IAM role suitable for SageMaker / Ray to assume.
+    bucket
+        S3 bucket name where AG-Cloud will read/write artifacts.
+    region
+        AWS region for AG-Cloud operations.
+    backend
+        Which AG-Cloud backend the resources are intended for.
+    stack_name
+        Optional CloudFormation stack name. If you deployed the resources
+        via your own CFN stack and want :func:`teardown` to be able to
+        delete it later, pass the name here. Defaults to ``None``, meaning
+        teardown will only remove the config file, not touch AWS.
+
+    Raises
+    ------
+    ValueError
+        If an unknown backend is passed.
+    """
+    if backend not in SUPPORTED_SETUP_BACKENDS:
+        raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_SETUP_BACKENDS}.")
+    config = CloudConfig(
         region=region,
         role_arn=role_arn,
         bucket=bucket,
         backend=backend,
         stack_name=stack_name,
-        aws_profile=aws_profile,
     )
-    upsert_profile(profile_name, profile)
-    print(f"Saved profile {profile_name!r} to {get_config_path()}")
+    save_config(config)
+    print(f"Saved AG-Cloud config to {get_config_path()}")
 
 
-def status(profile_name: Optional[str] = None, *, check_role: bool = True) -> Dict[str, Any]:
-    """Return a health snapshot of the named (or active) profile.
+def status(
+    *,
+    session: Optional[boto3.Session] = None,
+    check_role: bool = True,
+) -> Dict[str, Any]:
+    """Return a health snapshot of the persisted config.
 
-    On found=True the dict contains ``profile`` (Profile), ``is_active`` (bool),
-    ``config_path`` (str), and ``checks`` (dict of ``bucket`` / ``stack`` /
-    ``role`` strings, each ``"ok"`` or a failure description).
+    On found=True the dict contains ``config`` (CloudConfig), ``config_path``
+    (str), and ``checks`` (dict of ``bucket`` / ``stack`` / ``role`` strings,
+    each ``"ok"`` or a failure description).
 
-    On found=False the dict contains ``config_path`` and (if a profile name
-    was given but missing) ``reason`` and ``available_profiles``.
+    On found=False the dict contains just ``config_path``.
 
     Makes real AWS calls. Pass ``check_role=False`` to skip ``iam:GetRole``.
+    Pass ``session=`` to use specific credentials; otherwise the standard
+    boto3 credential chain is used (with the saved region as a default).
     """
     config = load_config()
-    if config is None or not config.profiles:
+    if config is None:
         return {"found": False, "config_path": str(get_config_path())}
 
-    try:
-        profile = config.get_profile(profile_name)
-    except KeyError:
-        return {
-            "found": False,
-            "config_path": str(get_config_path()),
-            "reason": "profile not found",
-            "requested_profile": profile_name,
-            "available_profiles": sorted(config.profiles),
-        }
-    active = profile_name or config.active_profile
-
-    session = _boto_session(aws_profile=profile.aws_profile, region=profile.region)
-    checks: Dict[str, str] = {"bucket": _check_bucket(session, profile.bucket)}
-    if profile.stack_name:
-        checks["stack"] = _check_stack(session, profile.stack_name)
+    session = session or boto3.Session(region_name=config.region)
+    checks: Dict[str, str] = {"bucket": _check_bucket(session, config.bucket)}
+    if config.stack_name:
+        checks["stack"] = _check_stack(session, config.stack_name)
     if check_role:
-        checks["role"] = _check_role(session, profile.role_arn)
+        checks["role"] = _check_role(session, config.role_arn)
 
     return {
         "found": True,
         "config_path": str(get_config_path()),
-        "profile_name": active,
-        "is_active": active == config.active_profile,
-        "profile": profile,
+        "config": config,
         "checks": checks,
     }
 
 
 def teardown(
-    profile_name: Optional[str] = None,
     *,
+    session: Optional[boto3.Session] = None,
     delete_bucket_contents: bool = False,
 ) -> None:
-    """Delete the CloudFormation stack and remove the profile from config.
+    """Delete the CloudFormation stack (if any) and remove the config file.
 
     Parameters
     ----------
-    profile_name
-        Profile to tear down. Defaults to the active profile.
+    session
+        A ``boto3.Session`` to use for AWS calls. If ``None``, a default
+        session is built from the standard credential chain, with the saved
+        region applied automatically.
     delete_bucket_contents
         Empty the S3 bucket before stack deletion. Required if the bucket is
         non-empty; otherwise CloudFormation will refuse to delete it.
@@ -168,32 +196,29 @@ def teardown(
         If stack deletion or bucket emptying fails.
     """
     config = load_config()
-    if config is None or not config.profiles:
+    if config is None:
         print("No AG-Cloud config found — nothing to tear down.")
         return
-    try:
-        profile = config.get_profile(profile_name)
-    except KeyError:
-        print(f"Profile {profile_name!r} not found. Available profiles: {sorted(config.profiles)}")
-        return
-    active = profile_name or config.active_profile
 
-    if profile.stack_name is None:
-        delete_profile(active)
-        print(f"Removed profile {active!r} (no stack to delete).")
+    if config.stack_name is None:
+        delete_config()
+        print("Removed config (no stack to delete).")
         return
 
-    session = _boto_session(aws_profile=profile.aws_profile, region=profile.region)
+    session, account = _verified_session(session or boto3.Session(region_name=config.region))
     if delete_bucket_contents:
-        _empty_bucket(session, profile.bucket)
+        _empty_bucket(session, config.bucket)
 
-    print(f"Deleting CloudFormation stack {profile.stack_name!r} (this typically takes ~1 minute)...")
+    print(
+        f"Deleting CloudFormation stack {config.stack_name!r} "
+        f"(account {account}, region {config.region}, ~1 minute)..."
+    )
     cfn = session.client("cloudformation")
-    cfn.delete_stack(StackName=profile.stack_name)
-    cfn.get_waiter("stack_delete_complete").wait(StackName=profile.stack_name)
+    cfn.delete_stack(StackName=config.stack_name)
+    cfn.get_waiter("stack_delete_complete").wait(StackName=config.stack_name)
 
-    delete_profile(active)
-    print(f"Stack {profile.stack_name!r} deleted; removed profile {active!r}.")
+    delete_config()
+    print(f"Stack {config.stack_name!r} deleted; config removed.")
 
 
 # ---------------------------------------------------------------------------
@@ -201,29 +226,24 @@ def teardown(
 # ---------------------------------------------------------------------------
 
 
-def _boto_session(aws_profile: Optional[str] = None, region: Optional[str] = None) -> boto3.Session:
-    kwargs: Dict[str, Any] = {}
-    if aws_profile:
-        kwargs["profile_name"] = aws_profile
-    if region:
-        kwargs["region_name"] = region
-    return boto3.Session(**kwargs)
+def _verified_session(session: Optional[boto3.Session]) -> tuple[boto3.Session, str]:
+    """Build a default session if none given and verify it can call STS.
 
-
-def _verified_session(aws_profile: Optional[str] = None, region: Optional[str] = None) -> boto3.Session:
-    """Build a session and verify it can call sts:GetCallerIdentity."""
-    session = _boto_session(aws_profile=aws_profile, region=region)
+    Returns the session paired with the AWS account ID, so callers can show
+    the user what's about to happen (and where) without a second STS call.
+    """
+    session = session or boto3.Session()
     try:
-        session.client("sts").get_caller_identity()
+        identity = session.client("sts").get_caller_identity()
     except (NoCredentialsError, ClientError, BotoCoreError) as e:
         raise RuntimeError(
             "Could not detect AWS credentials. Run `aws configure`, set AWS_* "
-            "env vars, use AWS SSO, or pass `aws_profile=<name>`."
+            "env vars, use AWS SSO, or pass a configured `boto3.Session`."
         ) from e
-    return session
+    return session, identity["Account"]
 
 
-def _provision_stack(session: boto3.Session, *, stack_name: str, backend: Backend) -> tuple[str, str]:
+def _provision_stack(session: boto3.Session, *, stack_name: str, backend: BackendName) -> tuple[str, str]:
     """Deploy the bundled CFN template and return ``(role_arn, bucket_name)``."""
     cfn = session.client("cloudformation")
     template = resources.files("autogluon.cloud.templates").joinpath(f"ag_cloud_{backend}.yaml")
@@ -267,8 +287,8 @@ def _check_stack(session: boto3.Session, stack_name: str) -> str:
 
 
 def _check_role(session: boto3.Session, role_arn: str) -> str:
-    """Verify the IAM role exists. Does not assume it — that would bypass the
-    caller's boto3 identity.
+    """Verify the IAM role exists via iam:GetRole. Doesn't call sts:AssumeRole —
+    we only check existence, not the caller's permission to assume it.
     """
     try:
         session.client("iam").get_role(RoleName=role_arn.rsplit("/", 1)[-1])
@@ -280,5 +300,8 @@ def _check_role(session: boto3.Session, role_arn: str) -> str:
 def _empty_bucket(session: boto3.Session, bucket: str) -> None:
     print(f"Emptying bucket {bucket!r}...")
     b = session.resource("s3").Bucket(bucket)
+    # Both calls are needed for versioned buckets (our CFN template enables
+    # versioning): object_versions covers all historical versions + delete
+    # markers; objects covers anything left in the current listing.
     b.object_versions.delete()
     b.objects.delete()

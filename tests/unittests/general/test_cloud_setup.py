@@ -1,9 +1,9 @@
-"""Tests for the top-level Python API (autogluon.cloud.initialize/status/teardown)."""
+"""Tests for the ``autogluon.cloud`` setup API."""
 
 import pytest
 
-import autogluon.cloud as agc
-from autogluon.cloud.config import CONFIG_DIR_ENV, load_config, save_config
+from autogluon.cloud import bootstrap, register, status, teardown
+from autogluon.cloud.config import CONFIG_DIR_ENV, CloudConfig, load_config, save_config
 
 
 @pytest.fixture(autouse=True)
@@ -12,70 +12,138 @@ def isolated_config_dir(tmp_path, monkeypatch):
     yield tmp_path
 
 
-@pytest.fixture(autouse=True)
-def stub_aws(monkeypatch):
-    """Stub out the credential-verification call so tests don't hit AWS."""
+def _register_default():
+    register(
+        role_arn="arn:aws:iam::111122223333:role/x",
+        bucket="b1",
+        region="us-east-1",
+    )
 
-    class _StubSession:
-        def __init__(self, region):
-            self.region_name = region or "us-east-1"
+
+# ---------------------------------------------------------------------------
+# register (no AWS calls — pure file I/O)
+# ---------------------------------------------------------------------------
+
+
+def test_register_writes_file(capsys):
+    _register_default()
+
+    config = load_config()
+    assert config.role_arn == "arn:aws:iam::111122223333:role/x"
+    assert config.bucket == "b1"
+    assert config.region == "us-east-1"
+    assert config.backend == "sagemaker"
+    assert config.stack_name is None
+    assert "Saved AG-Cloud config" in capsys.readouterr().out
+
+
+def test_register_overwrites_existing():
+    _register_default()
+    register(
+        role_arn="arn:aws:iam::111122223333:role/y",
+        bucket="b2",
+        region="us-west-2",
+    )
+    config = load_config()
+    assert config.bucket == "b2"
+    assert config.region == "us-west-2"
+
+
+def test_register_rejects_unknown_backend():
+    with pytest.raises(ValueError, match="Unsupported backend"):
+        register(
+            role_arn="arn:...",
+            bucket="b",
+            region="us-east-1",
+            backend="not-a-backend",
+        )
+
+
+def test_register_records_stack_name_when_given():
+    """Users who deployed their own stack can record the name so teardown can clean up."""
+    register(
+        role_arn="arn:aws:iam::111122223333:role/x",
+        bucket="b1",
+        region="us-east-1",
+        stack_name="my-stack",
+    )
+    assert load_config().stack_name == "my-stack"
+
+
+# ---------------------------------------------------------------------------
+# bootstrap (CFN deploy + register)
+# ---------------------------------------------------------------------------
+
+
+def test_bootstrap_calls_cfn_then_registers(monkeypatch, capsys):
+    """bootstrap should deploy a stack and persist outputs via register."""
+
+    class FakeSession:
+        region_name = "us-east-1"
+
+        def client(self, service):
+            raise AssertionError("session.client unused; _provision_stack is stubbed")
 
     monkeypatch.setattr(
         "autogluon.cloud.cloud_setup._verified_session",
-        lambda aws_profile=None, region=None: _StubSession(region),
+        lambda s: (FakeSession(), "123456789012"),
+    )
+    monkeypatch.setattr(
+        "autogluon.cloud.cloud_setup._provision_stack",
+        lambda session, stack_name, backend: ("arn:aws:iam::123:role/r", "ag-cloud-bucket"),
     )
 
+    bootstrap(backend="sagemaker", stack_name="my-stack")
 
-def _initialize_existing(**overrides):
-    kwargs = dict(
-        backend="sagemaker",
-        region="us-east-1",
-        role_arn="arn:aws:iam::111122223333:role/x",
-        bucket="b1",
+    config = load_config()
+    assert config.role_arn == "arn:aws:iam::123:role/r"
+    assert config.bucket == "ag-cloud-bucket"
+    assert config.stack_name == "my-stack"
+    assert config.region == "us-east-1"
+
+    out = capsys.readouterr().out
+    assert "Deploying CloudFormation stack 'my-stack'" in out
+    assert "account 123456789012" in out
+    assert "region us-east-1" in out
+    assert "deployed" in out
+    assert "Saved AG-Cloud config" in out
+
+
+def test_bootstrap_returns_none(monkeypatch):
+    monkeypatch.setattr(
+        "autogluon.cloud.cloud_setup._verified_session",
+        lambda s: (type("S", (), {"region_name": "us-east-1"})(), "123456789012"),
     )
-    kwargs.update(overrides)
-    agc.initialize(**kwargs)
+    monkeypatch.setattr(
+        "autogluon.cloud.cloud_setup._provision_stack",
+        lambda session, stack_name, backend: ("arn:...", "b"),
+    )
+    assert bootstrap() is None
 
 
-# ---------------------------------------------------------------------------
-# initialize
-# ---------------------------------------------------------------------------
-
-
-def test_initialize_with_existing_resources_writes_config():
-    """`initialize(role_arn=..., bucket=...)` writes config without CloudFormation."""
-    _initialize_existing(region="us-west-2", bucket="my-bucket")
-
-    profile = load_config().get_profile()
-    assert profile.region == "us-west-2"
-    assert profile.bucket == "my-bucket"
-    assert profile.role_arn == "arn:aws:iam::111122223333:role/x"
-    assert profile.stack_name is None
-
-
-def test_initialize_returns_none(capsys):
-    """initialize() is a side-effecting setup function; it shouldn't return data."""
-    result = _initialize_existing()
-    assert result is None
-    # And it should print where the config was saved.
-    assert "Saved profile" in capsys.readouterr().out
-
-
-def test_initialize_requires_role_and_bucket_together():
-    with pytest.raises(ValueError, match="must be provided together"):
-        agc.initialize(role_arn="arn:aws:iam::111122223333:role/x")  # missing bucket
-
-
-def test_initialize_rejects_unknown_backend():
+def test_bootstrap_rejects_unknown_backend():
     with pytest.raises(ValueError, match="Unsupported backend"):
-        agc.initialize(backend="not-a-backend", role_arn="arn:...", bucket="b")
+        bootstrap(backend="not-a-backend")
 
 
-def test_initialize_overwrites_existing_profile():
-    """Second initialize() overwrites the first — no confirmation in Python API."""
-    _initialize_existing(bucket="b1")
-    _initialize_existing(bucket="b2")
-    assert load_config().get_profile().bucket == "b2"
+def test_bootstrap_default_stack_name_uses_backend(monkeypatch):
+    captured = {}
+
+    class FakeSession:
+        region_name = "us-east-1"
+
+    def fake_provision(session, stack_name, backend):
+        captured["stack_name"] = stack_name
+        return "arn:...", "b"
+
+    monkeypatch.setattr(
+        "autogluon.cloud.cloud_setup._verified_session",
+        lambda s: (FakeSession(), "123456789012"),
+    )
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._provision_stack", fake_provision)
+
+    bootstrap(backend="ray_aws")
+    assert captured["stack_name"] == "ag-cloud-ray-aws"
 
 
 # ---------------------------------------------------------------------------
@@ -84,40 +152,40 @@ def test_initialize_overwrites_existing_profile():
 
 
 def test_status_without_config_returns_not_found():
-    result = agc.status()
+    result = status()
     assert result["found"] is False
-    assert "reason" not in result  # missing config, not missing profile
 
 
 def test_status_with_config(monkeypatch):
-    """Status returns a snapshot; health checks are stubbed to avoid AWS."""
-    _initialize_existing()
+    _register_default()
     monkeypatch.setattr("autogluon.cloud.cloud_setup._check_bucket", lambda s, b: "ok")
     monkeypatch.setattr("autogluon.cloud.cloud_setup._check_role", lambda s, r: "ok")
 
-    result = agc.status()
+    result = status()
     assert result["found"] is True
-    assert result["profile_name"] == "default"
-    assert result["is_active"] is True
+    assert isinstance(result["config"], CloudConfig)
     assert result["checks"] == {"bucket": "ok", "role": "ok"}
 
 
-def test_status_missing_profile_returns_structured_result():
-    """Regression: status(profile_name=<nonexistent>) must not raise KeyError."""
-    _initialize_existing()
-    result = agc.status(profile_name="nonexistent")
-    assert result["found"] is False
-    assert result["reason"] == "profile not found"
-    assert result["requested_profile"] == "nonexistent"
-    assert result["available_profiles"] == ["default"]
-
-
 def test_status_check_role_false_skips_iam(monkeypatch):
-    _initialize_existing()
+    _register_default()
     monkeypatch.setattr("autogluon.cloud.cloud_setup._check_bucket", lambda s, b: "ok")
 
-    result = agc.status(check_role=False)
+    result = status(check_role=False)
     assert "role" not in result["checks"]
+
+
+def test_status_includes_stack_check_when_stack_name_set(monkeypatch):
+    register(role_arn="arn:...", bucket="b", region="us-east-1", stack_name="s")
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._check_bucket", lambda s, b: "ok")
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._check_role", lambda s, r: "ok")
+    monkeypatch.setattr(
+        "autogluon.cloud.cloud_setup._check_stack",
+        lambda s, n: "CREATE_COMPLETE",
+    )
+
+    result = status()
+    assert result["checks"]["stack"] == "CREATE_COMPLETE"
 
 
 # ---------------------------------------------------------------------------
@@ -126,41 +194,31 @@ def test_status_check_role_false_skips_iam(monkeypatch):
 
 
 def test_teardown_without_config_is_noop(capsys):
-    result = agc.teardown()
-    assert result is None
+    assert teardown() is None
     assert "nothing to tear down" in capsys.readouterr().out
 
 
-def test_teardown_removes_profile_when_no_stack(capsys):
-    """If the profile has no stack (initialize with role_arn/bucket), teardown is safe."""
-    _initialize_existing()
-    result = agc.teardown()
-    assert result is None
-    assert load_config().profiles == {}
+def test_teardown_no_stack_just_removes_config(capsys):
+    _register_default()
+    teardown()
+    assert load_config() is None
     assert "no stack to delete" in capsys.readouterr().out
 
 
-def test_teardown_missing_profile_is_friendly(capsys):
-    """Regression: teardown(profile_name=<nonexistent>) must not raise KeyError."""
-    _initialize_existing()
-    result = agc.teardown(profile_name="nonexistent")
-    assert result is None
-    assert "not found" in capsys.readouterr().out
-
-
-def test_teardown_with_stack_hits_cfn(monkeypatch):
-    """When a profile has a stack_name, teardown calls cfn.delete_stack."""
-    _initialize_existing()
-
-    # Promote the profile to having a fake stack.
-    config = load_config()
-    config.get_profile().stack_name = "ag-cloud-sagemaker"
-    save_config(config)
-
+def test_teardown_with_stack_deletes_stack(monkeypatch):
+    save_config(
+        CloudConfig(
+            region="us-east-1",
+            role_arn="arn:...",
+            bucket="b",
+            backend="sagemaker",
+            stack_name="ag-cloud-sagemaker",
+        )
+    )
     calls = []
 
     class FakeWaiter:
-        def wait(self, **kwargs):
+        def wait(self, **kw):
             pass
 
     class FakeCFN:
@@ -171,19 +229,21 @@ def test_teardown_with_stack_hits_cfn(monkeypatch):
             assert name == "stack_delete_complete"
             return FakeWaiter()
 
+    class FakeSTS:
+        def get_caller_identity(self):
+            return {"Account": "123456789012"}
+
     class FakeSession:
         def client(self, service):
-            assert service == "cloudformation"
-            return FakeCFN()
+            if service == "cloudformation":
+                return FakeCFN()
+            if service == "sts":
+                return FakeSTS()
+            raise AssertionError(f"unexpected client: {service}")
 
         def resource(self, service):
-            raise AssertionError("delete_bucket_contents is False; resource() not expected")
+            raise AssertionError("delete_bucket_contents=False; resource() not expected")
 
-    monkeypatch.setattr(
-        "autogluon.cloud.cloud_setup._boto_session",
-        lambda aws_profile=None, region=None: FakeSession(),
-    )
-
-    agc.teardown()
+    teardown(session=FakeSession())
     assert calls == ["ag-cloud-sagemaker"]
-    assert load_config().profiles == {}
+    assert load_config() is None
