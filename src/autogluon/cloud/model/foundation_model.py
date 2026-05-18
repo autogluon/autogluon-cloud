@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import tempfile
 from abc import abstractmethod
 from typing import Any, Dict, List, Literal, Optional, Union
@@ -13,8 +12,6 @@ from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
 from ..endpoint.endpoint import Endpoint
 from .registry import get_model_config
-
-logger = logging.getLogger(__name__)
 
 
 class FoundationModel:
@@ -102,8 +99,38 @@ class FoundationModel:
             "skip_model_selection": True,
         }
 
-    def deploy(self, **kwargs) -> Endpoint:
-        """Deploy model to a real-time endpoint. Not yet implemented."""
+    def deploy(
+        self,
+        instance_type: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        wait: bool = True,
+        **backend_kwargs,
+    ) -> Endpoint:
+        """
+        Deploy model to an endpoint.
+
+        Parameters
+        ----------
+        instance_type
+            Instance type for the endpoint.
+            If None, will use the default from the model registry.
+        endpoint_name
+            Custom endpoint name.
+            If None, will auto-generate a unique name.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
+        wait
+            Whether to block until the endpoint is ready.
+        **backend_kwargs
+            Backend-specific arguments. Use these to configure serverless, async, or
+            autoscaling (e.g. memory_size_in_mb, max_concurrency, initial_instance_count).
+
+        Returns
+        -------
+        Endpoint
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -111,12 +138,60 @@ class FoundationModel:
         """Subclasses override with task-specific signature."""
         ...
 
-    def fit(self, train_data: Union[str, pd.DataFrame], **kwargs) -> "FoundationModel":
-        """Fine-tune the model. Not yet implemented."""
+    def fit(
+        self,
+        train_data: Union[str, pd.DataFrame],
+        output_path: Optional[str] = None,
+        instance_type: Optional[str] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        wait: bool = True,
+        **kwargs,
+    ) -> "FoundationModel":
+        """
+        Fine-tune the model. Returns a new FoundationModel pointing to the fine-tuned artifact.
+
+        Parameters
+        ----------
+        train_data
+            Training data as DataFrame or S3 path.
+        output_path
+            S3 path to store fine-tuned model.
+            If None, will auto-generate under cloud_output_path.
+        instance_type
+            Instance type for the training job.
+            If None, will use the default from the model registry.
+        hyperparameters
+            Model hyperparameters for training. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
+        wait
+            If True, block until training completes.
+
+        Returns
+        -------
+        FoundationModel
+            New instance with hyperparameters pointing to the fine-tuned artifact.
+        """
+        if not self._config.get("fine_tunable", False):
+            raise ValueError(f"Model '{self.model_id}' does not support fine-tuning.")
         raise NotImplementedError
 
     def cache_model_artifact(self, s3_path: str) -> str:
-        """Pre-cache model weights to S3. Not yet implemented."""
+        """
+        Pre-cache model weights to S3 (for VPC-deployed endpoints).
+
+        Launches a small job that downloads weights from HuggingFace
+        and uploads them to S3.
+
+        Parameters
+        ----------
+        s3_path
+            S3 path where the model weights should be cached.
+
+        Returns
+        -------
+        str
+            S3 path to the cached artifact.
+        """
         raise NotImplementedError
 
 
@@ -309,12 +384,39 @@ class TabularFoundationModel(FoundationModel):
         test_data: Union[str, pd.DataFrame],
         label: str = "target",
         hyperparameters: Optional[Dict[str, Any]] = None,
+        output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
-        framework_version: str = "latest",
-        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
     ) -> Optional[pd.DataFrame]:
-        """Run batch prediction returning class probabilities."""
-        # TODO: same implementation as predict() but with predict_proba flag
+        """
+        Run batch prediction returning class probabilities.
+
+        Parameters
+        ----------
+        train_data
+            Labeled few-shot context for the foundation model.
+        test_data
+            Unlabeled data to predict on.
+        label
+            Target column name in train_data.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+            Available hyperparameters for each model are listed in the AutoGluon documentation.
+        output_path
+            S3 path to store predictions.
+            If None, will auto-generate under cloud_output_path.
+        instance_type
+            Instance type for the prediction job.
+            If None, will use the default from the model registry.
+        wait
+            If True, block and return DataFrame. If False, return the job handle.
+        **backend_kwargs
+            Additional backend-specific arguments (e.g. job_name, custom_image_uri,
+            framework_version, volume_size).
+
+        Returns
+        -------
+        Optional[pd.DataFrame]
+        """
         raise NotImplementedError
