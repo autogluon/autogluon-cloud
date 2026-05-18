@@ -1,15 +1,16 @@
-"""FoundationModel — deploy and predict with pretrained foundation models on AWS."""
+"""FoundationModel — predict with pretrained foundation models on AWS."""
 
 from __future__ import annotations
 
+import tempfile
 from abc import abstractmethod
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import pandas as pd
 
-from autogluon.cloud.endpoint.endpoint import Endpoint
-from autogluon.cloud.job.remote_job import RemoteJob
-
+from ..backend.backend_factory import BackendFactory
+from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
+from ..endpoint.endpoint import Endpoint
 from .registry import get_model_config
 
 
@@ -22,11 +23,12 @@ class FoundationModel:
 
     Examples
     --------
-    >>> model = FoundationModel("chronos-bolt-base", role_arn="arn:...", hyperparameters={"model_path": "s3://cached/"})
-    >>> endpoint = model.deploy()
-    >>> predictions = endpoint.predict(data)
-    >>> endpoint.delete_endpoint()
+    >>> model = FoundationModel("chronos-bolt-base")
+    >>> predictions = model.predict(data, prediction_length=12)
     """
+
+    _backend_map: Dict[str, str] = {}
+    _predictor_type: str
 
     def __new__(cls, model_id: str, **kwargs) -> "FoundationModel":
         if cls is not FoundationModel:
@@ -43,25 +45,50 @@ class FoundationModel:
         self,
         model_id: str,
         backend: Literal["sagemaker"] = "sagemaker",
-        role_arn: Optional[str] = None,
-        region: Optional[str] = None,
-        s3_output_path: Optional[str] = None,
+        cloud_output_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
     ):
         self.model_id = model_id
-        self.role_arn = role_arn
-        self.region = region
-        self.s3_output_path = s3_output_path
+        self.cloud_output_path = cloud_output_path
         self._config = get_model_config(model_id)
         self._hyperparameter_overrides = hyperparameters or {}
-        # TODO: instantiate backend via BackendFactory
-        self._backend_type = backend
+        self._tmpdir = tempfile.TemporaryDirectory(prefix="ag_fm_")
+
+        backend_name = self._backend_map.get(backend)
+        if backend_name is None:
+            raise ValueError(
+                f"Backend '{backend}' is not supported for {self.__class__.__name__}. "
+                f"Available: {list(self._backend_map.keys())}"
+            )
+        self._backend = BackendFactory.get_backend(
+            backend=backend_name,
+            local_output_path=self._tmpdir.name,
+            cloud_output_path=cloud_output_path,
+            predictor_type=self._predictor_type,
+        )
 
     def _get_hyperparameters(
         self, context: Literal["inference", "training"], overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
+        """Merge registry defaults → constructor overrides → call-site overrides."""
         config_key = "inference_hyperparameters" if context == "inference" else "training_hyperparameters"
         return self._config.get(config_key, {}) | self._hyperparameter_overrides | (overrides or {})
+
+    @abstractmethod
+    def _build_predictor_init_args(self, **user_kwargs) -> Dict[str, Any]:
+        """Build predictor_init_args dict from user-provided kwargs.
+
+        Subclasses override to map their public API kwargs (e.g., prediction_length,
+        target, known_covariates_names) to the dict that TimeSeriesPredictor/TabularPredictor expects.
+        """
+        ...
+
+    @abstractmethod
+    def _build_predictor_fit_args(
+        self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Build predictor_fit_args dict. Subclasses override with task-specific logic."""
+        ...
 
     def deploy(
         self,
@@ -98,13 +125,8 @@ class FoundationModel:
         raise NotImplementedError
 
     @abstractmethod
-    def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Union[pd.DataFrame, RemoteJob]:
-        """Subclasses override with task-specific signature.
-
-        When wait=False, returns a RemoteJob handle. Use job.get_job_status() to poll
-        and job.get_output_path() to get the S3 path to predictions once complete.
-        """
-        # TODO: consider adding a .result() method to RemoteJob that downloads + parses output
+    def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
+        """Subclasses override with task-specific signature."""
         ...
 
     def fit(
@@ -125,7 +147,7 @@ class FoundationModel:
             Training data as DataFrame or S3 path.
         output_path
             S3 path to store fine-tuned model.
-            If None, will auto-generate under s3_output_path.
+            If None, will auto-generate under cloud_output_path.
         instance_type
             Instance type for the training job.
             If None, will use the default from the model registry.
@@ -167,6 +189,36 @@ class FoundationModel:
 class TimeSeriesFoundationModel(FoundationModel):
     """Foundation model for time series forecasting (Chronos, etc.)."""
 
+    _backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
+    _predictor_type = "timeseries"
+
+    def _build_predictor_fit_args(
+        self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        model_name = self._config["model_name"]
+        merged_hp = self._get_hyperparameters("inference", hyperparameters)
+        return {
+            "train_data": train_data,
+            "hyperparameters": {model_name: merged_hp},
+            "skip_model_selection": True,
+        }
+
+    def _build_predictor_init_args(
+        self,
+        target: str = "target",
+        prediction_length: int = 1,
+        quantile_levels: Optional[List[float]] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Map user kwargs to TimeSeriesPredictor init args."""
+        args: Dict[str, Any] = {
+            "target": target,
+            "prediction_length": prediction_length,
+        }
+        if quantile_levels is not None:
+            args["quantile_levels"] = quantile_levels
+        return args
+
     def predict(
         self,
         data: Union[str, pd.DataFrame],
@@ -178,13 +230,17 @@ class TimeSeriesFoundationModel(FoundationModel):
         prediction_length: int = 1,
         quantile_levels: Optional[List[float]] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
-        output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
+        framework_version: str = "latest",
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Union[pd.DataFrame, RemoteJob]:
+    ) -> Optional[pd.DataFrame]:
         """
-        Run batch prediction for time series.
+        Run batch prediction for time series via a SageMaker training job (fit_predict pattern).
+
+        Launches a job that loads the foundation model, runs .fit() + .predict() in one shot,
+        and saves predictions to the job output.
 
         Parameters
         ----------
@@ -198,6 +254,8 @@ class TimeSeriesFoundationModel(FoundationModel):
             Name of the timestamp column.
         known_covariates
             Future values of known covariates (DataFrame or S3 path).
+            Covariate column names are inferred from the DataFrame columns
+            (excluding id_column and timestamp_column).
         static_features
             Metadata attributes of individual items (DataFrame or S3 path).
         prediction_length
@@ -206,28 +264,66 @@ class TimeSeriesFoundationModel(FoundationModel):
             Quantiles to predict.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
-            Available hyperparameters for each model are listed in the AutoGluon documentation.
-        output_path
-            S3 path to store predictions.
-            If None, will auto-generate under s3_output_path.
         instance_type
-            Instance type for the prediction job.
-            If None, will use the default from the model registry.
+            Instance type for the prediction job. If None, uses registry default.
+        framework_version
+            Container framework version.
+        custom_image_uri
+            Custom Docker image URI for the container.
         wait
             If True, block and return DataFrame. If False, return the job handle.
         **backend_kwargs
-            Additional backend-specific arguments (e.g. job_name, custom_image_uri,
-            framework_version, volume_size).
+            Additional backend-specific arguments (e.g., job_name, volume_size,
+            autogluon_sagemaker_estimator_kwargs).
 
         Returns
         -------
-        Union[pd.DataFrame, RemoteJob]
+        Optional[pd.DataFrame]
         """
-        raise NotImplementedError
+        if instance_type is None:
+            instance_type = self._config["predict_instance_type"]
+
+        predictor_init_args = self._build_predictor_init_args(
+            target=target,
+            prediction_length=prediction_length,
+            quantile_levels=quantile_levels,
+        )
+
+        predictor_fit_args = self._build_predictor_fit_args(data, hyperparameters)
+
+        if known_covariates is not None:
+            predictor_fit_args["known_covariates"] = known_covariates
+
+        self._backend.fit(
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            static_features=static_features,
+            framework_version=framework_version,
+            instance_type=instance_type,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            predict_after_fit=True,
+            **backend_kwargs,
+        )
+
+        if not wait:
+            # TODO: return a handle that supports polling status and fetching results
+            return None
+
+        return self._backend.get_fit_predict_results()
 
 
 class TabularFoundationModel(FoundationModel):
     """Foundation model for tabular prediction (Mitra, TabICL, etc.)."""
+
+    _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
+    _predictor_type = "tabular"
+
+    def _build_predictor_init_args(self, label: str = "target", **kwargs) -> Dict[str, Any]:
+        """Map user kwargs to TabularPredictor init args."""
+        return {"label": label}
 
     def predict(
         self,
@@ -235,13 +331,17 @@ class TabularFoundationModel(FoundationModel):
         test_data: Union[str, pd.DataFrame],
         label: str = "target",
         hyperparameters: Optional[Dict[str, Any]] = None,
-        output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
+        framework_version: str = "latest",
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Union[pd.DataFrame, RemoteJob]:
+    ) -> Optional[pd.DataFrame]:
         """
         Run batch prediction for tabular tasks.
+
+        For tabular foundation models (e.g., Mitra), train_data provides the few-shot
+        context and test_data contains the rows to predict on.
 
         Parameters
         ----------
@@ -253,23 +353,22 @@ class TabularFoundationModel(FoundationModel):
             Target column name in train_data.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
-            Available hyperparameters for each model are listed in the AutoGluon documentation.
-        output_path
-            S3 path to store predictions.
-            If None, will auto-generate under s3_output_path.
         instance_type
-            Instance type for the prediction job.
-            If None, will use the default from the model registry.
+            Instance type for the prediction job. If None, uses registry default.
+        framework_version
+            Container framework version.
+        custom_image_uri
+            Custom Docker image URI for the container.
         wait
             If True, block and return DataFrame. If False, return the job handle.
         **backend_kwargs
-            Additional backend-specific arguments (e.g. job_name, custom_image_uri,
-            framework_version, volume_size).
+            Additional backend-specific arguments.
 
         Returns
         -------
-        Union[pd.DataFrame, RemoteJob]
+        Optional[pd.DataFrame]
         """
+        # TODO: requires fit_predict support for TabularCloudPredictor
         raise NotImplementedError
 
     def predict_proba(
@@ -282,7 +381,7 @@ class TabularFoundationModel(FoundationModel):
         instance_type: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Union[pd.DataFrame, RemoteJob]:
+    ) -> Optional[pd.DataFrame]:
         """
         Run batch prediction returning class probabilities.
 
@@ -299,7 +398,7 @@ class TabularFoundationModel(FoundationModel):
             Available hyperparameters for each model are listed in the AutoGluon documentation.
         output_path
             S3 path to store predictions.
-            If None, will auto-generate under s3_output_path.
+            If None, will auto-generate under cloud_output_path.
         instance_type
             Instance type for the prediction job.
             If None, will use the default from the model registry.
@@ -311,6 +410,6 @@ class TabularFoundationModel(FoundationModel):
 
         Returns
         -------
-        Union[pd.DataFrame, RemoteJob]
+        Optional[pd.DataFrame]
         """
         raise NotImplementedError

@@ -173,6 +173,9 @@ if __name__ == "__main__":
     if args.known_covariates:
         kc_file = get_input_path(args.known_covariates)
         known_covariates_df = load_pd.load(kc_file)
+        if "known_covariates_names" not in predictor_init_args:
+            kc_cols = known_covariates_df.columns.to_list()
+            predictor_init_args["known_covariates_names"] = kc_cols[2:]  # skip id and timestamp columns
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
