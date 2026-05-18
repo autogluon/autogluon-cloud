@@ -205,7 +205,6 @@ class TimeSeriesFoundationModel(FoundationModel):
         self,
         target: str = "target",
         prediction_length: int = 1,
-        known_covariates_names: Optional[List[str]] = None,
         quantile_levels: Optional[List[float]] = None,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -214,8 +213,6 @@ class TimeSeriesFoundationModel(FoundationModel):
             "target": target,
             "prediction_length": prediction_length,
         }
-        if known_covariates_names:
-            args["known_covariates_names"] = known_covariates_names
         if quantile_levels is not None:
             args["quantile_levels"] = quantile_levels
         return args
@@ -284,15 +281,9 @@ class TimeSeriesFoundationModel(FoundationModel):
         if instance_type is None:
             instance_type = self._config["predict_instance_type"]
 
-        # Derive known_covariates_names from the DataFrame columns
-        known_covariates_names: Optional[List[str]] = None
-        if known_covariates is not None and isinstance(known_covariates, pd.DataFrame):
-            known_covariates_names = [c for c in known_covariates.columns if c not in (id_column, timestamp_column)]
-
         predictor_init_args = self._build_predictor_init_args(
             target=target,
             prediction_length=prediction_length,
-            known_covariates_names=known_covariates_names,
             quantile_levels=quantile_levels,
         )
 
