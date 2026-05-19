@@ -456,8 +456,10 @@ class SagemakerBackend(Backend):
             )
             volume_size = None
 
-        # Resolve model artifact
-        # None + fit job → use fit output; None + no fit job → no artifact (FM); otherwise use as-is
+        # Resolve model artifact:
+        # - predictor_path provided → use as-is
+        # - predictor_path=None, fit job exists → use fit output
+        # - predictor_path=None, no fit job → no artifact (FM: weights downloaded at startup)
         if predictor_path is None and self._fit_job is not None:
             fit_output = self._fit_job.get_output_path()
             if fit_output:
@@ -478,8 +480,10 @@ class SagemakerBackend(Backend):
             )
             entry_point = self._serve_script_path
 
-        # Pick model class
-        # NonRepack if tarball already has serve script; Repack to inject a different script; FM creates a minimal tarball
+        # Pick model class:
+        # - No artifact → create minimal tarball with serve script (FM deploy)
+        # - Artifact from different source or custom entry point → Repack (inject script into tarball)
+        # - Artifact from fit job, default entry point → NonRepack (script already in tarball)
         if predictor_path is None:
             predictor_path = self._create_serve_script_tarball(entry_point, endpoint_name)
             model_cls = AutoGluonNonRepackInferenceModel
