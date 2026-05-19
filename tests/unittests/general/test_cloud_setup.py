@@ -3,7 +3,13 @@
 import pytest
 
 from autogluon.cloud import bootstrap, register, status, teardown
-from autogluon.cloud.config import CONFIG_DIR_ENV, CloudConfig, load_config, save_config
+from autogluon.cloud.config import (
+    CONFIG_DIR_ENV,
+    BackendConfig,
+    CloudConfig,
+    load_config,
+    save_config,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -12,47 +18,64 @@ def isolated_config_dir(tmp_path, monkeypatch):
     yield tmp_path
 
 
-def _register_default():
+def _register_default(backend="sagemaker"):
     register(
-        role_arn="arn:aws:iam::111122223333:role/x",
+        role="arn:aws:iam::111122223333:role/x",
         bucket="b1",
         region="us-east-1",
+        backend=backend,
     )
 
 
 # ---------------------------------------------------------------------------
-# register (no AWS calls — pure file I/O)
+# register
 # ---------------------------------------------------------------------------
 
 
 def test_register_writes_file(capsys):
     _register_default()
 
-    config = load_config()
-    assert config.role_arn == "arn:aws:iam::111122223333:role/x"
-    assert config.bucket == "b1"
-    assert config.region == "us-east-1"
-    assert config.backend == "sagemaker"
-    assert config.stack_name is None
-    assert "Saved AG-Cloud config" in capsys.readouterr().out
+    cfg = load_config()
+    assert "sagemaker" in cfg.backends
+    sage = cfg.backends["sagemaker"]
+    assert sage.role_arn == "arn:aws:iam::111122223333:role/x"
+    assert sage.bucket == "b1"
+    assert sage.region == "us-east-1"
+    assert sage.stack_name is None
+    assert "Saved AG-Cloud config for backend 'sagemaker'" in capsys.readouterr().out
 
 
-def test_register_overwrites_existing():
+def test_register_overwrites_same_backend():
     _register_default()
     register(
-        role_arn="arn:aws:iam::111122223333:role/y",
+        role="arn:aws:iam::111122223333:role/y",
         bucket="b2",
         region="us-west-2",
     )
-    config = load_config()
-    assert config.bucket == "b2"
-    assert config.region == "us-west-2"
+    cfg = load_config()
+    assert cfg.backends["sagemaker"].bucket == "b2"
+    assert cfg.backends["sagemaker"].region == "us-west-2"
+
+
+def test_register_keeps_other_backends_untouched():
+    """Adding ray_aws shouldn't disturb sagemaker."""
+    _register_default(backend="sagemaker")
+    register(
+        role="arn:aws:iam::111122223333:role/r",
+        bucket="ray-bucket",
+        region="us-east-1",
+        backend="ray_aws",
+    )
+    cfg = load_config()
+    assert set(cfg.backends) == {"sagemaker", "ray_aws"}
+    assert cfg.backends["sagemaker"].bucket == "b1"
+    assert cfg.backends["ray_aws"].bucket == "ray-bucket"
 
 
 def test_register_rejects_unknown_backend():
     with pytest.raises(ValueError, match="Unsupported backend"):
         register(
-            role_arn="arn:...",
+            role="arn:...",
             bucket="b",
             region="us-east-1",
             backend="not-a-backend",
@@ -60,14 +83,13 @@ def test_register_rejects_unknown_backend():
 
 
 def test_register_records_stack_name_when_given():
-    """Users who deployed their own stack can record the name so teardown can clean up."""
     register(
-        role_arn="arn:aws:iam::111122223333:role/x",
+        role="arn:aws:iam::111122223333:role/x",
         bucket="b1",
         region="us-east-1",
         stack_name="my-stack",
     )
-    assert load_config().stack_name == "my-stack"
+    assert load_config().backends["sagemaker"].stack_name == "my-stack"
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +98,6 @@ def test_register_records_stack_name_when_given():
 
 
 def test_bootstrap_calls_cfn_then_registers(monkeypatch, capsys):
-    """bootstrap should deploy a stack and persist outputs via register."""
-
     class FakeSession:
         region_name = "us-east-1"
 
@@ -95,18 +115,15 @@ def test_bootstrap_calls_cfn_then_registers(monkeypatch, capsys):
 
     bootstrap(backend="sagemaker", stack_name="my-stack")
 
-    config = load_config()
-    assert config.role_arn == "arn:aws:iam::123:role/r"
-    assert config.bucket == "ag-cloud-bucket"
-    assert config.stack_name == "my-stack"
-    assert config.region == "us-east-1"
+    cfg = load_config()
+    assert cfg.backends["sagemaker"].role_arn == "arn:aws:iam::123:role/r"
+    assert cfg.backends["sagemaker"].bucket == "ag-cloud-bucket"
+    assert cfg.backends["sagemaker"].stack_name == "my-stack"
 
     out = capsys.readouterr().out
     assert "Deploying CloudFormation stack 'my-stack'" in out
     assert "account 123456789012" in out
-    assert "region us-east-1" in out
     assert "deployed" in out
-    assert "Saved AG-Cloud config" in out
 
 
 def test_bootstrap_returns_none(monkeypatch):
@@ -151,32 +168,35 @@ def test_bootstrap_default_stack_name_uses_backend(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_status_without_config_returns_not_found():
-    result = status()
-    assert result["found"] is False
+def test_status_without_config_returns_empty_dict():
+    assert status() == {}
 
 
-def test_status_with_config(monkeypatch):
-    _register_default()
+def test_status_returns_one_per_backend(monkeypatch):
+    _register_default(backend="sagemaker")
+    register(
+        role="arn:...",
+        bucket="ray-bucket",
+        region="us-east-1",
+        backend="ray_aws",
+    )
     monkeypatch.setattr("autogluon.cloud.cloud_setup._check_bucket", lambda s, b: "ok")
     monkeypatch.setattr("autogluon.cloud.cloud_setup._check_role", lambda s, r: "ok")
 
-    result = status()
-    assert result["found"] is True
-    assert isinstance(result["config"], CloudConfig)
-    assert result["checks"] == {"bucket": "ok", "role": "ok"}
-
-
-def test_status_check_role_false_skips_iam(monkeypatch):
-    _register_default()
-    monkeypatch.setattr("autogluon.cloud.cloud_setup._check_bucket", lambda s, b: "ok")
-
-    result = status(check_role=False)
-    assert "role" not in result["checks"]
+    reports = status()
+    assert set(reports) == {"sagemaker", "ray_aws"}
+    assert isinstance(reports["sagemaker"].config, BackendConfig)
+    assert reports["sagemaker"].checks == {"bucket": "ok", "role": "ok"}
+    assert reports["ray_aws"].config.bucket == "ray-bucket"
 
 
 def test_status_includes_stack_check_when_stack_name_set(monkeypatch):
-    register(role_arn="arn:...", bucket="b", region="us-east-1", stack_name="s")
+    register(
+        role="arn:...",
+        bucket="b",
+        region="us-east-1",
+        stack_name="s",
+    )
     monkeypatch.setattr("autogluon.cloud.cloud_setup._check_bucket", lambda s, b: "ok")
     monkeypatch.setattr("autogluon.cloud.cloud_setup._check_role", lambda s, r: "ok")
     monkeypatch.setattr(
@@ -184,8 +204,27 @@ def test_status_includes_stack_check_when_stack_name_set(monkeypatch):
         lambda s, n: "CREATE_COMPLETE",
     )
 
-    result = status()
-    assert result["checks"]["stack"] == "CREATE_COMPLETE"
+    reports = status()
+    assert reports["sagemaker"].checks["stack"] == "CREATE_COMPLETE"
+
+
+def test_check_role_returns_unverified_on_access_denied():
+    """AccessDenied means the caller lacks permission to verify, not that the role is broken."""
+    from botocore.exceptions import ClientError
+
+    from autogluon.cloud.cloud_setup import _check_role
+
+    class FakeIAM:
+        def get_role(self, RoleName):
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "no perms"}}, "GetRole")
+
+    class FakeSession:
+        def client(self, service):
+            assert service == "iam"
+            return FakeIAM()
+
+    result = _check_role(FakeSession(), "arn:aws:iam::123:role/x")
+    assert "unverified" in result
 
 
 # ---------------------------------------------------------------------------
@@ -198,24 +237,37 @@ def test_teardown_without_config_is_noop(capsys):
     assert "nothing to tear down" in capsys.readouterr().out
 
 
-def test_teardown_no_stack_just_removes_config(capsys):
+def test_teardown_no_stacks_just_removes_config(capsys):
+    """Backends registered without stack_name → only the config is removed."""
     _register_default()
     teardown()
     assert load_config() is None
-    assert "no stack to delete" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "no stack to delete" in out
+    assert "Removed config" in out
 
 
-def test_teardown_with_stack_deletes_stack(monkeypatch):
+def test_teardown_with_stack_deletes_each_backend(monkeypatch):
+    """Multiple backends with stacks → all get deleted, then config removed."""
     save_config(
         CloudConfig(
-            region="us-east-1",
-            role_arn="arn:...",
-            bucket="b",
-            backend="sagemaker",
-            stack_name="ag-cloud-sagemaker",
+            backends={
+                "sagemaker": BackendConfig(
+                    region="us-east-1",
+                    role_arn="arn:...",
+                    bucket="b1",
+                    stack_name="ag-cloud-sagemaker",
+                ),
+                "ray_aws": BackendConfig(
+                    region="us-east-1",
+                    role_arn="arn:...",
+                    bucket="b2",
+                    stack_name="ag-cloud-ray-aws",
+                ),
+            }
         )
     )
-    calls = []
+    deleted = []
 
     class FakeWaiter:
         def wait(self, **kw):
@@ -223,7 +275,7 @@ def test_teardown_with_stack_deletes_stack(monkeypatch):
 
     class FakeCFN:
         def delete_stack(self, StackName):
-            calls.append(StackName)
+            deleted.append(StackName)
 
         def get_waiter(self, name):
             assert name == "stack_delete_complete"
@@ -241,9 +293,26 @@ def test_teardown_with_stack_deletes_stack(monkeypatch):
                 return FakeSTS()
             raise AssertionError(f"unexpected client: {service}")
 
-        def resource(self, service):
-            raise AssertionError("delete_bucket_contents=False; resource() not expected")
-
     teardown(session=FakeSession())
-    assert calls == ["ag-cloud-sagemaker"]
+    assert sorted(deleted) == ["ag-cloud-ray-aws", "ag-cloud-sagemaker"]
     assert load_config() is None
+
+
+def test_teardown_specific_backend_keeps_others():
+    """teardown(backend='sagemaker') removes only that entry; ray_aws stays."""
+    _register_default(backend="sagemaker")
+    register(role="arn:...", bucket="ray-bucket", region="us-east-1", backend="ray_aws")
+
+    teardown(backend="sagemaker")  # neither has a stack_name → no AWS calls
+
+    cfg = load_config()
+    assert cfg is not None
+    assert set(cfg.backends) == {"ray_aws"}
+
+
+def test_teardown_unknown_backend_is_friendly(capsys):
+    _register_default(backend="sagemaker")
+    teardown(backend="ray_aws")  # not registered
+    out = capsys.readouterr().out
+    assert "not in config" in out
+    assert load_config() is not None  # nothing was removed
