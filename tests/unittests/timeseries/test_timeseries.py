@@ -6,7 +6,6 @@ import pytest
 
 from autogluon.cloud import TimeSeriesCloudPredictor
 from autogluon.cloud.model import FoundationModel
-from autogluon.cloud.utils.serializers import AutoGluonSerializationWrapper
 
 
 @pytest.fixture(scope="module")
@@ -191,17 +190,13 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
         )
 
         try:
-            inference_kwargs = {
-                "target": ds["target"],
-                "id_column": ds["id_column"],
-                "timestamp_column": ds["timestamp_column"],
-                "prediction_length": ds["prediction_length"],
-            }
-            payload = AutoGluonSerializationWrapper(
+            predictions = endpoint.predict(
                 data=ds["train_data"],
-                inference_kwargs=inference_kwargs,
+                target=ds["target"],
+                id_column=ds["id_column"],
+                timestamp_column=ds["timestamp_column"],
+                prediction_length=ds["prediction_length"],
             )
-            predictions = endpoint.predict(payload)
             assert isinstance(predictions, pd.DataFrame)
             assert "mean" in predictions.columns
         finally:

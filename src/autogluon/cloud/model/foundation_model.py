@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
-from ..endpoint.endpoint import Endpoint
+from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from .registry import get_model_config
 
@@ -106,7 +106,7 @@ class FoundationModel:
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Endpoint:
+    ) -> "TimeSeriesEndpoint":
         """
         Deploy model to a real-time endpoint.
 
@@ -132,7 +132,7 @@ class FoundationModel:
 
         Returns
         -------
-        Endpoint
+        TimeSeriesEndpoint
         """
         if instance_type is None:
             instance_type = self._config["deploy_instance_type"]
@@ -157,7 +157,7 @@ class FoundationModel:
             **backend_kwargs,
         )
         assert self._backend.endpoint is not None
-        return self._backend.endpoint
+        return TimeSeriesEndpoint(self._backend.endpoint)
 
     @abstractmethod
     def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
