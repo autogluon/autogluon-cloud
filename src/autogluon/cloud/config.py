@@ -30,7 +30,7 @@ from typing import Dict, Optional
 
 import yaml
 
-CONFIG_DIR_ENV = "AUTOGLUON_CLOUD_CONFIG_DIR"
+CONFIG_DIR_ENV = "AG_CONFIG_DIR"
 
 
 def get_config_dir() -> Path:

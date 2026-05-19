@@ -19,7 +19,7 @@ from typing import Dict, Literal, Optional
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
-from .backend.constant import SUPPORTED_SETUP_BACKENDS
+from .backend.constant import SUPPORTED_BACKENDS
 from .config import (
     BackendConfig,
     CloudConfig,
@@ -41,7 +41,7 @@ class StatusReport:
     checks: Dict[str, str] = field(default_factory=dict)
 
 
-# Keep these values in sync with SUPPORTED_SETUP_BACKENDS in backend/constant.py.
+# Keep these values in sync with SUPPORTED_BACKENDS in backend/constant.py.
 BackendName = Literal["sagemaker", "ray_aws"]
 
 
@@ -70,8 +70,8 @@ def bootstrap(
         A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is constructed from the standard
         credential chain (env vars, ``~/.aws/credentials``, SSO, instance profile).
     """
-    if backend not in SUPPORTED_SETUP_BACKENDS:
-        raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_SETUP_BACKENDS}.")
+    if backend not in SUPPORTED_BACKENDS:
+        raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
 
     session, account = _verified_session(session)
     region = session.region_name
@@ -127,8 +127,8 @@ def register(
         :func:`teardown` to be able to delete it later, pass the name here. Defaults to ``None``, meaning teardown
         will only remove the config entry, not touch AWS.
     """
-    if backend not in SUPPORTED_SETUP_BACKENDS:
-        raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_SETUP_BACKENDS}.")
+    if backend not in SUPPORTED_BACKENDS:
+        raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
     config = load_config() or CloudConfig()
     config.backends[backend] = BackendConfig(
         region=region,
@@ -162,10 +162,7 @@ def status(
         return {}
 
     reports: Dict[str, StatusReport] = {}
-    for name in list(config.backends):
-        backend_config = config.backends.get(name)
-        if backend_config is None:
-            continue
+    for name, backend_config in config.backends.items():
         sess = session or boto3.Session(region_name=backend_config.region)
         checks: Dict[str, str] = {"bucket": _check_bucket(sess, backend_config.bucket)}
         if backend_config.stack_name:
@@ -289,15 +286,17 @@ def _provision_stack(session: boto3.Session, *, stack_name: str, backend: Backen
     return outputs["RoleARN"], outputs["BucketName"]
 
 
-# AWS error codes that mean "the caller lacks IAM permission to read this", as
-# distinct from "the resource doesn't exist". We surface these as ``"unverified"``
-# rather than ``"failed"`` so users don't think their setup is broken when really
-# it's just a permissions gap on the side of whoever is running ``status()``.
-_PERMISSION_ERROR_CODES = frozenset({"AccessDenied", "AccessDeniedException", "Forbidden", "UnauthorizedOperation"})
-
-
 def _is_permission_error(e: ClientError) -> bool:
-    return e.response.get("Error", {}).get("Code", "") in _PERMISSION_ERROR_CODES
+    # AWS error codes that mean "the caller lacks IAM permission to read this", as
+    # distinct from "the resource doesn't exist". We surface these as ``"unverified"``
+    # rather than ``"failed"`` so users don't think their setup is broken when really
+    # it's just a permissions gap on the side of whoever is running ``status()``.
+    return e.response.get("Error", {}).get("Code", "") in {
+        "AccessDenied",
+        "AccessDeniedException",
+        "Forbidden",
+        "UnauthorizedOperation",
+    }
 
 
 def _check_bucket(session: boto3.Session, bucket: str) -> str:
