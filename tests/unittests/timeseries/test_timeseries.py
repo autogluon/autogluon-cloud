@@ -6,6 +6,7 @@ import pytest
 
 from autogluon.cloud import TimeSeriesCloudPredictor
 from autogluon.cloud.model import FoundationModel
+from autogluon.cloud.utils.serializers import AutoGluonSerializationWrapper
 
 
 @pytest.fixture(scope="module")
@@ -168,3 +169,40 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
         counts = predictions.groupby("item_id").size()
         assert (counts == ds["prediction_length"]).all()
         assert len(predictions) == len(expected_item_ids) * ds["prediction_length"]
+
+
+def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset):
+    """Test FoundationModel deploy to a real-time endpoint and predict."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=True)
+
+        model = FoundationModel(
+            "chronos-bolt-tiny",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy/{framework_version}/{timestamp}",
+        )
+
+        endpoint = model.deploy(
+            custom_image_uri=inference_custom_image_uri,
+        )
+
+        try:
+            inference_kwargs = {
+                "target": ds["target"],
+                "id_column": ds["id_column"],
+                "timestamp_column": ds["timestamp_column"],
+                "prediction_length": ds["prediction_length"],
+            }
+            payload = AutoGluonSerializationWrapper(
+                data=ds["train_data"],
+                inference_kwargs=inference_kwargs,
+            )
+            predictions = endpoint.predict(payload)
+            assert isinstance(predictions, pd.DataFrame)
+            assert "mean" in predictions.columns
+        finally:
+            endpoint.delete_endpoint()
