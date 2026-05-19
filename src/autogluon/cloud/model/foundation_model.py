@@ -97,6 +97,20 @@ class FoundationModel:
         """Path to the serve script for this model type."""
         ...
 
+    @abstractmethod
+    def deploy(self, **kwargs):
+        """Deploy model to a real-time endpoint.
+
+        Subclasses implement this and return a task-specific endpoint
+        (e.g., TimeSeriesEndpoint, TabularEndpoint).
+        """
+        ...
+
+    @abstractmethod
+    def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
+        """Subclasses override with task-specific signature."""
+        ...
+
     def _deploy_backend(
         self,
         instance_type: Optional[str] = None,
@@ -107,7 +121,7 @@ class FoundationModel:
         wait: bool = True,
         **backend_kwargs,
     ) -> None:
-        """Deploy the model to SageMaker. Subclasses call this then wrap the endpoint."""
+        """Shared deploy logic. Subclasses call this then wrap the endpoint."""
         if instance_type is None:
             instance_type = self._config["deploy_instance_type"]
 
@@ -131,16 +145,6 @@ class FoundationModel:
             **backend_kwargs,
         )
         assert self._backend.endpoint is not None
-
-    @abstractmethod
-    def deploy(self, **kwargs):
-        """Deploy model to a real-time endpoint. Returns a task-specific endpoint."""
-        ...
-
-    @abstractmethod
-    def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
-        """Subclasses override with task-specific signature."""
-        ...
 
     def fit(
         self,
@@ -240,7 +244,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             Whether to block until the endpoint is ready.
         **backend_kwargs
             Backend-specific arguments (e.g., initial_instance_count, volume_size,
-            model_kwargs, deploy_kwargs for SageMaker).
+            model_kwargs, deploy_kwargs).
 
         Returns
         -------
@@ -302,10 +306,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         **backend_kwargs,
     ) -> Optional[pd.DataFrame]:
         """
-        Run batch prediction for time series via a SageMaker training job (fit_predict pattern).
-
-        Launches a job that loads the foundation model, runs .fit() + .predict() in one shot,
-        and saves predictions to the job output.
+        Run batch prediction for time series.
 
         Parameters
         ----------

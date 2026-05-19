@@ -2,6 +2,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
+from autogluon.common.loaders import load_pd
+
 from ..utils.serializers import AutoGluonSerializationWrapper
 from .endpoint import Endpoint
 
@@ -13,17 +15,9 @@ class TimeSeriesEndpoint:
     providing a clean predict() interface.
     """
 
-    def __init__(
-        self,
-        endpoint: Endpoint,
-        default_target: Optional[str] = None,
-        default_id_column: Optional[str] = None,
-        default_timestamp_column: Optional[str] = None,
-    ):
+    def __init__(self, endpoint: Endpoint):
+        # TODO: replace with sagemaker.Predictor directly (remove Endpoint/SagemakerEndpoint layer)
         self._endpoint = endpoint
-        self._default_target = default_target
-        self._default_id_column = default_id_column
-        self._default_timestamp_column = default_timestamp_column
 
     @property
     def endpoint_name(self) -> str:
@@ -32,12 +26,12 @@ class TimeSeriesEndpoint:
     def predict(
         self,
         data: Union[str, pd.DataFrame],
-        known_covariates: Optional[pd.DataFrame] = None,
-        static_features: Optional[pd.DataFrame] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
         prediction_length: int = 1,
-        target: Optional[str] = None,
-        id_column: Optional[str] = None,
-        timestamp_column: Optional[str] = None,
+        target: str = "target",
+        id_column: str = "item_id",
+        timestamp_column: str = "timestamp",
         quantile_levels: Optional[List[float]] = None,
         accept: str = "application/x-parquet",
     ) -> pd.DataFrame:
@@ -69,17 +63,19 @@ class TimeSeriesEndpoint:
         -------
         pd.DataFrame
         """
-        target = target or self._default_target
-        id_column = id_column or self._default_id_column
-        timestamp_column = timestamp_column or self._default_timestamp_column
+        if isinstance(data, str):
+            data = load_pd.load(data)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+        if isinstance(static_features, str):
+            static_features = load_pd.load(static_features)
 
-        inference_kwargs: Dict[str, Any] = {"prediction_length": prediction_length}
-        if target is not None:
-            inference_kwargs["target"] = target
-        if id_column is not None:
-            inference_kwargs["id_column"] = id_column
-        if timestamp_column is not None:
-            inference_kwargs["timestamp_column"] = timestamp_column
+        inference_kwargs: Dict[str, Any] = {
+            "prediction_length": prediction_length,
+            "target": target,
+            "id_column": id_column,
+            "timestamp_column": timestamp_column,
+        }
         if quantile_levels is not None:
             inference_kwargs["quantile_levels"] = quantile_levels
 
