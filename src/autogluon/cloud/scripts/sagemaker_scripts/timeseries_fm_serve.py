@@ -122,6 +122,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
 
     tsdf = _build_tsdf(data, id_column, timestamp_column, target)
 
+    model.target = target
     model.prediction_length = prediction_length
     if quantile_levels is not None:
         model.quantile_levels = sorted(quantile_levels)
