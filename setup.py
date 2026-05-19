@@ -140,6 +140,9 @@ install_requires = [
     "PyYAML~=6.0",
     "Pillow>=10.2,<13",
     "ray[default]>=2.10.0,<2.56",
+    # CLI dependencies (autogluon-cloud command)
+    "click>=8.0,<9",
+    "rich>=13.0,<15",
 ]
 
 extras_require = dict()
@@ -165,5 +168,10 @@ if __name__ == "__main__":
     setup(
         install_requires=install_requires,
         extras_require=extras_require,
+        entry_points={
+            "console_scripts": [
+                "autogluon-cloud=autogluon.cloud.cli:main",
+            ],
+        },
         **setup_args,
     )
