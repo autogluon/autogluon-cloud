@@ -73,7 +73,7 @@ def _parse_jumpstart_payload(payload: dict):
             "parameters": {"prediction_length": 12, "quantile_levels": [...]}
         }
     """
-    # TODO: implement JumpStart schema parsing
+    # TODO: add support for JumpStart JSON schema
     raise NotImplementedError("JumpStart JSON input schema is not yet supported")
 
 
