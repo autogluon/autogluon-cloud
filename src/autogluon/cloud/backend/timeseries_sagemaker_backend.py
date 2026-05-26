@@ -20,7 +20,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         predictor_fit_args: Dict[str, Any],
         id_column: str,
         timestamp_column: str,
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -30,44 +29,36 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
-        predict_after_fit: bool = False,
+        extra_ag_args: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
         ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.pkl``
-        (see ``extra_ag_args`` on the parent ``fit``). ``static_features`` is uploaded as its own SageMaker
-        channel. ``known_covariates`` (if present in ``predictor_fit_args``) is also uploaded as a separate
-        channel and only honored when ``predict_after_fit=True``.
+        (see ``extra_ag_args`` on the parent ``fit``). ``train_data`` / ``tuning_data`` / ``known_covariates``
+        / ``static_features`` (if present in ``predictor_fit_args``) are extracted here and uploaded as
+        separate SageMaker channels via ``data_channels``. ``known_covariates`` is only honored when
+        ``extra_ag_args["predict_after_fit"]`` is True.
         """
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
-        train_data = predictor_fit_args.pop("train_data")
-        tuning_data = predictor_fit_args.pop("tuning_data", None)
-        known_covariates = predictor_fit_args.pop("known_covariates", None)
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]] = {
+            "train_data": predictor_fit_args.pop("train_data"),
+            "tuning_data": predictor_fit_args.pop("tuning_data", None),
+            "known_covariates": predictor_fit_args.pop("known_covariates", None),
+            "static_features": predictor_fit_args.pop("static_features", None),
+        }
 
-        if isinstance(train_data, str):
-            train_data = load_pd.load(train_data)
-        if isinstance(tuning_data, str):
-            tuning_data = load_pd.load(tuning_data)
-        if isinstance(known_covariates, str):
-            known_covariates = load_pd.load(known_covariates)
-        if isinstance(static_features, str):
-            static_features = load_pd.load(static_features)
-
-        if known_covariates is not None and not predict_after_fit:
-            raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
-
-        predictor_fit_args["train_data"] = train_data
-        predictor_fit_args["tuning_data"] = tuning_data
-
-        extra_ag_args: Dict[str, Any] = {
+        merged_extra_ag_args: Dict[str, Any] = {
             "id_column": id_column,
             "timestamp_column": timestamp_column,
-            "predict_after_fit": predict_after_fit,
+            **(extra_ag_args or {}),
         }
+        if data_channels["known_covariates"] is not None and not merged_extra_ag_args.get("predict_after_fit", False):
+            raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
 
         super().fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            data_channels=data_channels,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,
@@ -77,9 +68,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
-            known_covariates=known_covariates,
-            static_features=static_features,
-            extra_ag_args=extra_ag_args,
+            extra_ag_args=merged_extra_ag_args,
         )
 
     def predict_real_time(
@@ -88,6 +77,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         id_column: str,
         timestamp_column: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
         inference_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
@@ -106,15 +96,13 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             test_data = load_pd.load(test_data)
         if isinstance(static_features, str):
             static_features = load_pd.load(static_features)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
 
         if inference_kwargs is None:
             inference_kwargs = {}
         inference_kwargs["id_column"] = id_column
         inference_kwargs["timestamp_column"] = timestamp_column
-
-        known_covariates = inference_kwargs.pop("known_covariates", None)
-        if isinstance(known_covariates, str):
-            known_covariates = load_pd.load(known_covariates)
 
         wrapper = AutoGluonSerializationWrapper(
             data=test_data,

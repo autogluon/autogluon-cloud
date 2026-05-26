@@ -269,10 +269,18 @@ class CloudPredictor(ABC):
         )
         if backend_kwargs is None:
             backend_kwargs = {}
+        # Extract data inputs out of predictor_fit_args so they can be uploaded as separate SageMaker
+        # channels. predictor_fit_args itself becomes pure predictor.fit() kwargs.
+        predictor_fit_args = dict(predictor_fit_args)
+        data_channels = {
+            "train_data": predictor_fit_args.pop("train_data"),
+            "tuning_data": predictor_fit_args.pop("tuning_data", None),
+        }
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            data_channels=data_channels,
             image_column=image_column,
             leaderboard=leaderboard,
             framework_version=framework_version,

@@ -139,13 +139,15 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             "predictor_metadata"
         ] = json.dumps(predictor_metadata)
 
+        if static_features is not None:
+            predictor_fit_args = {**predictor_fit_args, "static_features": static_features}
+
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             id_column=id_column,
             timestamp_column=timestamp_column,
-            static_features=static_features,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,
@@ -205,8 +207,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             id_column=self.id_column,
             timestamp_column=self.timestamp_column,
             static_features=static_features,
+            known_covariates=known_covariates,
             accept=accept,
-            inference_kwargs=dict(known_covariates=known_covariates, **kwargs),
+            inference_kwargs=kwargs,
         )
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:

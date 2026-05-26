@@ -109,6 +109,7 @@ class RayBackend(Backend):
         *,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         image_column: Optional[str] = None,
         leaderboard: bool = True,
         framework_version: str = "latest",
@@ -181,9 +182,11 @@ class RayBackend(Backend):
         """
         if image_column is not None:
             raise ValueError("Distributed training doesn't support image modality yet")
+        if data_channels.get("train_data") is None:
+            raise ValueError("`data_channels['train_data']` is required.")
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
-        train_data = predictor_fit_args.pop("train_data")
-        tune_data = predictor_fit_args.pop("tuning_data", None)
+        train_data = data_channels["train_data"]
+        tune_data = data_channels.get("tuning_data")
         presets = predictor_fit_args.pop("presets", [])
         num_bag_folds = predictor_fit_args.get("num_bag_folds", None)
         hyperparameter_tune_kwargs = predictor_fit_args.get("hyperparameter_tune_kwargs", None)

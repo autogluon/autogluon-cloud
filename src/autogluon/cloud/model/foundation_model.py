@@ -359,18 +359,19 @@ class TimeSeriesFoundationModel(FoundationModel):
 
         if known_covariates is not None:
             predictor_fit_args["known_covariates"] = known_covariates
+        if static_features is not None:
+            predictor_fit_args["static_features"] = static_features
 
         self._backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             id_column=id_column,
             timestamp_column=timestamp_column,
-            static_features=static_features,
             framework_version=framework_version,
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            predict_after_fit=True,
+            extra_ag_args={"predict_after_fit": True},
             **backend_kwargs,
         )
 
