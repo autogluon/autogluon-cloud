@@ -79,13 +79,12 @@ class TimeSeriesEndpoint:
         if quantile_levels is not None:
             inference_kwargs["quantile_levels"] = quantile_levels
 
-        # TODO: known_covariates and static_features support in follow-up serde PR
-        if known_covariates is not None:
-            raise NotImplementedError("known_covariates for real-time endpoints is not yet supported")
-        if static_features is not None:
-            raise NotImplementedError("static_features for real-time endpoints is not yet supported")
-
-        payload = AutoGluonSerializationWrapper(data=data, inference_kwargs=inference_kwargs)
+        payload = AutoGluonSerializationWrapper(
+            data=data,
+            inference_kwargs=inference_kwargs,
+            static_features=static_features,
+            known_covariates=known_covariates,
+        )
         return self._endpoint.predict(payload, initial_args={"Accept": accept})
 
     def delete_endpoint(self) -> None:

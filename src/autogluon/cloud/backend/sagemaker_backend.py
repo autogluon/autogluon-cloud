@@ -140,14 +140,10 @@ class SagemakerBackend(Backend):
 
     def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to fit call"""
-        autogluon_sagemaker_estimator_kwargs = kwargs.get("autogluon_sagemaker_estimator_kwargs", None)
-        fit_kwargs = kwargs.get("fit_kwargs", None)
-        predict_after_fit = kwargs.get("predict_after_fit", False)
-
         return dict(
-            autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
-            fit_kwargs=fit_kwargs,
-            predict_after_fit=predict_after_fit,
+            autogluon_sagemaker_estimator_kwargs=kwargs.get("autogluon_sagemaker_estimator_kwargs", None),
+            fit_kwargs=kwargs.get("fit_kwargs", None),
+            extra_ag_args={"predict_after_fit": kwargs.get("predict_after_fit", False)},
         )
 
     def attach_job(self, job_name: str) -> None:
@@ -218,8 +214,9 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
-        predict_after_fit: bool = False,
         known_covariates: Optional[pd.DataFrame] = None,
+        static_features: Optional[pd.DataFrame] = None,
+        extra_ag_args: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -264,10 +261,12 @@ class SagemakerBackend(Backend):
         fit_kwargs:
             Any extra arguments needed to pass to fit.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
-        predict_after_fit: bool, default = False
-            If True, run prediction inside the training job and persist results for later retrieval.
         known_covariates: Optional[pd.DataFrame], default = None
-            Known covariates over the forecast horizon. Used only when ``predict_after_fit=True``.
+            Known covariates over the forecast horizon. Used only when ``extra_ag_args["predict_after_fit"]``
+            is set by the caller.
+        extra_ag_args: Optional[Dict[str, Any]], default = None
+            Additional entries to merge into ``ag_args.pkl``. Use this to ship caller-specific metadata to the
+            train script (e.g. ``predict_after_fit``, or ``id_column`` / ``timestamp_column`` for time series).
         """
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         train_data = predictor_fit_args.pop("train_data")
@@ -330,12 +329,12 @@ class SagemakerBackend(Backend):
             predictor_fit_args=predictor_fit_args,
             leaderboard=leaderboard,
         )
-        if predict_after_fit:
-            ag_args["predict_after_fit"] = True
         # Get the label from predictor_init_args
         label = predictor_init_args.get("label") or predictor_init_args.get("target") or None
         if image_column is not None:
             ag_args["image_column"] = image_column
+        if extra_ag_args:
+            ag_args.update(extra_ag_args)
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
@@ -345,6 +344,7 @@ class SagemakerBackend(Backend):
             ag_args=ag_args_path,
             image_column=image_column,
             known_covariates=known_covariates,
+            static_features=static_features,
             serving_script=ScriptManager.get_serve_script(
                 backend_type=self.name, framework_version=framework_version
             ),  # Training and Inference should have the same framework_version
@@ -1060,6 +1060,7 @@ class SagemakerBackend(Backend):
         serving_script,
         image_column=None,
         known_covariates=None,
+        static_features=None,
     ):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
         util_key_prefix = cloud_key_prefix + "/utils"
@@ -1104,6 +1105,13 @@ class SagemakerBackend(Backend):
             )
             logger.log(20, "Known covariates uploaded successfully")
 
+        static_features_input = None
+        if static_features is not None:
+            static_features_input = self._prepare_and_upload_data(
+                static_features, "static_features", cloud_bucket, util_key_prefix
+            )
+            logger.log(20, "Static features uploaded successfully")
+
         ag_args_input = self.sagemaker_session.upload_data(
             path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix
         )
@@ -1123,6 +1131,8 @@ class SagemakerBackend(Backend):
             inputs["tune"] = tune_input
         if known_covariates_input is not None:
             inputs["known_covariates"] = known_covariates_input
+        if static_features_input is not None:
+            inputs["static_features"] = static_features_input
         if train_images_input is not None:
             inputs["train_images"] = train_images_input
         if tune_images_input is not None:
@@ -1177,7 +1187,8 @@ class SagemakerBackend(Backend):
 
     def _predict_real_time(self, test_data, accept, split_pred_proba=True, inference_kwargs=None, **initial_args):
         try:
-            test_data = AutoGluonSerializationWrapper(data=test_data, inference_kwargs=inference_kwargs)
+            if not isinstance(test_data, AutoGluonSerializationWrapper):
+                test_data = AutoGluonSerializationWrapper(data=test_data, inference_kwargs=inference_kwargs)
             prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
             pred, pred_proba = None, None
             pred = prediction

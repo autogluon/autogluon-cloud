@@ -1,6 +1,6 @@
 import pickle
-from dataclasses import dataclass
-from typing import Any, Dict
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,8 @@ from sagemaker.serializers import NumpySerializer, SimpleBaseSerializer
 class AutoGluonSerializationWrapper:
     data: pd.DataFrame
     inference_kwargs: Dict[str, Any]
+    static_features: Optional[pd.DataFrame] = field(default=None)
+    known_covariates: Optional[pd.DataFrame] = field(default=None)
 
 
 class ParquetSerializer(SimpleBaseSerializer):
@@ -69,6 +71,10 @@ class AutoGluonSerializer(SimpleBaseSerializer):
         """
         if isinstance(data, AutoGluonSerializationWrapper):
             package = {"data": self.parquet_serializer.serialize(data.data), "inference_kwargs": data.inference_kwargs}
+            if data.static_features is not None:
+                package["static_features"] = self.parquet_serializer.serialize(data.static_features)
+            if data.known_covariates is not None:
+                package["known_covariates"] = self.parquet_serializer.serialize(data.known_covariates)
             return pickle.dumps(package)
 
         raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")

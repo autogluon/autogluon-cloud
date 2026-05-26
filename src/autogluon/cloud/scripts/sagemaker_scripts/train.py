@@ -30,47 +30,6 @@ def get_env_if_present(name):
     return result
 
 
-def prepare_timeseries_dataframe(df, predictor_init_args=None, target=None):
-    """Build a TimeSeriesDataFrame from a long-format ``df``.
-
-    ``df`` is expected to have its id column at position 0 and timestamp at position 1 (layout set by
-    ``TimeSeriesSagemakerBackend._preprocess_data``).
-
-    If ``target`` (or ``predictor_init_args['target']``) is provided, any columns trailing the target column are
-    treated as merged-in static features and reattached as ``df.static_features``. If ``target`` is ``None`` (e.g. a
-    ``known_covariates`` frame), the static-features branch is skipped entirely.
-    """
-    if target is None and predictor_init_args is not None:
-        target = predictor_init_args.get("target")
-    cols = df.columns.to_list()
-    id_column = cols[0]
-    timestamp_column = cols[1]
-    df[timestamp_column] = pd.to_datetime(df[timestamp_column])
-    static_features = None
-    if target is not None and target != cols[-1]:
-        # target is not the last column, then there are static features being merged in
-        target_index = cols.index(target)
-        static_columns = cols[target_index + 1 :]
-        static_features = df[[id_column] + static_columns].groupby([id_column], sort=False).head(1)
-        static_features.set_index(id_column, inplace=True)
-        df.drop(columns=static_columns, inplace=True)
-    df = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
-    if static_features is not None:
-        print(static_features)
-        df.static_features = static_features
-    return df
-
-
-def prepare_data(data_file, predictor_type, predictor_init_args=None):
-    if predictor_type == "timeseries":
-        assert predictor_init_args is not None
-        data = load_pd.load(data_file)
-        data = prepare_timeseries_dataframe(data, predictor_init_args=predictor_init_args)
-    else:
-        data = TabularDataset(data_file)
-    return data
-
-
 if __name__ == "__main__":
     # Disable Autotune
     os.environ["MXNET_CUDNN_AUTOTUNE_DEFAULT"] = "0"
@@ -95,6 +54,9 @@ if __name__ == "__main__":
     parser.add_argument("--serving_script", type=str, default=get_env_if_present("SM_CHANNEL_SERVING"))
     parser.add_argument(
         "--known_covariates", type=str, required=False, default=get_env_if_present("SM_CHANNEL_KNOWN_COVARIATES")
+    )
+    parser.add_argument(
+        "--static_features", type=str, required=False, default=get_env_if_present("SM_CHANNEL_STATIC_FEATURES")
     )
 
     args, _ = parser.parse_known_args()
@@ -137,8 +99,26 @@ if __name__ == "__main__":
         # Disable prediction caching to avoid errors on read-only filesystem
         predictor_init_args.setdefault("cache_predictions", False)
 
+    id_column = ag_args.get("id_column", "item_id")
+    timestamp_column = ag_args.get("timestamp_column", "timestamp")
+
+    static_features_df = None
+    if args.static_features:
+        sf_file = get_input_path(args.static_features)
+        static_features_df = load_pd.load(sf_file)
+        if id_column in static_features_df.columns:
+            static_features_df.set_index(id_column, inplace=True)
+
     train_file = get_input_path(args.train_dir)
-    training_data = prepare_data(train_file, predictor_type, predictor_init_args)
+    if predictor_type == "timeseries":
+        training_data = TimeSeriesDataFrame.from_data_frame(
+            load_pd.load(train_file),
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            static_features_df=static_features_df,
+        )
+    else:
+        training_data = TabularDataset(train_file)
 
     if predictor_type == "tabular" and "image_column" in ag_args:
         feature_metadata = predictor_fit_args.get("feature_metadata", None)
@@ -151,7 +131,15 @@ if __name__ == "__main__":
     tuning_data = None
     if args.tune_dir:
         tune_file = get_input_path(args.tune_dir)
-        tuning_data = prepare_data(tune_file, predictor_type)
+        if predictor_type == "timeseries":
+            tuning_data = TimeSeriesDataFrame.from_data_frame(
+                load_pd.load(tune_file),
+                id_column=id_column,
+                timestamp_column=timestamp_column,
+                static_features_df=static_features_df,
+            )
+        else:
+            tuning_data = TabularDataset(tune_file)
 
     if args.train_images:
         train_image_compressed_file = get_input_path(args.train_images)
@@ -175,7 +163,9 @@ if __name__ == "__main__":
         known_covariates_df = load_pd.load(kc_file)
         if "known_covariates_names" not in predictor_init_args:
             kc_cols = known_covariates_df.columns.to_list()
-            predictor_init_args["known_covariates_names"] = kc_cols[2:]  # skip id and timestamp columns
+            predictor_init_args["known_covariates_names"] = [
+                c for c in kc_cols if c not in (id_column, timestamp_column)
+            ]
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
@@ -195,10 +185,12 @@ if __name__ == "__main__":
                 f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
             )
         print("Running in-job prediction for fit_predict")
-        predict_kwargs = {}
+        known_covariates_tsdf = None
         if known_covariates_df is not None:
-            predict_kwargs["known_covariates"] = prepare_timeseries_dataframe(known_covariates_df, target=None)
-        predictions = predictor.predict(training_data, **predict_kwargs)
+            known_covariates_tsdf = TimeSeriesDataFrame.from_data_frame(
+                known_covariates_df, id_column=id_column, timestamp_column=timestamp_column
+            )
+        predictions = predictor.predict(training_data, known_covariates=known_covariates_tsdf)
         predictions = pd.DataFrame(predictions).reset_index()
         predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
         predictions.to_csv(predictions_path, index=False)
