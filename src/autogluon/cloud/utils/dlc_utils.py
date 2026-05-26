@@ -14,7 +14,7 @@ def _load_config():
 
 
 def _is_gpu_instance(instance_type):
-    return instance_type.startswith(_GPU_INSTANCE_PREFIXES) or instance_type.endswith("gpu")
+    return instance_type.startswith(_GPU_INSTANCE_PREFIXES) or instance_type == "local_gpu"
 
 
 def retrieve_available_framework_versions(framework_type="training", details=False):

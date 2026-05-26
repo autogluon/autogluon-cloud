@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import tarfile
+import tempfile
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -552,7 +553,6 @@ class SagemakerBackend(Backend):
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
         """Create a minimal model.tar.gz containing only the serve script under code/."""
-        import tempfile
 
         tarball_dir = tempfile.mkdtemp(prefix="ag_serve_")
         tarball_path = os.path.join(tarball_dir, "model.tar.gz")

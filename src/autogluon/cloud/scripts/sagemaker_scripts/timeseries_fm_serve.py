@@ -9,23 +9,22 @@ import os
 import pickle
 from io import BytesIO
 
+import numpy as np
 import pandas as pd
 
 from autogluon.timeseries import TimeSeriesDataFrame
+from autogluon.timeseries.models import ModelRegistry
 
 _SERVE_CONFIG = json.loads(os.environ.get("AG_SERVE_CONFIG", "{}"))
 
 
 def model_fn(model_dir):
     """Instantiate the foundation model and load weights into memory."""
-    import numpy as np
-
-    from autogluon.timeseries.models import ModelRegistry
-
     model_name = _SERVE_CONFIG["model_name"]
     hyperparameters = _SERVE_CONFIG.get("hyperparameters", {})
 
     model_cls = ModelRegistry.get_model_class(model_name)
+    # freq and prediction_length are overridden per-request in transform_fn
     model = model_cls(
         path=model_name,
         freq=None,
@@ -127,7 +126,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     if quantile_levels is not None:
         model.quantile_levels = sorted(quantile_levels)
 
-    predictions = model.predict(tsdf, **inference_kwargs)
+    predictions = model.predict(tsdf)
     predictions = pd.DataFrame(predictions)
 
     # Serialize response — output_content_type may be a comma-separated accept list

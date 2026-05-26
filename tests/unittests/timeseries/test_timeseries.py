@@ -8,6 +8,16 @@ from autogluon.cloud import TimeSeriesCloudPredictor
 from autogluon.cloud.model import FoundationModel
 
 
+def _assert_timeseries_predictions(predictions: pd.DataFrame, expected_item_ids: list, prediction_length: int) -> None:
+    """Validate shape and content of time series prediction DataFrame."""
+    assert isinstance(predictions, pd.DataFrame)
+    assert {"item_id", "timestamp", "mean"} <= set(predictions.columns)
+    assert sorted(predictions["item_id"].astype(str).unique()) == sorted(map(str, expected_item_ids))
+    counts = predictions.groupby("item_id").size()
+    assert (counts == prediction_length).all()
+    assert len(predictions) == len(expected_item_ids) * prediction_length
+
+
 @pytest.fixture(scope="module")
 def retail_sales_dataset():
     """Public retail-sales dataset with train data and known covariates."""
@@ -124,12 +134,7 @@ def test_timeseries_fit_predict_chronos(
             custom_image_uri=training_custom_image_uri,
         )
 
-        assert isinstance(predictions, pd.DataFrame)
-        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns)
-        assert sorted(predictions["item_id"].astype(str).unique()) == sorted(map(str, expected_item_ids))
-        counts = predictions.groupby("item_id").size()
-        assert (counts == ds["prediction_length"]).all()
-        assert len(predictions) == len(expected_item_ids) * ds["prediction_length"]
+        _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
 
         info = cloud_predictor.info()
         assert info["local_output_path"] is not None
@@ -162,12 +167,7 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
             instance_type="ml.m5.2xlarge",
         )
 
-        assert isinstance(predictions, pd.DataFrame)
-        assert {"item_id", "timestamp", "mean"} <= set(predictions.columns)
-        assert sorted(predictions["item_id"].astype(str).unique()) == sorted(map(str, expected_item_ids))
-        counts = predictions.groupby("item_id").size()
-        assert (counts == ds["prediction_length"]).all()
-        assert len(predictions) == len(expected_item_ids) * ds["prediction_length"]
+        _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
 
 
 def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset):
@@ -190,6 +190,7 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
         )
 
         try:
+            expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
             predictions = endpoint.predict(
                 data=ds["train_data"],
                 target=ds["target"],
@@ -197,7 +198,6 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
                 timestamp_column=ds["timestamp_column"],
                 prediction_length=ds["prediction_length"],
             )
-            assert isinstance(predictions, pd.DataFrame)
-            assert "mean" in predictions.columns
+            _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
         finally:
             endpoint.delete_endpoint()
