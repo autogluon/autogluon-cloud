@@ -37,14 +37,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         ``known_covariates`` (if present in ``data_channels``) is only honored when
         ``extra_ag_args["predict_after_fit"]`` is True.
         """
-        merged_extra_ag_args: Dict[str, Any] = {
-            "id_column": id_column,
-            "timestamp_column": timestamp_column,
-            **(extra_ag_args or {}),
-        }
-        if data_channels.get("known_covariates") is not None and not merged_extra_ag_args.get(
-            "predict_after_fit", False
-        ):
+        extra_ag_args = {**(extra_ag_args or {}), "id_column": id_column, "timestamp_column": timestamp_column}
+        if data_channels.get("known_covariates") is not None and not extra_ag_args.get("predict_after_fit", False):
             raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
 
         super().fit(
@@ -60,7 +54,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
-            extra_ag_args=merged_extra_ag_args,
+            extra_ag_args=extra_ag_args,
         )
 
     def predict_real_time(
