@@ -139,13 +139,22 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             "predictor_metadata"
         ] = json.dumps(predictor_metadata)
 
-        if static_features is not None:
-            predictor_fit_args = {**predictor_fit_args, "static_features": static_features}
+        # Extract data inputs from predictor_fit_args into separate SageMaker channels.
+        # static_features comes in as an explicit kwarg (matches TimeSeriesPredictor's UX) but is also
+        # uploaded as a channel.
+        predictor_fit_args = dict(predictor_fit_args)
+        data_channels = {
+            "train_data": predictor_fit_args.pop("train_data"),
+            "tuning_data": predictor_fit_args.pop("tuning_data", None),
+            "known_covariates": predictor_fit_args.pop("known_covariates", None),
+            "static_features": static_features,
+        }
 
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            data_channels=data_channels,
             id_column=id_column,
             timestamp_column=timestamp_column,
             framework_version=framework_version,

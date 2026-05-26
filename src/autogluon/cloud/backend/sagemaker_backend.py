@@ -1064,24 +1064,12 @@ class SagemakerBackend(Backend):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
         util_key_prefix = cloud_key_prefix + "/utils"
 
-        # Image-column mode: rewrite paths in train_data / tuning_data and prep zip artifacts.
-        # Only applies to those two channels.
-        common_train_data_path = None
-        common_tune_data_path = None
+        # Image-column mode rewrites paths in train_data / tuning_data and emits image-zip artifacts.
+        common_train_data_path, common_tune_data_path = None, None
         if image_column is not None:
-            data_channels = {**data_channels}
-            train_data = copy.deepcopy(data_channels["train_data"])
-            train_data, common_train_data_path = self._find_common_path_and_replace_image_column(
-                data=train_data, image_column=image_column
+            data_channels, common_train_data_path, common_tune_data_path = self._rewrite_image_paths(
+                data_channels, image_column
             )
-            data_channels["train_data"] = train_data
-            tune_data = data_channels.get("tuning_data")
-            if tune_data is not None:
-                tune_data = copy.deepcopy(tune_data)
-                tune_data, common_tune_data_path = self._find_common_path_and_replace_image_column(
-                    data=tune_data, image_column=image_column
-                )
-                data_channels["tuning_data"] = tune_data
 
         self.original_features = [col for col in data_channels["train_data"].columns if col != label]
 
@@ -1111,6 +1099,27 @@ class SagemakerBackend(Backend):
             inputs["tune_images"] = tune_images_input
 
         return inputs
+
+    def _rewrite_image_paths(self, data_channels, image_column):
+        """Deepcopy train_data / tuning_data and rewrite their image-column paths to be container-relative.
+
+        Returns updated data_channels plus the common image directories so they can be zipped and uploaded
+        as ``train_images`` / ``tune_images`` channels.
+        """
+        rewritten = dict(data_channels)
+        train_data, common_train_path = self._find_common_path_and_replace_image_column(
+            data=copy.deepcopy(rewritten["train_data"]), image_column=image_column
+        )
+        rewritten["train_data"] = train_data
+
+        common_tune_path = None
+        if rewritten.get("tuning_data") is not None:
+            tune_data, common_tune_path = self._find_common_path_and_replace_image_column(
+                data=copy.deepcopy(rewritten["tuning_data"]), image_column=image_column
+            )
+            rewritten["tuning_data"] = tune_data
+
+        return rewritten, common_train_path, common_tune_path
 
     def _upload_fit_image_artifact(self, image_dir_path, bucket, key_prefix):
         upload_image_path = None

@@ -1,4 +1,3 @@
-import copy
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
@@ -18,6 +17,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         *,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         id_column: str,
         timestamp_column: str,
         framework_version: str = "latest",
@@ -33,26 +33,18 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
-        ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.pkl``
-        (see ``extra_ag_args`` on the parent ``fit``). ``train_data`` / ``tuning_data`` / ``known_covariates``
-        / ``static_features`` (if present in ``predictor_fit_args``) are extracted here and uploaded as
-        separate SageMaker channels via ``data_channels``. ``known_covariates`` is only honored when
+        ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.pkl``.
+        ``known_covariates`` (if present in ``data_channels``) is only honored when
         ``extra_ag_args["predict_after_fit"]`` is True.
         """
-        predictor_fit_args = copy.deepcopy(predictor_fit_args)
-        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]] = {
-            "train_data": predictor_fit_args.pop("train_data"),
-            "tuning_data": predictor_fit_args.pop("tuning_data", None),
-            "known_covariates": predictor_fit_args.pop("known_covariates", None),
-            "static_features": predictor_fit_args.pop("static_features", None),
-        }
-
         merged_extra_ag_args: Dict[str, Any] = {
             "id_column": id_column,
             "timestamp_column": timestamp_column,
             **(extra_ag_args or {}),
         }
-        if data_channels["known_covariates"] is not None and not merged_extra_ag_args.get("predict_after_fit", False):
+        if data_channels.get("known_covariates") is not None and not merged_extra_ag_args.get(
+            "predict_after_fit", False
+        ):
             raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
 
         super().fit(
@@ -82,13 +74,36 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         inference_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> pd.DataFrame:
-        """Run a low-latency prediction against the deployed SageMaker endpoint.
+        """
+        Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
+        This is intended to provide a low latency inference.
+        If you want to inference on a large dataset, use `predict()` instead.
 
-        Sends ``test_data`` (and optional ``static_features`` / ``known_covariates``) as a
-        single ``application/x-autogluon`` payload. ``id_column`` / ``timestamp_column`` are
-        embedded in ``inference_kwargs`` so the serve script can build a TimeSeriesDataFrame.
+        Parameters
+        ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced.
+            Can be a pandas.DataFrame or a local path to a csv file.
+        id_column: str
+            Name of the 'item_id' column
+        timestamp_column: str
+            Name of the 'timestamp' column
+        static_features: Optional[Union[str, pd.DataFrame]]
+             An optional data frame describing the metadata attributes of individual items in the item index.
+             For more detail, please refer to `TimeSeriesDataFrame` documentation:
+             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
+        known_covariates: Optional[Union[str, pd.DataFrame]]
+            Future values of the known covariates over the forecast horizon.
+        accept: str, default = application/x-parquet
+            Type of accept output content.
+            Valid options are application/x-parquet, text/csv, application/json
+        inference_kwargs: Optional[Dict[str, Any]], default = None
+            Additional args that you would pass to `predict` calls of an AutoGluon logic
 
-        For datasets larger than the SageMaker 5MB endpoint limit, use ``predict()`` instead.
+        Returns
+        -------
+        Pandas.DataFrame
+        Predict results in DataFrame
         """
         self._validate_predict_real_time_args(accept)
 
