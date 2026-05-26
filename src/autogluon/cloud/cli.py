@@ -57,16 +57,11 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option(
-    "--backend",
-    type=click.Choice(SUPPORTED_BACKENDS),
-    default=None,
-    help="Backend to provision. Prompted if not given.",
-)
-@click.option("--region", default=None, help="AWS region. Falls back to your boto3 default.")
-@click.option("--stack-name", default=None, help="CFN stack name (auto-generated if not given).")
-@click.option("--aws-profile", default=None, help="Named AWS profile from ~/.aws/credentials.")
-@click.option("--yes", "-y", is_flag=True, help="Skip the deployment confirmation prompt.")
+@click.option("--backend", type=click.Choice(SUPPORTED_BACKENDS), default=None, help="Which backend to use.")
+@click.option("--region", default=None, help="AWS region for the stack.")
+@click.option("--stack-name", default=None, help="CloudFormation stack name.")
+@click.option("--aws-profile", default=None, help="AWS profile from ~/.aws/credentials.")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 def bootstrap(
     backend: Optional[str],
     region: Optional[str],
@@ -135,16 +130,11 @@ def bootstrap(
 
 
 @cli.command()
-@click.option(
-    "--backend",
-    type=click.Choice(SUPPORTED_BACKENDS),
-    default="sagemaker",
-    show_default=True,
-)
-@click.option("--role", default=None, help="IAM role ARN. Prompted if not given.")
-@click.option("--bucket", default=None, help="S3 bucket name. Prompted if not given.")
-@click.option("--region", default=None, help="AWS region for the resources. Prompted if not given.")
-@click.option("--stack-name", default=None, help="Optional CFN stack name to remember for teardown.")
+@click.option("--backend", type=click.Choice(SUPPORTED_BACKENDS), default="sagemaker", show_default=True)
+@click.option("--role", default=None, help="IAM role ARN.")
+@click.option("--bucket", default=None, help="S3 bucket name.")
+@click.option("--region", default=None, help="AWS region for the resources.")
+@click.option("--stack-name", default=None, help="CloudFormation stack name (for teardown to find later).")
 def register(
     backend: str,
     role: Optional[str],
@@ -171,8 +161,8 @@ def register(
 
 
 @cli.command()
-@click.option("--region", default=None, help="Override the saved region for the AWS calls.")
-@click.option("--aws-profile", default=None, help="Named AWS profile from ~/.aws/credentials.")
+@click.option("--region", default=None, help="AWS region.")
+@click.option("--aws-profile", default=None, help="AWS profile from ~/.aws/credentials.")
 def status(region: Optional[str], aws_profile: Optional[str]) -> None:
     """Check that configured AWS resources exist and are accessible."""
     config = load_config()
@@ -204,11 +194,11 @@ def status(region: Optional[str], aws_profile: Optional[str]) -> None:
     "--backend",
     type=click.Choice(SUPPORTED_BACKENDS),
     default=None,
-    help="Tear down just this backend. Defaults to all configured backends.",
+    help="Only tear down this backend (default: all).",
 )
-@click.option("--region", default=None, help="Override the saved region for the AWS calls.")
-@click.option("--aws-profile", default=None, help="Named AWS profile from ~/.aws/credentials.")
-@click.option("--yes", "-y", is_flag=True, help="Skip the destructive-action confirmation.")
+@click.option("--region", default=None, help="AWS region.")
+@click.option("--aws-profile", default=None, help="AWS profile from ~/.aws/credentials.")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 def teardown(
     backend: Optional[str],
     region: Optional[str],
