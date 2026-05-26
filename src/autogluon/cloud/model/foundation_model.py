@@ -10,7 +10,8 @@ import pandas as pd
 
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
-from ..endpoint.endpoint import Endpoint
+from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
+from ..scripts.script_manager import ScriptManager
 from .registry import get_model_config
 
 
@@ -90,44 +91,60 @@ class FoundationModel:
         """Build predictor_fit_args dict. Subclasses override with task-specific logic."""
         ...
 
-    def deploy(
-        self,
-        instance_type: Optional[str] = None,
-        endpoint_name: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
-        wait: bool = True,
-        **backend_kwargs,
-    ) -> Endpoint:
-        """
-        Deploy model to an endpoint.
+    @property
+    @abstractmethod
+    def _serve_script_path(self) -> str:
+        """Path to the serve script for this model type."""
+        ...
 
-        Parameters
-        ----------
-        instance_type
-            Instance type for the endpoint.
-            If None, will use the default from the model registry.
-        endpoint_name
-            Custom endpoint name.
-            If None, will auto-generate a unique name.
-        hyperparameters
-            Model hyperparameters for inference. Overrides values passed to the constructor.
-            Available hyperparameters for each model are listed in the AutoGluon documentation.
-        wait
-            Whether to block until the endpoint is ready.
-        **backend_kwargs
-            Backend-specific arguments. Use these to configure serverless, async, or
-            autoscaling (e.g. memory_size_in_mb, max_concurrency, initial_instance_count).
+    @abstractmethod
+    def deploy(self, **kwargs):
+        """Deploy model to a real-time endpoint.
 
-        Returns
-        -------
-        Endpoint
+        Subclasses implement this and return a task-specific endpoint
+        (e.g., TimeSeriesEndpoint, TabularEndpoint).
         """
-        raise NotImplementedError
+        ...
 
     @abstractmethod
     def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
         """Subclasses override with task-specific signature."""
         ...
+
+    def _deploy_backend(
+        self,
+        instance_type: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        framework_version: str = "latest",
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        **backend_kwargs,
+    ) -> None:
+        """Shared deploy logic. Subclasses call this then wrap the endpoint."""
+        if instance_type is None:
+            instance_type = self._config["deploy_instance_type"]
+
+        serve_config = {
+            "model_name": self._config["model_name"],
+            "hyperparameters": self._get_hyperparameters("inference", hyperparameters),
+        }
+
+        model_kwargs = backend_kwargs.pop("model_kwargs", {})
+        model_kwargs["entry_point"] = self._serve_script_path
+
+        self._backend.deploy(
+            predictor_path=None,
+            endpoint_name=endpoint_name,
+            framework_version=framework_version,
+            instance_type=instance_type,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            model_kwargs=model_kwargs,
+            serve_config=serve_config,
+            **backend_kwargs,
+        )
+        assert self._backend.endpoint is not None
 
     def fit(
         self,
@@ -192,6 +209,58 @@ class TimeSeriesFoundationModel(FoundationModel):
     _backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
     _predictor_type = "timeseries"
 
+    @property
+    def _serve_script_path(self) -> str:
+        return ScriptManager.SAGEMAKER_TIMESERIES_FM_SERVE_SCRIPT_PATH
+
+    def deploy(
+        self,
+        instance_type: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        framework_version: str = "latest",
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        **backend_kwargs,
+    ) -> TimeSeriesEndpoint:
+        """
+        Deploy model to a real-time endpoint.
+
+        Parameters
+        ----------
+        instance_type
+            Instance type for the endpoint.
+            If None, will use the default from the model registry.
+        endpoint_name
+            Custom endpoint name.
+            If None, will auto-generate a unique name.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+        framework_version
+            Container framework version. If 'latest', uses the most recent available.
+        custom_image_uri
+            Custom Docker image URI for the inference container.
+        wait
+            Whether to block until the endpoint is ready.
+        **backend_kwargs
+            Backend-specific arguments (e.g., initial_instance_count, volume_size,
+            model_kwargs, deploy_kwargs).
+
+        Returns
+        -------
+        TimeSeriesEndpoint
+        """
+        self._deploy_backend(
+            instance_type=instance_type,
+            endpoint_name=endpoint_name,
+            hyperparameters=hyperparameters,
+            framework_version=framework_version,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            **backend_kwargs,
+        )
+        return TimeSeriesEndpoint(self._backend.endpoint)
+
     def _build_predictor_fit_args(
         self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -237,10 +306,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         **backend_kwargs,
     ) -> Optional[pd.DataFrame]:
         """
-        Run batch prediction for time series via a SageMaker training job (fit_predict pattern).
-
-        Launches a job that loads the foundation model, runs .fit() + .predict() in one shot,
-        and saves predictions to the job output.
+        Run batch prediction for time series.
 
         Parameters
         ----------
@@ -320,6 +386,13 @@ class TabularFoundationModel(FoundationModel):
 
     _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
     _predictor_type = "tabular"
+
+    @property
+    def _serve_script_path(self) -> str:
+        raise NotImplementedError("Tabular FM deploy is not yet supported")
+
+    def deploy(self, **kwargs):
+        raise NotImplementedError("Tabular FM deploy is not yet supported")
 
     def _build_predictor_init_args(self, label: str = "target", **kwargs) -> Dict[str, Any]:
         """Map user kwargs to TabularPredictor init args."""

@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import tarfile
+import tempfile
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -390,6 +391,7 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
+        serve_config: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -430,17 +432,16 @@ class SagemakerBackend(Backend):
         deploy_kwargs:
             Any extra arguments needed to pass to deploy.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
+        serve_config: Optional[Dict[str, Any]], default = None
+            Configuration dict passed to the serve script via the AG_SERVE_CONFIG env var.
         """
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
-        if not predictor_path:
-            predictor_path = self._fit_job.get_output_path()
-            assert predictor_path, "No cloud trained model found."
-        predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
-
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
+
+        # Resolve container image
         if custom_image_uri:
             framework_version, py_version = None, None
             logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
@@ -456,25 +457,43 @@ class SagemakerBackend(Backend):
             )
             volume_size = None
 
-        self._serve_script_path = ScriptManager.get_serve_script(
-            backend_type=self.name, framework_version=framework_version
-        )
-        entry_point = self._serve_script_path
+        # Resolve model artifact:
+        # - predictor_path provided → use as-is
+        # - predictor_path=None, fit job exists → use fit output
+        # - predictor_path=None, no fit job → no artifact (FM: weights downloaded at startup)
+        if predictor_path is None and self._fit_job is not None:
+            predictor_path = self._fit_job.get_output_path()
+        if predictor_path:
+            predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
+
+        # Resolve entry point
         if model_kwargs is None:
             model_kwargs = {}
         model_kwargs = copy.deepcopy(model_kwargs)
         user_entry_point = model_kwargs.pop("entry_point", None)
         if user_entry_point:
-            logger.warning(
-                f"Providing a custom entry point could break the deployment. Please refer to `{entry_point}` for our implementation"
-            )
             entry_point = user_entry_point
+        else:
+            self._serve_script_path = ScriptManager.get_serve_script(
+                backend_type=self.name, framework_version=framework_version
+            )
+            entry_point = self._serve_script_path
 
-        repack_model = False
-        if predictor_path != self._fit_job.get_output_path() or user_entry_point is not None:
-            # Not inference on cloud trained model or not using inference on cloud trained model
-            # Need to repack the code into model. This will slow down batch inference and deployment
-            repack_model = True
+        # Pick model class:
+        # - No artifact → create minimal tarball with serve script (FM deploy)
+        # - Artifact from different source or custom entry point → Repack (inject script into tarball)
+        # - Artifact from fit job, default entry point → NonRepack (script already in tarball)
+        if predictor_path is None:
+            predictor_path = self._create_serve_script_tarball(entry_point, endpoint_name)
+            model_cls = AutoGluonNonRepackInferenceModel
+        else:
+            fit_output = self._fit_job.get_output_path() if self._fit_job is not None else None
+            if predictor_path != fit_output or user_entry_point is not None:
+                model_cls = AutoGluonRepackInferenceModel
+            else:
+                model_cls = AutoGluonNonRepackInferenceModel
+
+        # Assemble env vars and deploy
         predictor_cls = self._realtime_predictor_cls
         user_predictor_cls = model_kwargs.pop("predictor_cls", None)
         if user_predictor_cls:
@@ -484,10 +503,6 @@ class SagemakerBackend(Backend):
             )
             predictor_cls = user_predictor_cls
 
-        if repack_model:
-            model_cls = AutoGluonRepackInferenceModel
-        else:
-            model_cls = AutoGluonNonRepackInferenceModel
         model_kwargs_env = model_kwargs.pop("env", None)
         SAGEMAKER_MODEL_SERVER_WORKERS = "SAGEMAKER_MODEL_SERVER_WORKERS"
         if model_kwargs_env is not None:
@@ -502,6 +517,9 @@ class SagemakerBackend(Backend):
                 model_kwargs_env[SAGEMAKER_MODEL_SERVER_WORKERS] = "1"
         else:
             model_kwargs_env = {SAGEMAKER_MODEL_SERVER_WORKERS: "1"}
+
+        if serve_config is not None:
+            model_kwargs_env["AG_SERVE_CONFIG"] = json.dumps(serve_config)
 
         model = model_cls(
             model_data=predictor_path,
@@ -530,6 +548,17 @@ class SagemakerBackend(Backend):
                 **deploy_kwargs,
             )
         )
+
+    def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
+        """Create a minimal model.tar.gz containing only the serve script under code/."""
+
+        tarball_dir = tempfile.mkdtemp(prefix="ag_serve_")
+        tarball_path = os.path.join(tarball_dir, "model.tar.gz")
+        with tarfile.open(tarball_path, "w:gz") as tar:
+            tar.add(serve_script_path, arcname=f"code/{os.path.basename(serve_script_path)}")
+        s3_key = f"endpoints/{endpoint_name}/model/model.tar.gz"
+        s3_path = self._upload_predictor(tarball_path, s3_key)
+        return s3_path
 
     def cleanup_deployment(self) -> None:
         """
