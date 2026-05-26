@@ -24,6 +24,7 @@ def model_fn(model_dir):
     hyperparameters = _SERVE_CONFIG.get("hyperparameters", {})
 
     model_cls = ModelRegistry.get_model_class(model_name)
+    # freq and prediction_length are overridden per-request in transform_fn
     model = model_cls(
         path=model_name,
         freq=None,
@@ -31,6 +32,7 @@ def model_fn(model_dir):
         hyperparameters=hyperparameters,
     )
 
+    # fit() on dummy data to initialize model internals and load weights
     dummy_df = TimeSeriesDataFrame(
         pd.DataFrame(
             {"item_id": [0] * 10, "timestamp": pd.date_range("2020-01-01", periods=10), "target": np.zeros(10)}
@@ -91,6 +93,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     predictions = model.predict(tsdf, known_covariates=known_covariates)
     predictions = predictions.to_data_frame().reset_index()
 
+    # Serialize response — output_content_type may be a comma-separated accept list
     if "application/x-parquet" in output_content_type:
         predictions.columns = predictions.columns.astype(str)
         output = predictions.to_parquet()

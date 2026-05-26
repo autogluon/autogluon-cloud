@@ -168,5 +168,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         )
         return pred
 
-    def predict_proba(self, **kwargs) -> Optional[pd.DataFrame]:
+    def predict_proba(
+        self,
+        **kwargs,
+    ) -> Optional[pd.DataFrame]:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
