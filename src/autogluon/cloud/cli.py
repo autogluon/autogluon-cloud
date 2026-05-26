@@ -53,7 +53,7 @@ def _abort_on_error(fn, *args, **kwargs):
 @click.group()
 @click.version_option(package_name="autogluon.cloud")
 def cli() -> None:
-    """Manage AutoGluon-Cloud setup on AWS."""
+    """Set up and manage your AWS environment for AutoGluon-Cloud."""
 
 
 @cli.command()
@@ -74,7 +74,9 @@ def bootstrap(
     aws_profile: Optional[str],
     yes: bool,
 ) -> None:
-    """Deploy the CloudFormation stack and persist the config."""
+    """Create the AWS resources (IAM role, S3 bucket) needed to run AutoGluon-Cloud."""
+    _console.print("\nOne-time setup for AutoGluon-Cloud.\n")
+
     if backend is None:
         backend = Prompt.ask(
             "Which backend?",
@@ -87,25 +89,49 @@ def bootstrap(
         region = Prompt.ask("AWS region", default=detected or "us-east-1")
 
     session = _make_session(aws_profile, region)
-    effective_stack = stack_name or f"ag-cloud-{backend.replace('_', '-')}"
+    if stack_name is None:
+        default_stack = f"ag-cloud-{backend.replace('_', '-')}"
+        stack_name = Prompt.ask("Stack name", default=default_stack)
+    effective_stack = stack_name
+    template_url = f"https://github.com/autogluon/autogluon-cloud/blob/master/cloudformation/ag_cloud_{backend}.yaml"
+
+    _console.print(
+        f"This will use CloudFormation to create AWS resources (IAM roles, S3 bucket, etc.) "
+        f"needed to run AutoGluon-Cloud with '{backend}'.\n"
+        f"Verify the template: {template_url}\n"
+    )
 
     plan = Table.grid(padding=(0, 2))
     plan.add_row("[bold]Backend[/bold]", backend)
     plan.add_row("[bold]Region[/bold]", region)
-    plan.add_row("[bold]Stack name[/bold]", effective_stack)
+    plan.add_row("[bold]Stack[/bold]", effective_stack)
     if aws_profile:
-        plan.add_row("[bold]AWS profile[/bold]", aws_profile)
+        plan.add_row("[bold]Profile[/bold]", aws_profile)
     _console.print(Panel(plan, title="Deployment plan", border_style="cyan"))
 
     if not yes and not Confirm.ask("Proceed?", default=True):
         raise click.Abort()
 
-    _abort_on_error(
-        _bootstrap,
-        backend=backend,
-        stack_name=stack_name,
-        session=session,
-    )
+    with _console.status(f"Deploying stack '{effective_stack}'...", spinner="dots"):
+        _abort_on_error(
+            _bootstrap,
+            backend=backend,
+            stack_name=effective_stack,
+            session=session,
+            verbose=False,
+        )
+
+    config = load_config()
+    if config and backend in config.backends:
+        bc = config.backends[backend]
+        cfn_url = (
+            f"https://{bc.region}.console.aws.amazon.com/cloudformation/home"
+            f"?region={bc.region}#/stacks?filteringText={effective_stack}"
+        )
+        _console.print("\n[bold]Created resources:[/bold]")
+        _console.print(f"  Role:   {bc.role_arn}")
+        _console.print(f"  Bucket: {bc.bucket}")
+        _console.print(f"  Stack:  {cfn_url}\n")
 
 
 @cli.command()
@@ -126,7 +152,7 @@ def register(
     region: Optional[str],
     stack_name: Optional[str],
 ) -> None:
-    """Persist an existing IAM role + S3 bucket as the config for a backend (no AWS calls)."""
+    """Point AutoGluon-Cloud at an IAM role and S3 bucket you already have."""
     role = role or Prompt.ask("IAM role ARN")
     bucket = bucket or Prompt.ask("S3 bucket name")
     region = region or Prompt.ask("AWS region", default="us-east-1")
@@ -148,10 +174,12 @@ def register(
 @click.option("--region", default=None, help="Override the saved region for the AWS calls.")
 @click.option("--aws-profile", default=None, help="Named AWS profile from ~/.aws/credentials.")
 def status(region: Optional[str], aws_profile: Optional[str]) -> None:
-    """Show a per-backend health snapshot of the saved config."""
+    """Check that your AWS resources are in place and accessible."""
     config = load_config()
     if config is None or not config.backends:
-        _console.print("[yellow]No AG-Cloud config found.[/yellow] Run `autogluon-cloud bootstrap` to create one.")
+        _console.print(
+            "[yellow]No AutoGluon-Cloud config found.[/yellow] Run `autogluon-cloud bootstrap` to create one."
+        )
         return
 
     session = _make_session(aws_profile, region)
@@ -187,10 +215,10 @@ def teardown(
     aws_profile: Optional[str],
     yes: bool,
 ) -> None:
-    """Delete CloudFormation stack(s) and remove the config entry/file."""
+    """Remove the AWS resources created by bootstrap."""
     config = load_config()
     if config is None or not config.backends:
-        _console.print("[yellow]No AG-Cloud config found — nothing to tear down.[/yellow]")
+        _console.print("[yellow]No AutoGluon-Cloud config found — nothing to tear down.[/yellow]")
         return
 
     targets = [backend] if backend else sorted(config.backends)

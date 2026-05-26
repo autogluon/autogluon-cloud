@@ -62,11 +62,16 @@ def test_bootstrap_with_yes_skips_confirm_and_calls_python_api(runner, monkeypat
 
     result = runner.invoke(
         cli,
-        ["bootstrap", "--backend", "sagemaker", "--region", "us-east-1", "--yes"],
+        ["bootstrap", "--backend", "sagemaker", "--region", "us-east-1", "--stack-name", "my-stack", "--yes"],
     )
     assert result.exit_code == 0, result.output
     assert calls["bootstrap"] == [
-        {"backend": "sagemaker", "stack_name": None, "session": pytest.approx(calls["bootstrap"][0]["session"])}
+        {
+            "backend": "sagemaker",
+            "stack_name": "my-stack",
+            "session": pytest.approx(calls["bootstrap"][0]["session"]),
+            "verbose": False,
+        }
     ]
 
 
@@ -74,8 +79,8 @@ def test_bootstrap_aborts_when_user_says_no(runner, monkeypatch):
     calls = {}
     _stub_python_api(monkeypatch, calls=calls)
 
-    # `n` answers Confirm.ask("Proceed?", default=True) negatively → click.Abort.
-    result = runner.invoke(cli, ["bootstrap", "--backend", "sagemaker", "--region", "us-east-1"], input="n\n")
+    # First prompt is stack name (accept default), then `n` for Confirm → click.Abort.
+    result = runner.invoke(cli, ["bootstrap", "--backend", "sagemaker", "--region", "us-east-1"], input="\nn\n")
     assert result.exit_code != 0
     assert "bootstrap" not in calls  # function was never called
 
@@ -84,8 +89,8 @@ def test_bootstrap_prompts_for_missing_backend(runner, monkeypatch):
     calls = {}
     _stub_python_api(monkeypatch, calls=calls)
 
-    # Two prompts to answer: backend choice (we type 'sagemaker'), then 'Proceed?' (default y).
-    result = runner.invoke(cli, ["bootstrap", "--region", "us-east-1", "--yes"], input="sagemaker\n")
+    # Prompts: backend ('sagemaker'), stack name (accept default).
+    result = runner.invoke(cli, ["bootstrap", "--region", "us-east-1", "--yes"], input="sagemaker\n\n")
     assert result.exit_code == 0, result.output
     assert calls["bootstrap"][0]["backend"] == "sagemaker"
 
@@ -94,12 +99,11 @@ def test_bootstrap_prompts_for_missing_region(runner, monkeypatch):
     calls = {}
     _stub_python_api(monkeypatch, calls=calls)
 
-    # No --region: should be prompted. Empty input takes the boto3-detected default;
-    # we type 'eu-west-2' to override it. Then 'Proceed?' (default y) accepted by --yes.
+    # Prompts: region ('eu-west-2'), stack name (accept default).
     result = runner.invoke(
         cli,
         ["bootstrap", "--backend", "sagemaker", "--yes"],
-        input="eu-west-2\n",
+        input="eu-west-2\n\n",
     )
     assert result.exit_code == 0, result.output
     # The CLI threads region into the boto3.Session; verify by checking session.region_name.
@@ -112,7 +116,9 @@ def test_bootstrap_translates_runtime_error_to_clean_exit(runner, monkeypatch):
 
     monkeypatch.setattr("autogluon.cloud.cli._bootstrap", raises)
 
-    result = runner.invoke(cli, ["bootstrap", "--backend", "sagemaker", "--region", "us-east-1", "--yes"])
+    result = runner.invoke(
+        cli, ["bootstrap", "--backend", "sagemaker", "--region", "us-east-1", "--stack-name", "s", "--yes"]
+    )
     assert result.exit_code != 0
     assert "AWS credentials missing" in result.output
     # ClickException prints the message without a Python traceback.
@@ -192,7 +198,7 @@ def test_register_prompts_for_stack_name_when_provided(runner, monkeypatch):
 def test_status_without_config_prints_hint(runner):
     result = runner.invoke(cli, ["status"])
     assert result.exit_code == 0
-    assert "No AG-Cloud config" in result.output
+    assert "No AutoGluon-Cloud config" in result.output
 
 
 def test_status_with_config_renders_table(runner, monkeypatch):
