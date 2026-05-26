@@ -74,7 +74,7 @@ def bootstrap(
     aws_profile: Optional[str],
     yes: bool,
 ) -> None:
-    """Create the AWS resources (IAM role, S3 bucket) needed to run AutoGluon-Cloud."""
+    """One-time setup to run AutoGluon-Cloud on AWS."""
     _console.print("\nOne-time setup for AutoGluon-Cloud.\n")
 
     if backend is None:
@@ -152,7 +152,7 @@ def register(
     region: Optional[str],
     stack_name: Optional[str],
 ) -> None:
-    """Point AutoGluon-Cloud at an IAM role and S3 bucket you already have."""
+    """Use your own IAM role and S3 bucket with AutoGluon-Cloud."""
     role = role or Prompt.ask("IAM role ARN")
     bucket = bucket or Prompt.ask("S3 bucket name")
     region = region or Prompt.ask("AWS region", default="us-east-1")
@@ -174,7 +174,7 @@ def register(
 @click.option("--region", default=None, help="Override the saved region for the AWS calls.")
 @click.option("--aws-profile", default=None, help="Named AWS profile from ~/.aws/credentials.")
 def status(region: Optional[str], aws_profile: Optional[str]) -> None:
-    """Check that your AWS resources are in place and accessible."""
+    """Check that configured AWS resources exist and are accessible."""
     config = load_config()
     if config is None or not config.backends:
         _console.print(
@@ -215,7 +215,7 @@ def teardown(
     aws_profile: Optional[str],
     yes: bool,
 ) -> None:
-    """Remove the AWS resources created by bootstrap."""
+    """Remove AWS resources created by bootstrap."""
     config = load_config()
     if config is None or not config.backends:
         _console.print("[yellow]No AutoGluon-Cloud config found — nothing to tear down.[/yellow]")
