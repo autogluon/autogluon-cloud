@@ -143,7 +143,7 @@ class SagemakerBackend(Backend):
         return dict(
             autogluon_sagemaker_estimator_kwargs=kwargs.get("autogluon_sagemaker_estimator_kwargs", None),
             fit_kwargs=kwargs.get("fit_kwargs", None),
-            extra_ag_args={"predict_after_fit": kwargs.get("predict_after_fit", False)},
+            extra_ag_args=kwargs.get("extra_ag_args", None),
         )
 
     def attach_job(self, job_name: str) -> None:

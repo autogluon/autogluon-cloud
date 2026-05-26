@@ -412,7 +412,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             backend_kwargs = {}
         else:
             backend_kwargs = dict(backend_kwargs)
-        backend_kwargs["predict_after_fit"] = True
+        backend_kwargs["extra_ag_args"] = {"predict_after_fit": True}
 
         self.fit(
             predictor_init_args=predictor_init_args,
