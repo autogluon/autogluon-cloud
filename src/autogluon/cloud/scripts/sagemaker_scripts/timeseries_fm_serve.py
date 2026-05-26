@@ -127,7 +127,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         model.quantile_levels = sorted(quantile_levels)
 
     predictions = model.predict(tsdf)
-    predictions = pd.DataFrame(predictions)
+    predictions = predictions.to_data_frame().reset_index()
 
     # Serialize response — output_content_type may be a comma-separated accept list
     if "application/x-parquet" in output_content_type:
