@@ -75,7 +75,7 @@ def bootstrap(
     yes: bool,
 ) -> None:
     """One-time setup to run AutoGluon-Cloud on AWS."""
-    _console.print("\nOne-time setup for AutoGluon-Cloud.\n")
+    _console.print("\nOne-time setup to run AutoGluon-Cloud on AWS.\n")
 
     if backend is None:
         backend = Prompt.ask(
