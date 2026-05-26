@@ -85,7 +85,7 @@ def _format_jumpstart_response(predictions: pd.DataFrame) -> str:
             "forecasts": [{"item_id": "...", "mean": [...], "quantiles": {"0.1": [...], ...}}, ...]
         }
     """
-    # TODO: implement JumpStart response formatting
+    # TODO: implement JumpStart schema parsing
     raise NotImplementedError("JumpStart JSON output schema is not yet supported")
 
 
