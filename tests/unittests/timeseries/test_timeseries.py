@@ -83,7 +83,6 @@ def test_timeseries(test_helper, framework_version):
             ),
             deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
             predict_kwargs=dict(
-                static_features=static_features,
                 framework_version=framework_version,
                 custom_image_uri=inference_custom_image_uri,
             ),

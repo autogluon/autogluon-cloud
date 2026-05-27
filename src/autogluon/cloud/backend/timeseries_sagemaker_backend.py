@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
@@ -7,6 +8,8 @@ from autogluon.common.loaders import load_pd
 from ..utils.serializers import AutoGluonSerializationWrapper
 from .constant import TIMESERIES_SAGEMAKER
 from .sagemaker_backend import SagemakerBackend
+
+logger = logging.getLogger(__name__)
 
 
 class TimeSeriesSagemakerBackend(SagemakerBackend):
@@ -40,6 +43,12 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         extra_ag_args = {**(extra_ag_args or {}), "id_column": id_column, "timestamp_column": timestamp_column}
         if data_channels.get("known_covariates") is not None and not extra_ag_args.get("predict_after_fit", False):
             raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
+        data_channels = self._validate_data_channels(
+            data_channels=data_channels,
+            predictor_init_args=predictor_init_args,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+        )
 
         super().fit(
             predictor_init_args=predictor_init_args,
@@ -163,3 +172,74 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
+
+    def _validate_data_channels(
+        self,
+        *,
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
+        predictor_init_args: Dict[str, Any],
+        id_column: str,
+        timestamp_column: str,
+    ) -> Dict[str, Optional[Union[str, pd.DataFrame]]]:
+        """Validate time-series data channels client-side before launching the SageMaker job.
+
+        Resolves ``str`` paths via ``load_pd.load`` so column checks can run, and returns the (possibly loaded)
+        channel dict for the caller to reuse.
+
+        Validates:
+        - ``train_data`` and ``tuning_data`` contain ``id_column``, ``timestamp_column``, and the predictor's
+          ``target`` column.
+        - ``known_covariates`` (if present) contains ``id_column`` / ``timestamp_column`` and every name in
+          ``predictor_init_args['known_covariates_names']``. Warns about extra columns that will be ignored.
+        - If ``known_covariates_names`` is set, ``train_data`` must also contain those columns.
+        """
+        target = predictor_init_args.get("target", "target")
+        loaded: Dict[str, Optional[Union[str, pd.DataFrame]]] = {}
+        for name, df in data_channels.items():
+            if isinstance(df, str):
+                df = load_pd.load(df)
+            loaded[name] = df
+
+        for name in ("train_data", "tuning_data"):
+            df = loaded.get(name)
+            if df is None:
+                continue
+            for required in (id_column, timestamp_column, target):
+                if required not in df.columns:
+                    raise ValueError(f"`{name}` must contain column '{required}'.")
+
+        known_covariates = loaded.get("known_covariates")
+        names = predictor_init_args.get("known_covariates_names")
+        if known_covariates is not None:
+            if names is not None and (isinstance(names, str) or not isinstance(names, (list, tuple))):
+                raise ValueError(
+                    "`predictor_init_args['known_covariates_names']` must be a list or tuple of strings, "
+                    f"got {type(names).__name__}."
+                )
+            kc_cols = known_covariates.columns.tolist()
+            for required in (id_column, timestamp_column):
+                if required not in kc_cols:
+                    raise ValueError(f"`known_covariates` must contain column '{required}'.")
+            if names:
+                missing_in_covs = [n for n in names if n not in kc_cols]
+                if missing_in_covs:
+                    raise ValueError(
+                        f"`known_covariates` is missing columns listed in `known_covariates_names`: {missing_in_covs}."
+                    )
+                extra_in_covs = [c for c in kc_cols if c not in names and c not in (id_column, timestamp_column)]
+                if extra_in_covs:
+                    logger.warning(
+                        f"`known_covariates` has columns not listed in `known_covariates_names`: {extra_in_covs}. "
+                        "These will be ignored by the predictor."
+                    )
+
+        if names:
+            train_data = loaded.get("train_data")
+            if isinstance(train_data, pd.DataFrame):
+                missing_in_train = [n for n in names if n not in train_data.columns]
+                if missing_in_train:
+                    raise ValueError(
+                        f"`train_data` is missing columns listed in `known_covariates_names`: {missing_in_train}."
+                    )
+
+        return loaded
