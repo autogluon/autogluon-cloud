@@ -1,8 +1,50 @@
+import logging
 from typing import Optional
 
 import boto3
 import sagemaker
 from botocore.config import Config
+
+from ..config import load_config
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
+    """Resolve the SageMaker execution role ARN — the role that *jobs* run as on AWS.
+
+    This is distinct from the *caller* identity (the AWS principal calling
+    ``sagemaker:Create*``); the caller never assumes this role. SageMaker assumes it
+    on the job's behalf to access S3 inputs/outputs, ECR images, etc.
+
+    Resolution order:
+
+    1. ``role`` argument if provided.
+    2. ``role_arn`` from ``~/.autogluon/cloud.yaml`` under the matching backend slot.
+    3. ``sagemaker.get_execution_role()`` — only succeeds inside a SageMaker
+       Notebook / Studio environment.
+
+    Parameters
+    ----------
+    role
+        Explicit execution role ARN. If given, returned as-is.
+    backend_name
+        Backend key used to look up the persisted config (e.g. ``"sagemaker"``).
+
+    Returns
+    -------
+    str
+        The resolved execution role ARN.
+    """
+    if role:
+        return role
+    config = load_config()
+    if config is not None:
+        entry = config.backends.get(backend_name)
+        if entry is not None and entry.role_arn:
+            logger.log(20, f"Using execution role from ~/.autogluon/cloud.yaml: {entry.role_arn}")
+            return entry.role_arn
+    return sagemaker.get_execution_role()
 
 
 def get_latest_amazon_linux_ami(region="us-east-1", version="al2023"):
