@@ -32,16 +32,16 @@ def get_env_if_present(name):
     return result
 
 
-def prepare_data(file, predictor_type, ag_args, static_features_df=None):
+def prepare_data(data_file, predictor_type, ag_args, static_features_df=None):
     if predictor_type == "timeseries":
         return TimeSeriesDataFrame.from_data_frame(
-            load_pd.load(file),
+            load_pd.load(data_file),
             id_column=ag_args["id_column"],
             timestamp_column=ag_args["timestamp_column"],
             static_features_df=static_features_df,
         )
     else:
-        return TabularDataset(file)
+        return TabularDataset(data_file)
 
 
 if __name__ == "__main__":
@@ -118,8 +118,6 @@ if __name__ == "__main__":
     static_features_df = None
     if args.static_features:
         static_features_df = load_pd.load(get_input_path(args.static_features))
-        if ag_args["id_column"] in static_features_df.columns:
-            static_features_df.set_index(ag_args["id_column"], inplace=True)
 
     training_data = prepare_data(get_input_path(args.train_dir), predictor_type, ag_args, static_features_df)
 
@@ -165,6 +163,8 @@ if __name__ == "__main__":
         predictor.save(path=save_path, standalone=True)
 
     if predictor_type == "timeseries":
+        # Persisted so the serve script can rebuild a TimeSeriesDataFrame from the test data
+        # passed to predict / predict_real_time without the user having to re-specify the column names.
         with open(os.path.join(save_path, "predictor_metadata.json"), "w") as f:
             json.dump({"id_column": ag_args["id_column"], "timestamp_column": ag_args["timestamp_column"]}, f)
 
