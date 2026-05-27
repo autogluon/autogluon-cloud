@@ -341,15 +341,7 @@ class SagemakerBackend(Backend):
         if extra_ag_args:
             ag_args.update(extra_ag_args)
         if ag_args.get("predict_after_fit"):
-            predictions_path = (
-                ag_args.get("predictions_path") or f"{self.cloud_output_path}/{job_name}/predictions.csv"
-            )
-            if not is_s3_url(predictions_path):
-                raise ValueError(
-                    f"`predictions_path` must be a full S3 URL like 's3://bucket/key/predictions.csv', "
-                    f"got {predictions_path!r}."
-                )
-            ag_args["predictions_path"] = predictions_path
+            ag_args.setdefault("predictions_path", f"{self.cloud_output_path}/{job_name}/predictions.csv")
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
