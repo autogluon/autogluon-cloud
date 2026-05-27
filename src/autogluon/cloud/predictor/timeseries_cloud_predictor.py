@@ -132,7 +132,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def predict_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
+        data: Union[str, pd.DataFrame],
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         known_covariates: Optional[pd.DataFrame] = None,
         accept: str = "application/x-parquet",
@@ -143,12 +143,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
 
-        ``test_data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
+        ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced.
+        data: Union(str, pandas.DataFrame)
+            The data to forecast from.
             Can be a pandas.DataFrame or a local path to a csv file.
         static_features: Optional[pd.DataFrame]
              An optional data frame describing the metadata attributes of individual items in the item index.
@@ -171,7 +171,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Predict results in DataFrame
         """
         return self.backend.predict_real_time(
-            test_data=test_data,
+            test_data=data,
             static_features=static_features,
             known_covariates=known_covariates,
             accept=accept,
@@ -183,8 +183,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def predict(
         self,
-        test_data: Union[str, pd.DataFrame],
+        data: Union[str, pd.DataFrame],
         static_features: Optional[Union[str, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         predictor_path: Optional[str] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
@@ -202,20 +203,19 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 
-        Note that batch prediction with `known_covariates` is currently not supported.  Please use `predict_real_time`
-        to predict with `known_covariates` instead.
-
-        ``test_data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
+        ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
 
         Parameters
         ----------
-        test_data: str
-            The test data to be inferenced.
+        data: Union(str, pandas.DataFrame)
+            The data to forecast from.
             Can be a pandas.DataFrame or a local path to a csv file.
         static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
+        known_covariates: Optional[Union[str, pd.DataFrame]]
+            Future values of the known covariates over the forecast horizon.
         predictor_path: str
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
@@ -264,8 +264,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
         return self.backend.predict(
-            test_data=test_data,
+            test_data=data,
             static_features=static_features,
+            known_covariates=known_covariates,
             predictor_path=predictor_path,
             framework_version=framework_version,
             job_name=job_name,
