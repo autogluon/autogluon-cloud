@@ -24,7 +24,7 @@ from ..utils.ag_sagemaker import (
     AutoGluonRealtimePredictor,
     AutoGluonRepackInferenceModel,
 )
-from ..utils.aws_utils import setup_sagemaker_session
+from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
 from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
 from ..utils.dlc_utils import parse_framework_version
 from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
@@ -51,11 +51,19 @@ logger = logging.getLogger(__name__)
 class SagemakerBackend(Backend):
     name = SAGEMAKER
 
-    def __init__(self, local_output_path: str, cloud_output_path: str, predictor_type: str, **kwargs) -> None:
+    def __init__(
+        self,
+        local_output_path: str,
+        cloud_output_path: str,
+        predictor_type: str,
+        role: Optional[str] = None,
+        **kwargs,
+    ) -> None:
         self.initialize(
             local_output_path=local_output_path,
             cloud_output_path=cloud_output_path,
             predictor_type=predictor_type,
+            role=role,
             **kwargs,
         )
 
@@ -64,20 +72,22 @@ class SagemakerBackend(Backend):
         """Class used for realtime endpoint"""
         return AutoGluonRealtimePredictor
 
-    def initialize(self, **kwargs) -> None:
-        """Initialize the backend."""
+    def initialize(self, role: Optional[str] = None, **kwargs) -> None:
+        """Initialize the backend.
+
+        Parameters
+        ----------
+        role
+            SageMaker execution role ARN. See
+            :func:`autogluon.cloud.utils.aws_utils.resolve_execution_role` for the resolution order.
+        """
         super().initialize(**kwargs)
         try:
-            self.role_arn = sagemaker.get_execution_role()
+            self.role_arn = resolve_execution_role(role, backend_name=SAGEMAKER)
         except ClientError as e:
             logger.warning(
-                "Failed to get IAM role. Did you configure and authenticate the IAM role?",
-                "For more information, https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html",
-                f"If you do not have a role created yet, \
-                You can use {self.__class__.__name__}.generate_default_permission() to get the required trust relationship and iam policy",
-                "You can then use the generated trust relationship and IAM policy to create an IAM role",
-                "For more information, https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html",
-                "IMPORTANT: Please review the generated trust relationship and IAM policy before you create an IAM role with them",
+                "Failed to resolve SageMaker execution role. Pass `role=<arn>` to the predictor/model "
+                "or run `autogluon.cloud.bootstrap()` / `register()` to persist one."
             )
             raise e
         self.sagemaker_session = setup_sagemaker_session()

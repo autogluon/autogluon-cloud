@@ -36,6 +36,7 @@ class CloudPredictor(ABC):
         local_output_path: Optional[str] = None,
         cloud_output_path: Optional[str] = None,
         backend: str = SAGEMAKER,
+        role: Optional[str] = None,
         verbosity: int = 2,
     ) -> None:
         """
@@ -60,6 +61,10 @@ class CloudPredictor(ABC):
             The backend to use. Valid options are: "sagemaker" and "ray_aws".
             SageMaker backend supports training, deploying and batch inference on AWS SageMaker. Only single instance training is supported.
             RayAWS backend supports distributed training by creating an ephemeral ray cluster on AWS. Deployment and batch inferenc are not supported yet.
+        role: Optional[str], default = None
+            ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
+            ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
+            :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
         verbosity : int, default = 2
             Verbosity levels range from 0 to 4 and control how much information is printed.
             Higher levels correspond to more detailed print statements (you can set verbosity = 0 to suppress warnings).
@@ -76,6 +81,7 @@ class CloudPredictor(ABC):
             local_output_path=self.local_output_path,
             cloud_output_path=self.cloud_output_path,
             predictor_type=self.predictor_type,
+            role=role,
         )
 
     @property

@@ -48,7 +48,24 @@ class FoundationModel:
         backend: Literal["sagemaker"] = "sagemaker",
         cloud_output_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
+        role: Optional[str] = None,
     ):
+        """
+        Parameters
+        ----------
+        model_id
+            ID of the foundation model from the model registry.
+        backend
+            Cloud backend to use.
+        cloud_output_path
+            S3 path to store intermediate artifacts.
+        hyperparameters
+            Default hyperparameters applied to inference and (when supported) training.
+        role
+            ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
+            ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
+            :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
+        """
         self.model_id = model_id
         self.cloud_output_path = cloud_output_path
         self._config = get_model_config(model_id)
@@ -66,6 +83,7 @@ class FoundationModel:
             local_output_path=self._tmpdir.name,
             cloud_output_path=cloud_output_path,
             predictor_type=self._predictor_type,
+            role=role,
         )
 
     def _get_hyperparameters(
