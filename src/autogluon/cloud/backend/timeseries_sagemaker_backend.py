@@ -1,11 +1,12 @@
 import logging
+import os
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
 from autogluon.common.loaders import load_pd
 
-from ..utils.serializers import AutoGluonSerializationWrapper
+from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 from .constant import TIMESERIES_SAGEMAKER
 from .sagemaker_backend import SagemakerBackend
 
@@ -152,17 +153,35 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         kwargs:
             Refer to `SagemakerBackend.predict()`
         """
-        if static_features is not None:
-            raise NotImplementedError(
-                "`static_features` is not supported for batch prediction. Use `predict_real_time()` instead."
-            )
-        if known_covariates is not None:
-            raise NotImplementedError(
-                "`known_covariates` is not supported for batch prediction. Use `predict_real_time()` instead."
-            )
+        if isinstance(test_data, str):
+            test_data = load_pd.load(test_data)
+        if isinstance(static_features, str):
+            static_features = load_pd.load(static_features)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+
+        wrapper = AutoGluonSerializationWrapper(
+            data=test_data,
+            inference_kwargs={},
+            static_features=static_features,
+            known_covariates=known_covariates,
+        )
+        # Pickle the request body to disk and pass the path through. Force content_type / split_type so
+        # SageMaker sends the whole body in one transform_fn call — preserves static_features /
+        # known_covariates side channels.
+        payload_dir = os.path.join(self.local_output_path, "utils")
+        os.makedirs(payload_dir, exist_ok=True)
+        payload_path = os.path.join(payload_dir, "predict_payload.pkl")
+        with open(payload_path, "wb") as f:
+            f.write(AutoGluonSerializer().serialize(wrapper))
+        transform_kwargs = kwargs.pop("transform_kwargs", None) or {}
+        transform_kwargs["content_type"] = "application/x-autogluon"
+        transform_kwargs["split_type"] = "None"
+
         pred, _ = super()._predict(
-            test_data=test_data,
+            test_data=payload_path,
             split_pred_proba=False,
+            transform_kwargs=transform_kwargs,
             **kwargs,
         )
         return pred

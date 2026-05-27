@@ -1245,7 +1245,9 @@ class SagemakerBackend(Backend):
                 logger.warning(
                     "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
                 )
-            else:
+            elif original_features is not None:
+                # Loading is only needed for the column check below — skip it for predictors that don't track
+                # `original_features` (e.g. timeseries) to avoid loading the file as a DataFrame just to upload it.
                 test_data = load_pd.load(test_data)
 
         if isinstance(test_data, pd.DataFrame) and original_features is not None:

@@ -20,7 +20,7 @@ def _assert_timeseries_predictions(predictions: pd.DataFrame, expected_item_ids:
 
 @pytest.fixture(scope="module")
 def retail_sales_dataset():
-    """Public retail-sales dataset with train data and known covariates."""
+    """Public retail-sales dataset with train data, known covariates, and synthetic static features."""
     target = "Sales"
     id_column = "id"
     timestamp_column = "timestamp"
@@ -31,10 +31,15 @@ def retail_sales_dataset():
     test_df[timestamp_column] = pd.to_datetime(test_df[timestamp_column])
     known_covariates_df = test_df.drop(columns=target)
     known_covariates_names = [c for c in known_covariates_df.columns if c not in (id_column, timestamp_column)]
+    unique_ids = train_df[id_column].unique()
+    static_features_df = pd.DataFrame(
+        {id_column: unique_ids, "category": [f"cat_{i % 3}" for i in range(len(unique_ids))]}
+    )
     return {
         "train_data": train_df,
         "known_covariates": known_covariates_df,
         "known_covariates_names": known_covariates_names,
+        "static_features": static_features_df,
         "target": target,
         "id_column": id_column,
         "timestamp_column": timestamp_column,
@@ -42,20 +47,21 @@ def retail_sales_dataset():
     }
 
 
-def test_timeseries(test_helper, framework_version):
-    train_data = "timeseries_train.csv"
-    static_features = "timeseries_static_features.csv"
+def test_timeseries(test_helper, framework_version, retail_sales_dataset):
+    ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        test_helper.prepare_data(train_data, static_features)
-        time_limit = 60
 
-        predictor_init_args = dict(target="target", prediction_length=3)
+        predictor_init_args = dict(
+            target=ds["target"],
+            prediction_length=ds["prediction_length"],
+            known_covariates_names=ds["known_covariates_names"],
+        )
         predictor_fit_args = dict(
-            train_data=train_data,
+            train_data=ds["train_data"],
             presets="medium_quality",
-            time_limit=time_limit,
+            time_limit=60,
         )
 
         cloud_predictor = TimeSeriesCloudPredictor(
@@ -75,18 +81,25 @@ def test_timeseries(test_helper, framework_version):
             predictor_init_args,
             predictor_fit_args,
             cloud_predictor_no_train,
-            train_data,
+            ds["train_data"],
             fit_kwargs=dict(
-                static_features=static_features,
+                id_column=ds["id_column"],
+                timestamp_column=ds["timestamp_column"],
+                static_features=ds["static_features"],
                 framework_version=framework_version,
                 custom_image_uri=training_custom_image_uri,
             ),
             deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
             predict_kwargs=dict(
+                static_features=ds["static_features"],
+                known_covariates=ds["known_covariates"],
                 framework_version=framework_version,
                 custom_image_uri=inference_custom_image_uri,
             ),
-            predict_real_time_kwargs=dict(static_features=static_features),
+            predict_real_time_kwargs=dict(
+                static_features=ds["static_features"],
+                known_covariates=ds["known_covariates"],
+            ),
         )
 
 
