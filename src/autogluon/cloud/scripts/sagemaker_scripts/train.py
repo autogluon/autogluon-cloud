@@ -3,6 +3,7 @@
 # The import order of autogluon sub module here could cause seg fault. Ignore isort for now
 # https://github.com/autogluon/autogluon/issues/2042
 import argparse
+import json
 import os
 import pandas as pd
 import shutil
@@ -173,6 +174,10 @@ if __name__ == "__main__":
     # This is required because of https://discuss.huggingface.co/t/error-403-when-downloading-model-for-sagemaker-batch-inference/12571/6
     if predictor_type == "multimodal":
         predictor.save(path=save_path, standalone=True)
+
+    if predictor_type == "timeseries":
+        with open(os.path.join(save_path, "predictor_metadata.json"), "w") as f:
+            json.dump({"id_column": id_column, "timestamp_column": timestamp_column}, f)
 
     if predictor_cls == TabularPredictor:
         if ag_args.get("leaderboard", False):

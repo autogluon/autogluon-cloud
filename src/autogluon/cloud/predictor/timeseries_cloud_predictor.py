@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any, Dict, Optional, Union
@@ -18,23 +17,6 @@ logger = logging.getLogger(__name__)
 class TimeSeriesCloudPredictor(CloudPredictor):
     predictor_file_name = "TimeSeriesCloudPredictor.pkl"
     backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
-
-    def __init__(
-        self,
-        local_output_path: Optional[str] = None,
-        cloud_output_path: Optional[str] = None,
-        backend: str = SAGEMAKER,
-        verbosity: int = 2,
-    ) -> None:
-        super().__init__(
-            local_output_path=local_output_path,
-            cloud_output_path=cloud_output_path,
-            backend=backend,
-            verbosity=verbosity,
-        )
-        self.target_column: Optional[str] = None
-        self.id_column: Optional[str] = None
-        self.timestamp_column: Optional[str] = None
 
     @property
     def predictor_type(self):
@@ -123,25 +105,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
 
-        self.target_column = predictor_init_args.get("target", "target")
-        self.id_column = id_column
-        self.timestamp_column = timestamp_column
-
-        # Create predictor metadata dict
-        predictor_metadata = {
-            "id_column": self.id_column,
-            "timestamp_column": self.timestamp_column,
-            "target_column": self.target_column,
-        }
-
-        # Add to backend kwargs
-        backend_kwargs.setdefault("autogluon_sagemaker_estimator_kwargs", {}).setdefault("hyperparameters", {})[
-            "predictor_metadata"
-        ] = json.dumps(predictor_metadata)
-
-        # Extract data inputs from predictor_fit_args into separate SageMaker channels.
-        # static_features comes in as an explicit kwarg (matches TimeSeriesPredictor's UX) but is also
-        # uploaded as a channel.
         predictor_fit_args = dict(predictor_fit_args)
         data_channels = {
             "train_data": predictor_fit_args.pop("train_data"),
@@ -182,6 +145,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
 
+        ``test_data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
+
         Parameters
         ----------
         test_data: Union(str, pandas.DataFrame)
@@ -207,14 +172,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Pandas.DataFrame
         Predict results in DataFrame
         """
-        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
-            raise ValueError(
-                "Please set id_column, timestamp_column and target_column before calling predict_real_time"
-            )
         return self.backend.predict_real_time(
             test_data=test_data,
-            id_column=self.id_column,
-            timestamp_column=self.timestamp_column,
             static_features=static_features,
             known_covariates=known_covariates,
             accept=accept,
@@ -248,6 +207,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Note that batch prediction with `known_covariates` is currently not supported.  Please use `predict_real_time`
         to predict with `known_covariates` instead.
 
+        ``test_data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
+
         Parameters
         ----------
         test_data: str
@@ -257,8 +218,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        target: str
-            Name of column that contains the target values to forecast
         predictor_path: str
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
@@ -306,12 +265,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
-        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
-            raise ValueError("Please set id_column, timestamp_column and target_column before calling predict")
         return self.backend.predict(
             test_data=test_data,
-            id_column=self.id_column,
-            timestamp_column=self.timestamp_column,
             static_features=static_features,
             predictor_path=predictor_path,
             framework_version=framework_version,
@@ -527,24 +482,3 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             predictions.to_csv(output_file, index=False)
             logger.log(20, f"fit_predict results saved to {output_file}")
         return predictions
-
-    def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
-        """Attach to existing training job"""
-        super().attach_job(job_name)
-
-        # Get full job description including hyperparameters
-        job_desc = self.backend.get_fit_job_info()
-        hyperparameters = job_desc.get("hyperparameters", {})
-
-        # Extract and set predictor metadata
-        if hyperparameters and "predictor_metadata" in hyperparameters:
-            metadata = hyperparameters["predictor_metadata"]
-            self.id_column = metadata.get("id_column")
-            self.timestamp_column = metadata.get("timestamp_column")
-            self.target_column = metadata.get("target_column")
-        else:
-            logger.warning(
-                "No predictor metadata found in training job. Please set id_column, timestamp_column and target_column manually."
-            )
-
-        return self

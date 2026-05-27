@@ -60,8 +60,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     def predict_real_time(
         self,
         test_data: Union[str, pd.DataFrame],
-        id_column: str,
-        timestamp_column: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
@@ -78,10 +76,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         test_data: Union(str, pandas.DataFrame)
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
-        id_column: str
-            Name of the 'item_id' column
-        timestamp_column: str
-            Name of the 'timestamp' column
         static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
@@ -108,14 +102,9 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         if isinstance(known_covariates, str):
             known_covariates = load_pd.load(known_covariates)
 
-        if inference_kwargs is None:
-            inference_kwargs = {}
-        inference_kwargs["id_column"] = id_column
-        inference_kwargs["timestamp_column"] = timestamp_column
-
         wrapper = AutoGluonSerializationWrapper(
             data=test_data,
-            inference_kwargs=inference_kwargs,
+            inference_kwargs=inference_kwargs or {},
             static_features=static_features,
             known_covariates=known_covariates,
         )
@@ -128,8 +117,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     def predict(
         self,
         test_data: Union[str, pd.DataFrame],
-        id_column: str,
-        timestamp_column: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         **kwargs,
@@ -147,10 +134,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         test_data: str
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
-        id_column: str
-            Name of the 'item_id' column
-        timestamp_column: str
-            Name of the 'timestamp' column
         static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
@@ -168,14 +151,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             raise NotImplementedError(
                 "`known_covariates` is not supported for batch prediction. Use `predict_real_time()` instead."
             )
-        if isinstance(test_data, str):
-            test_data = load_pd.load(test_data)
-        for required in (id_column, timestamp_column):
-            if required not in test_data.columns:
-                raise ValueError(f"`test_data` must contain column '{required}'.")
-        cols = test_data.columns.to_list()
-        reordered = [id_column, timestamp_column] + [c for c in cols if c not in (id_column, timestamp_column)]
-        test_data = test_data[reordered]
         pred, _ = super()._predict(
             test_data=test_data,
             split_pred_proba=False,

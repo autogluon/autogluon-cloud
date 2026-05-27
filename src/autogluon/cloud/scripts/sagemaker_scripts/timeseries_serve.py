@@ -1,4 +1,5 @@
 # flake8: noqa
+import json
 import os
 import pickle
 import shutil
@@ -22,19 +23,23 @@ def model_fn(model_dir):
     model = TimeSeriesPredictor.load(tmp_model_dir)
     if hasattr(model, "persist"):  # timeseries added persist in v1.1
         model.persist()
+
+    metadata_path = os.path.join(tmp_model_dir, "predictor_metadata.json")
+    if os.path.exists(metadata_path):
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+        model._id_column = metadata["id_column"]
+        model._timestamp_column = metadata["timestamp_column"]
+    else:
+        model._id_column = "item_id"
+        model._timestamp_column = "timestamp"
     return model
 
 
-def _parse_autogluon_payload(request_body):
+def _parse_autogluon_payload(request_body, *, id_column, timestamp_column):
     """Parse x-autogluon payload. Returns (data, known_covariates, inference_kwargs)."""
     payload = pickle.loads(request_body)
     inference_kwargs = payload.get("inference_kwargs") or {}
-
-    try:
-        id_column = inference_kwargs.pop("id_column")
-        timestamp_column = inference_kwargs.pop("timestamp_column")
-    except KeyError as e:
-        raise ValueError(f"`application/x-autogluon` payload must include {e.args[0]!r} in inference_kwargs.") from e
 
     data = pd.read_parquet(BytesIO(payload["data"]))
     static_features = payload.get("static_features")
@@ -54,8 +59,8 @@ def _parse_autogluon_payload(request_body):
     return tsdf, known_covariates, inference_kwargs
 
 
-def _parse_simple_payload(request_body, content_type):
-    """Parse plain parquet/csv/json payloads. Falls back to positional columns."""
+def _parse_simple_payload(request_body, content_type, *, id_column, timestamp_column):
+    """Parse plain parquet/csv/json payloads using the column names recorded at fit time."""
     if content_type == "application/x-parquet":
         data = pd.read_parquet(BytesIO(request_body))
     elif content_type == "text/csv":
@@ -67,17 +72,21 @@ def _parse_simple_payload(request_body, content_type):
     else:
         raise ValueError(f"{content_type} input content type not supported.")
 
-    id_column = data.columns[0]
-    timestamp_column = data.columns[1]
     tsdf = TimeSeriesDataFrame.from_data_frame(data, id_column=id_column, timestamp_column=timestamp_column)
     return tsdf, None, {}
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
+    id_column = model._id_column
+    timestamp_column = model._timestamp_column
     if input_content_type == "application/x-autogluon":
-        tsdf, known_covariates, inference_kwargs = _parse_autogluon_payload(request_body)
+        tsdf, known_covariates, inference_kwargs = _parse_autogluon_payload(
+            request_body, id_column=id_column, timestamp_column=timestamp_column
+        )
     else:
-        tsdf, known_covariates, inference_kwargs = _parse_simple_payload(request_body, input_content_type)
+        tsdf, known_covariates, inference_kwargs = _parse_simple_payload(
+            request_body, input_content_type, id_column=id_column, timestamp_column=timestamp_column
+        )
 
     prediction = model.predict(tsdf, known_covariates=known_covariates, **inference_kwargs)
     prediction = pd.DataFrame(prediction)
