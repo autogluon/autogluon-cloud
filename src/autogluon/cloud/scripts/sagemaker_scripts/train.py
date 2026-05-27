@@ -13,6 +13,7 @@ import pickle
 
 from autogluon.common.loaders import load_pd
 from autogluon.tabular import TabularPredictor, TabularDataset
+from autogluon.timeseries import TimeSeriesDataFrame
 
 
 def get_input_path(path):
@@ -29,6 +30,18 @@ def get_env_if_present(name):
     if name in os.environ:
         result = os.environ[name]
     return result
+
+
+def prepare_data(file, predictor_type, ag_args, static_features_df=None):
+    if predictor_type == "timeseries":
+        return TimeSeriesDataFrame.from_data_frame(
+            load_pd.load(file),
+            id_column=ag_args["id_column"],
+            timestamp_column=ag_args["timestamp_column"],
+            static_features_df=static_features_df,
+        )
+    else:
+        return TabularDataset(file)
 
 
 if __name__ == "__main__":
@@ -93,33 +106,22 @@ if __name__ == "__main__":
         from autogluon.multimodal import MultiModalPredictor
 
         predictor_cls = MultiModalPredictor
-    elif predictor_type == "timeseries":
-        from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+    else:
+        from autogluon.timeseries import TimeSeriesPredictor
 
         predictor_cls = TimeSeriesPredictor
         # Disable prediction caching to avoid errors on read-only filesystem
         predictor_init_args.setdefault("cache_predictions", False)
-
-    id_column = ag_args.get("id_column", "item_id")
-    timestamp_column = ag_args.get("timestamp_column", "timestamp")
+        ag_args.setdefault("id_column", "item_id")
+        ag_args.setdefault("timestamp_column", "timestamp")
 
     static_features_df = None
     if args.static_features:
-        sf_file = get_input_path(args.static_features)
-        static_features_df = load_pd.load(sf_file)
-        if id_column in static_features_df.columns:
-            static_features_df.set_index(id_column, inplace=True)
+        static_features_df = load_pd.load(get_input_path(args.static_features))
+        if ag_args["id_column"] in static_features_df.columns:
+            static_features_df.set_index(ag_args["id_column"], inplace=True)
 
-    train_file = get_input_path(args.train_dir)
-    if predictor_type == "timeseries":
-        training_data = TimeSeriesDataFrame.from_data_frame(
-            load_pd.load(train_file),
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-            static_features_df=static_features_df,
-        )
-    else:
-        training_data = TabularDataset(train_file)
+    training_data = prepare_data(get_input_path(args.train_dir), predictor_type, ag_args, static_features_df)
 
     if predictor_type == "tabular" and "image_column" in ag_args:
         feature_metadata = predictor_fit_args.get("feature_metadata", None)
@@ -131,16 +133,7 @@ if __name__ == "__main__":
 
     tuning_data = None
     if args.tune_dir:
-        tune_file = get_input_path(args.tune_dir)
-        if predictor_type == "timeseries":
-            tuning_data = TimeSeriesDataFrame.from_data_frame(
-                load_pd.load(tune_file),
-                id_column=id_column,
-                timestamp_column=timestamp_column,
-                static_features_df=static_features_df,
-            )
-        else:
-            tuning_data = TabularDataset(tune_file)
+        tuning_data = prepare_data(get_input_path(args.tune_dir), predictor_type, ag_args, static_features_df)
 
     if args.train_images:
         train_image_compressed_file = get_input_path(args.train_images)
@@ -158,15 +151,11 @@ if __name__ == "__main__":
         image_column = ag_args["image_column"]
         tuning_data[image_column] = tuning_data[image_column].apply(lambda path: os.path.join(tune_images_dir, path))
 
-    known_covariates_df = None
+    known_covariates = None
     if args.known_covariates:
-        kc_file = get_input_path(args.known_covariates)
-        known_covariates_df = load_pd.load(kc_file)
+        known_covariates = prepare_data(get_input_path(args.known_covariates), predictor_type, ag_args)
         if "known_covariates_names" not in predictor_init_args:
-            kc_cols = known_covariates_df.columns.to_list()
-            predictor_init_args["known_covariates_names"] = [
-                c for c in kc_cols if c not in (id_column, timestamp_column)
-            ]
+            predictor_init_args["known_covariates_names"] = list(known_covariates.columns)
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
@@ -177,7 +166,7 @@ if __name__ == "__main__":
 
     if predictor_type == "timeseries":
         with open(os.path.join(save_path, "predictor_metadata.json"), "w") as f:
-            json.dump({"id_column": id_column, "timestamp_column": timestamp_column}, f)
+            json.dump({"id_column": ag_args["id_column"], "timestamp_column": ag_args["timestamp_column"]}, f)
 
     if predictor_cls == TabularPredictor:
         if ag_args.get("leaderboard", False):
@@ -190,12 +179,7 @@ if __name__ == "__main__":
                 f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
             )
         print("Running in-job prediction for fit_predict")
-        known_covariates_tsdf = None
-        if known_covariates_df is not None:
-            known_covariates_tsdf = TimeSeriesDataFrame.from_data_frame(
-                known_covariates_df, id_column=id_column, timestamp_column=timestamp_column
-            )
-        predictions = predictor.predict(training_data, known_covariates=known_covariates_tsdf)
+        predictions = predictor.predict(training_data, known_covariates=known_covariates)
         predictions = pd.DataFrame(predictions).reset_index()
         predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
         predictions.to_csv(predictions_path, index=False)
