@@ -1,8 +1,8 @@
 # flake8: noqa
 import base64
 import copy
+import json
 import os
-import pickle
 from io import BytesIO, StringIO
 
 import numpy as np
@@ -66,24 +66,14 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
             image_bytearrays.append(im_bytes)
 
     elif input_content_type == "application/x-autogluon-parquet":
-        buf = bytes(request_body)
-        payload = pickle.loads(buf)
-        data = pd.read_parquet(BytesIO(payload["data"]))
-        inference_kwargs = payload["inference_kwargs"]
-        if inference_kwargs is None:
-            inference_kwargs = {}
+        payload = json.loads(request_body)
+        data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
+        inference_kwargs = payload.get("inference_kwargs") or {}
 
     elif input_content_type == "application/x-autogluon-npy":
-        buf = bytes(request_body)
-        payload = pickle.loads(buf)
-        data = np.load(BytesIO(payload["data"]), allow_pickle=True)
-        image_bytearrays = []
-        for _bytes in data:
-            im_bytes = base64.b85decode(_bytes)
-            image_bytearrays.append(im_bytes)
-        inference_kwargs = payload["inference_kwargs"]
-        if inference_kwargs is None:
-            inference_kwargs = {}
+        payload = json.loads(request_body)
+        image_bytearrays = [base64.b85decode(_bytes) for _bytes in payload["data"]]
+        inference_kwargs = payload.get("inference_kwargs") or {}
 
     elif input_content_type == "application/x-image":
         image_bytearrays = []
