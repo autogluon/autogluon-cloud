@@ -351,11 +351,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Optional[pd.DataFrame]
             Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
         """
-        if predictions_path is not None and not is_s3_url(predictions_path):
-            raise ValueError(
-                f"`predictions_path` must be a full S3 URL like 's3://bucket/key/predictions.csv', "
-                f"got {predictions_path!r}."
-            )
+        if predictions_path is not None:
+            if not is_s3_url(predictions_path) or not predictions_path.endswith((".csv", ".parquet")):
+                raise ValueError(
+                    f"`predictions_path` must be a full S3 URL ending in '.csv' or '.parquet' "
+                    f"(e.g. 's3://bucket/key/predictions.parquet'), got {predictions_path!r}."
+                )
         if predictor_fit_args is None:
             predictor_fit_args = {}
         else:
