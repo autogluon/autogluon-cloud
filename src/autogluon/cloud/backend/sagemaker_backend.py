@@ -1004,7 +1004,10 @@ class SagemakerBackend(Backend):
             ag_args = pickle.load(f)
         predictions_path = ag_args.get("predictions_path")
         assert predictions_path is not None, "No fit_predict job found. Call `fit_predict()` first."
-        return load_pd.load(predictions_path)
+        bucket, key = s3_path_to_bucket_prefix(predictions_path)
+        with tempfile.TemporaryDirectory(prefix="ag_fit_predict_") as tmpdir:
+            self.sagemaker_session.download_data(path=tmpdir, bucket=bucket, key_prefix=key)
+            return load_pd.load(os.path.join(tmpdir, os.path.basename(key)))
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(
