@@ -1343,8 +1343,15 @@ class SagemakerBackend(Backend):
         pred, pred_proba = None, None
         if download:
             results_path = self.download_predict_results(save_path=save_path)
-            # Batch inference will only return json format
-            results = pd.read_json(results_path)
+            accept = transformer_kwargs.get("accept", "application/json")
+            if accept == "application/x-parquet":
+                results = pd.read_parquet(results_path)
+            elif accept == "text/csv":
+                results = pd.read_csv(results_path)
+            elif accept == "application/json":
+                results = pd.read_json(results_path)
+            else:
+                raise ValueError(f"Unsupported accept type for batch inference results: {accept!r}")
             pred = results
             if split_pred_proba:
                 pred, pred_proba = split_pred_and_pred_proba(results)

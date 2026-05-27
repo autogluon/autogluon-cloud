@@ -177,11 +177,17 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         transform_kwargs = kwargs.pop("transform_kwargs", None) or {}
         transform_kwargs["content_type"] = "application/x-autogluon"
         transform_kwargs["split_type"] = "None"
+        # Parquet output (JSON can exceed TorchServe's 6.5MB cap); assemble_with=None preserves
+        # parquet footer (default "Line" appends a newline that corrupts it).
+        transformer_kwargs = kwargs.pop("transformer_kwargs", None) or {}
+        transformer_kwargs.setdefault("accept", "application/x-parquet")
+        transformer_kwargs.setdefault("assemble_with", None)
 
         pred, _ = super()._predict(
             test_data=payload_path,
             split_pred_proba=False,
             transform_kwargs=transform_kwargs,
+            transformer_kwargs=transformer_kwargs,
             **kwargs,
         )
         return pred
