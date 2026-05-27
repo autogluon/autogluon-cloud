@@ -231,8 +231,7 @@ class SagemakerBackend(Backend):
         data_channels: Dict[str, Union[str, pd.DataFrame, None]]
             Mapping from data-input name to a DataFrame or local/S3 path. Each non-None entry is uploaded
             as a separate SageMaker channel; the train script reads it via ``SM_CHANNEL_<KEY_UPPER>``.
-            Must contain a non-None ``train_data`` entry. Subclasses define which other keys are honored
-            (e.g. ``tuning_data``, ``known_covariates``, ``static_features`` for time series).
+            Must contain a non-None ``train_data`` entry; subclasses define which additional keys are honored.
         image_column: str, default = None
             The column name in the training/tuning data that contains the image paths.
             The image paths MUST be absolute paths to you local system.
@@ -1049,8 +1048,9 @@ class SagemakerBackend(Backend):
     def _find_common_path_and_replace_image_column(self, data, image_column):
         common_path = os.path.commonpath(data[image_column].tolist())
         common_path_head = os.path.split(common_path)[0]  # we keep the base dir to match zipping behavior
-        data[image_column] = data[image_column].apply(lambda path: os.path.relpath(path, common_path_head))
-
+        data = data.assign(
+            **{image_column: data[image_column].apply(lambda path: os.path.relpath(path, common_path_head))}
+        )
         return data, common_path
 
     def _upload_fit_artifact(
@@ -1064,17 +1064,16 @@ class SagemakerBackend(Backend):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
         util_key_prefix = cloud_key_prefix + "/utils"
 
-        # Image-column mode: deepcopy and rewrite image paths to be container-relative; common image
-        # directories are zipped and uploaded as separate train_images / tune_images channels below.
+        # Image-column mode: rewrite image paths to be container-relative; common image directories
+        # are zipped and uploaded as separate train_images / tune_images channels below.
         common_train_data_path, common_tune_data_path = None, None
         if image_column is not None:
-            data_channels = dict(data_channels)
             data_channels["train_data"], common_train_data_path = self._find_common_path_and_replace_image_column(
-                data=copy.deepcopy(data_channels["train_data"]), image_column=image_column
+                data=data_channels["train_data"], image_column=image_column
             )
             if data_channels.get("tuning_data") is not None:
                 data_channels["tuning_data"], common_tune_data_path = self._find_common_path_and_replace_image_column(
-                    data=copy.deepcopy(data_channels["tuning_data"]), image_column=image_column
+                    data=data_channels["tuning_data"], image_column=image_column
                 )
 
         self.original_features = [col for col in data_channels["train_data"].columns if col != label]

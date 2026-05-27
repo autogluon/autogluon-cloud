@@ -134,15 +134,31 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
-        """Predict using SageMaker batch transform.
+        """
+        Predict using SageMaker batch transform.
+        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
+        If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
+        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
+        then create a transformer with it, and call transform in the end.
 
-        Batch transform sends a single CSV body without per-record metadata, so the serve script
-        relies on positional column inference: ``id_column`` at position 0, ``timestamp_column`` at
-        position 1. We reorder ``test_data`` here to match that contract.
-
-        ``static_features`` and ``known_covariates`` are not supported in this code path — SageMaker
-        batch transform splits the request body and we have no second channel to attach them to. Use
-        ``predict_real_time()`` instead.
+        Parameters
+        ----------
+        test_data: str
+            The test data to be inferenced.
+            Can be a pandas.DataFrame or a local path to a csv file.
+        id_column: str
+            Name of the 'item_id' column
+        timestamp_column: str
+            Name of the 'timestamp' column
+        static_features: Optional[Union[str, pd.DataFrame]]
+             An optional data frame describing the metadata attributes of individual items in the item index.
+             For more detail, please refer to `TimeSeriesDataFrame` documentation:
+             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
+        known_covariates: Optional[Union[str, pd.DataFrame]]
+            Future values of the known covariates over the forecast horizon.
+        kwargs:
+            Refer to `SagemakerBackend.predict()`
         """
         if static_features is not None:
             raise NotImplementedError(
@@ -157,7 +173,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         for required in (id_column, timestamp_column):
             if required not in test_data.columns:
                 raise ValueError(f"`test_data` must contain column '{required}'.")
-        # Reorder so the serve script's positional inference picks up the right columns.
         cols = test_data.columns.to_list()
         reordered = [id_column, timestamp_column] + [c for c in cols if c not in (id_column, timestamp_column)]
         test_data = test_data[reordered]
