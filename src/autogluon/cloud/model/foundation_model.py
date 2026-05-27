@@ -62,11 +62,9 @@ class FoundationModel:
         hyperparameters
             Default hyperparameters applied to inference and (when supported) training.
         role
-            ARN of the SageMaker execution role — the role that SageMaker assumes when running training and
-            inference jobs. This is *not* the caller's identity (which comes from the standard boto3 credential
-            chain); the caller passes the ARN and SageMaker assumes it on the job's behalf. If ``None``, falls back
-            to ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
-            :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()`` (notebook only).
+            ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
+            ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
+            :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
         """
         self.model_id = model_id
         self.cloud_output_path = cloud_output_path

@@ -78,19 +78,16 @@ class SagemakerBackend(Backend):
         Parameters
         ----------
         role
-            Explicit SageMaker execution role ARN. This is the role SageMaker assumes when
-            running training/inference jobs (not the caller's identity). If ``None``, falls
-            back to ``~/.autogluon/cloud.yaml`` and then ``sagemaker.get_execution_role()``.
-            See :func:`autogluon.cloud.utils.aws_utils.resolve_execution_role` for details.
+            SageMaker execution role ARN. See
+            :func:`autogluon.cloud.utils.aws_utils.resolve_execution_role` for the resolution order.
         """
         super().initialize(**kwargs)
         try:
             self.role_arn = resolve_execution_role(role, backend_name=SAGEMAKER)
         except ClientError as e:
             logger.warning(
-                "Failed to resolve SageMaker execution role. Pass `role=<arn>` to the predictor/model, "
-                "run `autogluon.cloud.bootstrap()` / `register()` to persist one, "
-                "or run inside a SageMaker Notebook/Studio so `sagemaker.get_execution_role()` succeeds."
+                "Failed to resolve SageMaker execution role. Pass `role=<arn>` to the predictor/model "
+                "or run `autogluon.cloud.bootstrap()` / `register()` to persist one."
             )
             raise e
         self.sagemaker_session = setup_sagemaker_session()
