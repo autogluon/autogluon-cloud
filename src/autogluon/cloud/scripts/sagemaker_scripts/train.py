@@ -3,6 +3,7 @@
 # The import order of autogluon sub module here could cause seg fault. Ignore isort for now
 # https://github.com/autogluon/autogluon/issues/2042
 import argparse
+import json
 import os
 import pandas as pd
 import shutil
@@ -12,6 +13,7 @@ import pickle
 
 from autogluon.common.loaders import load_pd
 from autogluon.tabular import TabularPredictor, TabularDataset
+from autogluon.timeseries import TimeSeriesDataFrame
 
 
 def get_input_path(path):
@@ -30,45 +32,16 @@ def get_env_if_present(name):
     return result
 
 
-def prepare_timeseries_dataframe(df, predictor_init_args=None, target=None):
-    """Build a TimeSeriesDataFrame from a long-format ``df``.
-
-    ``df`` is expected to have its id column at position 0 and timestamp at position 1 (layout set by
-    ``TimeSeriesSagemakerBackend._preprocess_data``).
-
-    If ``target`` (or ``predictor_init_args['target']``) is provided, any columns trailing the target column are
-    treated as merged-in static features and reattached as ``df.static_features``. If ``target`` is ``None`` (e.g. a
-    ``known_covariates`` frame), the static-features branch is skipped entirely.
-    """
-    if target is None and predictor_init_args is not None:
-        target = predictor_init_args.get("target")
-    cols = df.columns.to_list()
-    id_column = cols[0]
-    timestamp_column = cols[1]
-    df[timestamp_column] = pd.to_datetime(df[timestamp_column])
-    static_features = None
-    if target is not None and target != cols[-1]:
-        # target is not the last column, then there are static features being merged in
-        target_index = cols.index(target)
-        static_columns = cols[target_index + 1 :]
-        static_features = df[[id_column] + static_columns].groupby([id_column], sort=False).head(1)
-        static_features.set_index(id_column, inplace=True)
-        df.drop(columns=static_columns, inplace=True)
-    df = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
-    if static_features is not None:
-        print(static_features)
-        df.static_features = static_features
-    return df
-
-
-def prepare_data(data_file, predictor_type, predictor_init_args=None):
+def prepare_data(data_file, predictor_type, ag_args, static_features_df=None):
     if predictor_type == "timeseries":
-        assert predictor_init_args is not None
-        data = load_pd.load(data_file)
-        data = prepare_timeseries_dataframe(data, predictor_init_args=predictor_init_args)
+        return TimeSeriesDataFrame.from_data_frame(
+            load_pd.load(data_file),
+            id_column=ag_args["id_column"],
+            timestamp_column=ag_args["timestamp_column"],
+            static_features_df=static_features_df,
+        )
     else:
-        data = TabularDataset(data_file)
-    return data
+        return TabularDataset(data_file)
 
 
 if __name__ == "__main__":
@@ -83,8 +56,8 @@ if __name__ == "__main__":
     parser.add_argument("--output-data-dir", type=str, default=get_env_if_present("SM_OUTPUT_DATA_DIR"))
     parser.add_argument("--model-dir", type=str, default=get_env_if_present("SM_MODEL_DIR"))
     parser.add_argument("--n_gpus", type=str, default=get_env_if_present("SM_NUM_GPUS"))
-    parser.add_argument("--train_dir", type=str, default=get_env_if_present("SM_CHANNEL_TRAIN"))
-    parser.add_argument("--tune_dir", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TUNE"))
+    parser.add_argument("--train_dir", type=str, default=get_env_if_present("SM_CHANNEL_TRAIN_DATA"))
+    parser.add_argument("--tune_dir", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TUNING_DATA"))
     parser.add_argument(
         "--train_images", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TRAIN_IMAGES")
     )
@@ -95,6 +68,9 @@ if __name__ == "__main__":
     parser.add_argument("--serving_script", type=str, default=get_env_if_present("SM_CHANNEL_SERVING"))
     parser.add_argument(
         "--known_covariates", type=str, required=False, default=get_env_if_present("SM_CHANNEL_KNOWN_COVARIATES")
+    )
+    parser.add_argument(
+        "--static_features", type=str, required=False, default=get_env_if_present("SM_CHANNEL_STATIC_FEATURES")
     )
 
     args, _ = parser.parse_known_args()
@@ -130,15 +106,20 @@ if __name__ == "__main__":
         from autogluon.multimodal import MultiModalPredictor
 
         predictor_cls = MultiModalPredictor
-    elif predictor_type == "timeseries":
-        from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+    else:
+        from autogluon.timeseries import TimeSeriesPredictor
 
         predictor_cls = TimeSeriesPredictor
         # Disable prediction caching to avoid errors on read-only filesystem
         predictor_init_args.setdefault("cache_predictions", False)
+        ag_args.setdefault("id_column", "item_id")
+        ag_args.setdefault("timestamp_column", "timestamp")
 
-    train_file = get_input_path(args.train_dir)
-    training_data = prepare_data(train_file, predictor_type, predictor_init_args)
+    static_features_df = None
+    if args.static_features:
+        static_features_df = load_pd.load(get_input_path(args.static_features))
+
+    training_data = prepare_data(get_input_path(args.train_dir), predictor_type, ag_args, static_features_df)
 
     if predictor_type == "tabular" and "image_column" in ag_args:
         feature_metadata = predictor_fit_args.get("feature_metadata", None)
@@ -150,8 +131,7 @@ if __name__ == "__main__":
 
     tuning_data = None
     if args.tune_dir:
-        tune_file = get_input_path(args.tune_dir)
-        tuning_data = prepare_data(tune_file, predictor_type)
+        tuning_data = prepare_data(get_input_path(args.tune_dir), predictor_type, ag_args, static_features_df)
 
     if args.train_images:
         train_image_compressed_file = get_input_path(args.train_images)
@@ -169,13 +149,11 @@ if __name__ == "__main__":
         image_column = ag_args["image_column"]
         tuning_data[image_column] = tuning_data[image_column].apply(lambda path: os.path.join(tune_images_dir, path))
 
-    known_covariates_df = None
+    known_covariates = None
     if args.known_covariates:
-        kc_file = get_input_path(args.known_covariates)
-        known_covariates_df = load_pd.load(kc_file)
+        known_covariates = prepare_data(get_input_path(args.known_covariates), predictor_type, ag_args)
         if "known_covariates_names" not in predictor_init_args:
-            kc_cols = known_covariates_df.columns.to_list()
-            predictor_init_args["known_covariates_names"] = kc_cols[2:]  # skip id and timestamp columns
+            predictor_init_args["known_covariates_names"] = list(known_covariates.columns)
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
@@ -183,6 +161,12 @@ if __name__ == "__main__":
     # This is required because of https://discuss.huggingface.co/t/error-403-when-downloading-model-for-sagemaker-batch-inference/12571/6
     if predictor_type == "multimodal":
         predictor.save(path=save_path, standalone=True)
+
+    if predictor_type == "timeseries":
+        # Persisted so the serve script can rebuild a TimeSeriesDataFrame from the test data
+        # passed to predict / predict_real_time without the user having to re-specify the column names.
+        with open(os.path.join(save_path, "predictor_metadata.json"), "w") as f:
+            json.dump({"id_column": ag_args["id_column"], "timestamp_column": ag_args["timestamp_column"]}, f)
 
     if predictor_cls == TabularPredictor:
         if ag_args.get("leaderboard", False):
@@ -195,10 +179,7 @@ if __name__ == "__main__":
                 f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
             )
         print("Running in-job prediction for fit_predict")
-        predict_kwargs = {}
-        if known_covariates_df is not None:
-            predict_kwargs["known_covariates"] = prepare_timeseries_dataframe(known_covariates_df, target=None)
-        predictions = predictor.predict(training_data, **predict_kwargs)
+        predictions = predictor.predict(training_data, known_covariates=known_covariates)
         predictions = pd.DataFrame(predictions).reset_index()
         predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
         predictions.to_csv(predictions_path, index=False)

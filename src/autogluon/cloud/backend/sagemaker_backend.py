@@ -140,14 +140,10 @@ class SagemakerBackend(Backend):
 
     def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to fit call"""
-        autogluon_sagemaker_estimator_kwargs = kwargs.get("autogluon_sagemaker_estimator_kwargs", None)
-        fit_kwargs = kwargs.get("fit_kwargs", None)
-        predict_after_fit = kwargs.get("predict_after_fit", False)
-
         return dict(
-            autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
-            fit_kwargs=fit_kwargs,
-            predict_after_fit=predict_after_fit,
+            autogluon_sagemaker_estimator_kwargs=kwargs.get("autogluon_sagemaker_estimator_kwargs", None),
+            fit_kwargs=kwargs.get("fit_kwargs", None),
+            extra_ag_args=kwargs.get("extra_ag_args", None),
         )
 
     def attach_job(self, job_name: str) -> None:
@@ -206,6 +202,7 @@ class SagemakerBackend(Backend):
         *,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         image_column: Optional[str] = None,
         leaderboard: bool = True,
         framework_version: str = "latest",
@@ -218,8 +215,7 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
-        predict_after_fit: bool = False,
-        known_covariates: Optional[pd.DataFrame] = None,
+        extra_ag_args: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -231,7 +227,11 @@ class SagemakerBackend(Backend):
         predictor_init_args: dict
             Init args for the predictor
         predictor_fit_args: dict
-            Fit args for the predictor
+            Fit args for the predictor (must NOT contain data inputs — pass those via ``data_channels``).
+        data_channels: Dict[str, Union[str, pd.DataFrame, None]]
+            Mapping from data-input name to a DataFrame or local/S3 path. Each non-None entry is uploaded
+            as a separate SageMaker channel; the train script reads it via ``SM_CHANNEL_<KEY_UPPER>``.
+            Must contain a non-None ``train_data`` entry; subclasses define which additional keys are honored.
         image_column: str, default = None
             The column name in the training/tuning data that contains the image paths.
             The image paths MUST be absolute paths to you local system.
@@ -264,14 +264,17 @@ class SagemakerBackend(Backend):
         fit_kwargs:
             Any extra arguments needed to pass to fit.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
-        predict_after_fit: bool, default = False
-            If True, run prediction inside the training job and persist results for later retrieval.
-        known_covariates: Optional[pd.DataFrame], default = None
-            Known covariates over the forecast horizon. Used only when ``predict_after_fit=True``.
+        extra_ag_args: Optional[Dict[str, Any]], default = None
+            Additional entries to merge into ``ag_args.pkl``. Use this to ship caller-specific metadata to the
+            train script (e.g. ``predict_after_fit``, or ``id_column`` / ``timestamp_column`` for time series).
         """
+        if data_channels.get("train_data") is None:
+            raise ValueError("`data_channels['train_data']` is required.")
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
-        train_data = predictor_fit_args.pop("train_data")
-        tune_data = predictor_fit_args.pop("tuning_data", None)
+        # Resolve any str paths into DataFrames so they can be CSV-uploaded as SageMaker channels.
+        data_channels = {
+            k: load_pd.load(v) if isinstance(v, str) else v for k, v in data_channels.items() if v is not None
+        }
         if custom_image_uri:
             framework_version, py_version = None, None
             logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
@@ -330,21 +333,19 @@ class SagemakerBackend(Backend):
             predictor_fit_args=predictor_fit_args,
             leaderboard=leaderboard,
         )
-        if predict_after_fit:
-            ag_args["predict_after_fit"] = True
         # Get the label from predictor_init_args
         label = predictor_init_args.get("label") or predictor_init_args.get("target") or None
         if image_column is not None:
             ag_args["image_column"] = image_column
+        if extra_ag_args:
+            ag_args.update(extra_ag_args)
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
-            train_data=train_data,
-            tune_data=tune_data,
+            data_channels=data_channels,
             label=label,
             ag_args=ag_args_path,
             image_column=image_column,
-            known_covariates=known_covariates,
             serving_script=ScriptManager.get_serve_script(
                 backend_type=self.name, framework_version=framework_version
             ),  # Training and Inference should have the same framework_version
@@ -1047,68 +1048,47 @@ class SagemakerBackend(Backend):
     def _find_common_path_and_replace_image_column(self, data, image_column):
         common_path = os.path.commonpath(data[image_column].tolist())
         common_path_head = os.path.split(common_path)[0]  # we keep the base dir to match zipping behavior
-        data[image_column] = data[image_column].apply(lambda path: os.path.relpath(path, common_path_head))
-
+        data = data.assign(
+            **{image_column: data[image_column].apply(lambda path: os.path.relpath(path, common_path_head))}
+        )
         return data, common_path
 
     def _upload_fit_artifact(
         self,
-        train_data,
-        tune_data,
+        data_channels,
         label,
         ag_args,
         serving_script,
         image_column=None,
-        known_covariates=None,
     ):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
         util_key_prefix = cloud_key_prefix + "/utils"
 
-        common_train_data_path = None
-        common_tune_data_path = None
+        # Image-column mode: rewrite image paths to be container-relative; common image directories
+        # are zipped and uploaded as separate train_images / tune_images channels below.
+        common_train_data_path, common_tune_data_path = None, None
         if image_column is not None:
-            # Find common path to zip and replace image column with relative path to be used in remote environment
-            if isinstance(train_data, str):
-                train_data = load_pd.load(train_data)
-            else:
-                train_data = copy.deepcopy(train_data)
-            if tune_data is not None:
-                if isinstance(tune_data, str):
-                    tune_data = load_pd.load(tune_data)
-                else:
-                    tune_data = copy.deepcopy(tune_data)
-            train_data, common_train_data_path = self._find_common_path_and_replace_image_column(
-                data=train_data, image_column=image_column
+            data_channels["train_data"], common_train_data_path = self._find_common_path_and_replace_image_column(
+                data=data_channels["train_data"], image_column=image_column
             )
-            if tune_data is not None:
-                tune_data, common_tune_data_path = self._find_common_path_and_replace_image_column(
-                    data=tune_data, image_column=image_column
+            if data_channels.get("tuning_data") is not None:
+                data_channels["tuning_data"], common_tune_data_path = self._find_common_path_and_replace_image_column(
+                    data=data_channels["tuning_data"], image_column=image_column
                 )
 
-        train_input = train_data
-        if isinstance(train_data, str):
-            train_data = load_pd.load(train_data)
-        self.original_features = [col for col in train_data.columns if col != label]
-        train_input = self._prepare_and_upload_data(train_data, "train", cloud_bucket, util_key_prefix)
-        logger.log(20, "Train data uploaded successfully")
+        self.original_features = [col for col in data_channels["train_data"].columns if col != label]
 
-        tune_input = None
-        if tune_data is not None:
-            tune_input = self._prepare_and_upload_data(tune_data, "tune", cloud_bucket, util_key_prefix)
-            logger.log(20, "Tune data uploaded successfully")
-
-        known_covariates_input = None
-        if known_covariates is not None:
-            known_covariates_input = self._prepare_and_upload_data(
-                known_covariates, "known_covariates", cloud_bucket, util_key_prefix
+        inputs: Dict[str, str] = {}
+        for channel_name, channel_data in data_channels.items():
+            inputs[channel_name] = self._prepare_and_upload_data(
+                channel_data, channel_name, cloud_bucket, util_key_prefix
             )
-            logger.log(20, "Known covariates uploaded successfully")
+            logger.log(20, f"{channel_name} uploaded successfully")
 
-        ag_args_input = self.sagemaker_session.upload_data(
+        inputs["ag_args"] = self.sagemaker_session.upload_data(
             path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix
         )
-
-        serving_input = self.sagemaker_session.upload_data(
+        inputs["serving"] = self.sagemaker_session.upload_data(
             path=serving_script, bucket=cloud_bucket, key_prefix=util_key_prefix
         )
 
@@ -1118,11 +1098,6 @@ class SagemakerBackend(Backend):
         tune_images_input = self._upload_fit_image_artifact(
             image_dir_path=common_tune_data_path, bucket=cloud_bucket, key_prefix=util_key_prefix
         )
-        inputs = dict(train=train_input, ag_args=ag_args_input, serving=serving_input)
-        if tune_input is not None:
-            inputs["tune"] = tune_input
-        if known_covariates_input is not None:
-            inputs["known_covariates"] = known_covariates_input
         if train_images_input is not None:
             inputs["train_images"] = train_images_input
         if tune_images_input is not None:
@@ -1177,7 +1152,8 @@ class SagemakerBackend(Backend):
 
     def _predict_real_time(self, test_data, accept, split_pred_proba=True, inference_kwargs=None, **initial_args):
         try:
-            test_data = AutoGluonSerializationWrapper(data=test_data, inference_kwargs=inference_kwargs)
+            if not isinstance(test_data, AutoGluonSerializationWrapper):
+                test_data = AutoGluonSerializationWrapper(data=test_data, inference_kwargs=inference_kwargs)
             prediction = self.endpoint.predict(test_data, initial_args={"Accept": accept, **initial_args})
             pred, pred_proba = None, None
             pred = prediction
@@ -1269,7 +1245,9 @@ class SagemakerBackend(Backend):
                 logger.warning(
                     "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
                 )
-            else:
+            elif original_features is not None:
+                # Loading is only needed for the column check below — skip it for predictors that don't track
+                # `original_features` (e.g. timeseries) to avoid loading the file as a DataFrame just to upload it.
                 test_data = load_pd.load(test_data)
 
         if isinstance(test_data, pd.DataFrame) and original_features is not None:
@@ -1365,8 +1343,15 @@ class SagemakerBackend(Backend):
         pred, pred_proba = None, None
         if download:
             results_path = self.download_predict_results(save_path=save_path)
-            # Batch inference will only return json format
-            results = pd.read_json(results_path)
+            accept = transformer_kwargs.get("accept", "application/json")
+            if accept == "application/x-parquet":
+                results = pd.read_parquet(results_path)
+            elif accept == "text/csv":
+                results = pd.read_csv(results_path)
+            elif accept == "application/json":
+                results = pd.read_json(results_path)
+            else:
+                raise ValueError(f"Unsupported accept type for batch inference results: {accept!r}")
             pred = results
             if split_pred_proba:
                 pred, pred_proba = split_pred_and_pred_proba(results)

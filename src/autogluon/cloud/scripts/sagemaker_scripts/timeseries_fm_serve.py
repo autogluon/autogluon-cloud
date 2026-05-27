@@ -43,90 +43,54 @@ def model_fn(model_dir):
     return model
 
 
-def _build_tsdf(df, id_column, timestamp_column, target):
-    """Convert a long-format DataFrame to TimeSeriesDataFrame.
-
-    Static features are encoded as columns after the target column (same convention
-    as TimeSeriesSagemakerBackend._preprocess_data).
-    """
-    df[timestamp_column] = pd.to_datetime(df[timestamp_column])
-    cols = df.columns.to_list()
-    static_features = None
-    if target != cols[-1]:
-        target_index = cols.index(target)
-        static_columns = cols[target_index + 1 :]
-        static_features = df[[id_column] + static_columns].groupby([id_column], sort=False).head(1)
-        static_features.set_index(id_column, inplace=True)
-        df = df.drop(columns=static_columns)
-    tsdf = TimeSeriesDataFrame.from_data_frame(df, id_column=id_column, timestamp_column=timestamp_column)
-    if static_features is not None:
-        tsdf.static_features = static_features
-    return tsdf
-
-
-def _parse_jumpstart_payload(payload: dict):
-    """Parse JumpStart-style JSON input into DataFrames + inference kwargs.
-
-    Expected schema:
-        {
-            "inputs": [{"target": [...], "item_id": "...", "start": "...", ...}, ...],
-            "parameters": {"prediction_length": 12, "quantile_levels": [...]}
-        }
-    """
-    # TODO: add support for JumpStart JSON schema
-    raise NotImplementedError("JumpStart JSON input schema is not yet supported")
-
-
-def _format_jumpstart_response(predictions: pd.DataFrame) -> str:
-    """Format predictions into JumpStart-style JSON output.
-
-    Expected output schema:
-        {
-            "forecasts": [{"item_id": "...", "mean": [...], "quantiles": {"0.1": [...], ...}}, ...]
-        }
-    """
-    # TODO: implement JumpStart schema parsing
-    raise NotImplementedError("JumpStart JSON output schema is not yet supported")
-
-
 def _parse_autogluon_payload(request_body):
-    """Parse application/x-autogluon pickle payload.
+    """Parse x-autogluon payload. Returns (data, known_covariates, inference_kwargs)."""
+    payload = pickle.loads(request_body)
+    inference_kwargs = payload.get("inference_kwargs") or {}
 
-    Same format as timeseries_serve.py:
-        pickle({"data": parquet_bytes, "inference_kwargs": {...}})
-    """
-    payload = pickle.loads(bytes(request_body))
+    try:
+        id_column = inference_kwargs.pop("id_column")
+        timestamp_column = inference_kwargs.pop("timestamp_column")
+    except KeyError as e:
+        raise ValueError(f"`application/x-autogluon` payload must include {e.args[0]!r} in inference_kwargs.") from e
+
     data = pd.read_parquet(BytesIO(payload["data"]))
-    inference_kwargs = payload.get("inference_kwargs", {})
-    return data, inference_kwargs
+    static_features = payload.get("static_features")
+    if static_features is not None:
+        static_features = pd.read_parquet(BytesIO(static_features))
+
+    tsdf = TimeSeriesDataFrame.from_data_frame(
+        data, id_column=id_column, timestamp_column=timestamp_column, static_features_df=static_features
+    )
+
+    known_covariates = payload.get("known_covariates")
+    if known_covariates is not None:
+        known_covariates = TimeSeriesDataFrame.from_data_frame(
+            pd.read_parquet(BytesIO(known_covariates)), id_column=id_column, timestamp_column=timestamp_column
+        )
+
+    return tsdf, known_covariates, inference_kwargs
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/x-parquet"):
     """Run inference with per-request prediction_length, quantile_levels, etc."""
     if input_content_type == "application/x-autogluon":
-        data, inference_kwargs = _parse_autogluon_payload(request_body)
+        tsdf, known_covariates, inference_kwargs = _parse_autogluon_payload(request_body)
     elif input_content_type == "application/json":
-        payload = json.loads(request_body)
-        data, inference_kwargs = _parse_jumpstart_payload(payload)
+        raise NotImplementedError("JumpStart JSON input schema is not yet supported")
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
 
-    # Extract TS-specific params from inference_kwargs
-    cols = data.columns.to_list()
-    id_column = inference_kwargs.pop("id_column", cols[0])
-    timestamp_column = inference_kwargs.pop("timestamp_column", cols[1])
-    target = inference_kwargs.pop("target", cols[2])
+    target = inference_kwargs.pop("target", "target")
     prediction_length = inference_kwargs.pop("prediction_length", 1)
     quantile_levels = inference_kwargs.pop("quantile_levels", None)
-
-    tsdf = _build_tsdf(data, id_column, timestamp_column, target)
 
     model.target = target
     model.prediction_length = prediction_length
     if quantile_levels is not None:
         model.quantile_levels = sorted(quantile_levels)
 
-    predictions = model.predict(tsdf)
+    predictions = model.predict(tsdf, known_covariates=known_covariates)
     predictions = predictions.to_data_frame().reset_index()
 
     # Serialize response — output_content_type may be a comma-separated accept list

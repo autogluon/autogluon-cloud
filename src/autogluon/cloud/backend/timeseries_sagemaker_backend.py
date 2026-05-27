@@ -1,70 +1,29 @@
-import copy
+import logging
+import os
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
 from autogluon.common.loaders import load_pd
 
+from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 from .constant import TIMESERIES_SAGEMAKER
 from .sagemaker_backend import SagemakerBackend
+
+logger = logging.getLogger(__name__)
 
 
 class TimeSeriesSagemakerBackend(SagemakerBackend):
     name = TIMESERIES_SAGEMAKER
-
-    def _preprocess_data(
-        self,
-        data: Union[pd.DataFrame, str],
-        id_column: str,
-        timestamp_column: str,
-        target: Optional[str] = None,
-        static_features: Optional[Union[pd.DataFrame, str]] = None,
-    ) -> pd.DataFrame:
-        """Normalize a long-format time-series frame for the remote container.
-
-        Reorders columns so that id and timestamp are the first two positions. When ``target`` is provided, the
-        target column is moved to the last position (so any trailing columns can be treated as merged-in static
-        features by the container). When ``static_features`` is provided, they are merged on ``id_column``.
-
-        With ``target=None`` and no static features, the frame is treated as a ``known_covariates`` layout
-        (``[id, timestamp, cov1, ..., covN]``).
-        """
-        if isinstance(data, str):
-            data = load_pd.load(data)
-        else:
-            data = copy.copy(data)
-        cols = data.columns.to_list()
-        for required in (id_column, timestamp_column):
-            if required not in cols:
-                raise ValueError(f"data must contain column '{required}'.")
-        # Make sure id and timestamp columns are the first two columns.
-        timestamp_index = cols.index(timestamp_column)
-        cols.insert(0, cols.pop(timestamp_index))
-        id_index = cols.index(id_column)
-        cols.insert(0, cols.pop(id_index))
-        if target is not None:
-            # Move the target column to the last position so that any trailing
-            # columns can be picked up as static features by the container.
-            target_index = cols.index(target)
-            cols.append(cols.pop(target_index))
-        data = data[cols]
-
-        if static_features is not None:
-            # Merge static features so only one dataframe needs to be sent to remote container
-            if isinstance(static_features, str):
-                static_features = load_pd.load(static_features)
-            data = pd.merge(data, static_features, how="left", on=id_column)
-
-        return data
 
     def fit(
         self,
         *,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         id_column: str,
         timestamp_column: str,
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -74,87 +33,28 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         wait: bool = True,
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
-        predict_after_fit: bool = False,
+        extra_ag_args: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """
-        Fit the predictor with SageMaker.
-        This function will first upload necessary config and train data to s3 bucket.
-        Then launch a SageMaker training job with the AutoGluon training container.
+        """Fit a TimeSeriesPredictor in SageMaker.
 
-        Parameters
-        ----------
-        predictor_init_args: dict
-            Init args for the predictor
-        predictor_fit_args: dict
-            Fit args for the predictor
-        image_column: str, default = None
-            The column name in the training/tuning data that contains the image paths.
-            The image paths MUST be absolute paths to you local system.
-        leaderboard: bool, default = True
-            Whether to include the leaderboard in the output artifact
-        framework_version: str, default = `latest`
-            Training container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance type the predictor will be trained on with SageMaker.
-        instance_count: int, default = 1
-            Number of instance used to fit the predictor.
-        volumes_size: int, default = 30
-            Size in GB of the EBS volume to use for storing input data during training (default: 30).
-            Must be large enough to store training data if File Mode is used (which is the default).
-        wait: bool, default = True
-            Whether the call should wait until the job completes
-            To be noticed, the function won't return immediately because there are some preparations needed prior fit.
-            Use `get_fit_job_status` to get job status.
-        autogluon_sagemaker_estimator_kwargs: dict, default = dict()
-            Any extra arguments needed to initialize AutoGluonSagemakerEstimator
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework for all options
-        fit_kwargs:
-            Any extra arguments needed to pass to fit.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
+        ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.pkl``.
+        ``known_covariates`` (if present in ``data_channels``) is only honored when
+        ``extra_ag_args["predict_after_fit"]`` is True.
         """
-        predictor_fit_args = copy.deepcopy(predictor_fit_args)
-        train_data = predictor_fit_args.pop("train_data")
-        tuning_data = predictor_fit_args.pop("tuning_data", None)
-        known_covariates = predictor_fit_args.pop("known_covariates", None)
-        target = predictor_init_args.get("target")
-        train_data = self._preprocess_data(
-            data=train_data,
+        extra_ag_args = {**(extra_ag_args or {}), "id_column": id_column, "timestamp_column": timestamp_column}
+        if data_channels.get("known_covariates") is not None and not extra_ag_args.get("predict_after_fit", False):
+            raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
+        data_channels = self._validate_data_channels(
+            data_channels=data_channels,
+            predictor_init_args=predictor_init_args,
             id_column=id_column,
             timestamp_column=timestamp_column,
-            target=target,
-            static_features=static_features,
         )
-        if tuning_data is not None:
-            tuning_data = self._preprocess_data(
-                data=tuning_data,
-                id_column=id_column,
-                timestamp_column=timestamp_column,
-                target=target,
-                static_features=static_features,
-            )
-        predictor_fit_args["train_data"] = train_data
-        predictor_fit_args["tuning_data"] = tuning_data
-
-        if known_covariates is not None:
-            if not predict_after_fit:
-                raise ValueError("`known_covariates` should only be provided if `predict_after_fit=True`.")
-            known_covariates = self._preprocess_data(
-                data=known_covariates,
-                id_column=id_column,
-                timestamp_column=timestamp_column,
-                target=None,
-                static_features=None,
-            )
 
         super().fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            data_channels=data_channels,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,
@@ -164,17 +64,14 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             wait=wait,
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
-            predict_after_fit=predict_after_fit,
-            known_covariates=known_covariates,
+            extra_ag_args=extra_ag_args,
         )
 
     def predict_real_time(
         self,
         test_data: Union[str, pd.DataFrame],
-        id_column: str,
-        timestamp_column: str,
-        target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         accept: str = "application/x-parquet",
         inference_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
@@ -189,16 +86,12 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         test_data: Union(str, pandas.DataFrame)
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
-        id_column: str
-            Name of the 'item_id' column
-        timestamp_column: str
-            Name of the 'timestamp' column
-        static_features: Optional[pd.DataFrame]
+        static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        target: str
-            Name of column that contains the target values to forecast
+        known_covariates: Optional[Union[str, pd.DataFrame]]
+            Future values of the known covariates over the forecast horizon.
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
@@ -211,16 +104,21 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         Predict results in DataFrame
         """
         self._validate_predict_real_time_args(accept)
-        test_data = self._preprocess_data(
+
+        if isinstance(test_data, str):
+            test_data = load_pd.load(test_data)
+        if isinstance(static_features, str):
+            static_features = load_pd.load(static_features)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+
+        wrapper = AutoGluonSerializationWrapper(
             data=test_data,
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-            target=target,
+            inference_kwargs=inference_kwargs or {},
             static_features=static_features,
+            known_covariates=known_covariates,
         )
-        pred, _ = self._predict_real_time(
-            test_data=test_data, accept=accept, split_pred_proba=False, inference_kwargs=inference_kwargs
-        )
+        pred, _ = self._predict_real_time(test_data=wrapper, accept=accept, split_pred_proba=False)
         return pred
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
@@ -229,10 +127,8 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     def predict(
         self,
         test_data: Union[str, pd.DataFrame],
-        id_column: str,
-        timestamp_column: str,
-        target: str,
         static_features: Optional[Union[str, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         """
@@ -248,29 +144,50 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         test_data: str
             The test data to be inferenced.
             Can be a pandas.DataFrame or a local path to a csv file.
-        id_column: str
-            Name of the 'item_id' column
-        timestamp_column: str
-            Name of the 'timestamp' column
         static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        target: str
-            Name of column that contains the target values to forecast
+        known_covariates: Optional[Union[str, pd.DataFrame]]
+            Future values of the known covariates over the forecast horizon.
         kwargs:
             Refer to `SagemakerBackend.predict()`
         """
-        test_data = self._preprocess_data(
+        if isinstance(test_data, str):
+            test_data = load_pd.load(test_data)
+        if isinstance(static_features, str):
+            static_features = load_pd.load(static_features)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+
+        wrapper = AutoGluonSerializationWrapper(
             data=test_data,
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-            target=target,
+            inference_kwargs={},
             static_features=static_features,
+            known_covariates=known_covariates,
         )
+        # Pickle the request body to disk and pass the path through. Force content_type / split_type so
+        # SageMaker sends the whole body in one transform_fn call — preserves static_features /
+        # known_covariates side channels.
+        payload_dir = os.path.join(self.local_output_path, "utils")
+        os.makedirs(payload_dir, exist_ok=True)
+        payload_path = os.path.join(payload_dir, "predict_payload.pkl")
+        with open(payload_path, "wb") as f:
+            f.write(AutoGluonSerializer().serialize(wrapper))
+        transform_kwargs = kwargs.pop("transform_kwargs", None) or {}
+        transform_kwargs["content_type"] = "application/x-autogluon"
+        transform_kwargs["split_type"] = "None"
+        # Parquet output (JSON can exceed TorchServe's 6.5MB cap); assemble_with=None preserves
+        # parquet footer (default "Line" appends a newline that corrupts it).
+        transformer_kwargs = kwargs.pop("transformer_kwargs", None) or {}
+        transformer_kwargs.setdefault("accept", "application/x-parquet")
+        transformer_kwargs.setdefault("assemble_with", None)
+
         pred, _ = super()._predict(
-            test_data=test_data,
+            test_data=payload_path,
             split_pred_proba=False,
+            transform_kwargs=transform_kwargs,
+            transformer_kwargs=transformer_kwargs,
             **kwargs,
         )
         return pred
@@ -280,3 +197,74 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
+
+    def _validate_data_channels(
+        self,
+        *,
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
+        predictor_init_args: Dict[str, Any],
+        id_column: str,
+        timestamp_column: str,
+    ) -> Dict[str, Optional[Union[str, pd.DataFrame]]]:
+        """Validate time-series data channels client-side before launching the SageMaker job.
+
+        Resolves ``str`` paths via ``load_pd.load`` so column checks can run, and returns the (possibly loaded)
+        channel dict for the caller to reuse.
+
+        Validates:
+        - ``train_data`` and ``tuning_data`` contain ``id_column``, ``timestamp_column``, and the predictor's
+          ``target`` column.
+        - ``known_covariates`` (if present) contains ``id_column`` / ``timestamp_column`` and every name in
+          ``predictor_init_args['known_covariates_names']``. Warns about extra columns that will be ignored.
+        - If ``known_covariates_names`` is set, ``train_data`` must also contain those columns.
+        """
+        target = predictor_init_args.get("target", "target")
+        loaded: Dict[str, Optional[Union[str, pd.DataFrame]]] = {}
+        for name, df in data_channels.items():
+            if isinstance(df, str):
+                df = load_pd.load(df)
+            loaded[name] = df
+
+        for name in ("train_data", "tuning_data"):
+            df = loaded.get(name)
+            if df is None:
+                continue
+            for required in (id_column, timestamp_column, target):
+                if required not in df.columns:
+                    raise ValueError(f"`{name}` must contain column '{required}'.")
+
+        known_covariates = loaded.get("known_covariates")
+        names = predictor_init_args.get("known_covariates_names")
+        if known_covariates is not None:
+            if names is not None and (isinstance(names, str) or not isinstance(names, (list, tuple))):
+                raise ValueError(
+                    "`predictor_init_args['known_covariates_names']` must be a list or tuple of strings, "
+                    f"got {type(names).__name__}."
+                )
+            kc_cols = known_covariates.columns.tolist()
+            for required in (id_column, timestamp_column):
+                if required not in kc_cols:
+                    raise ValueError(f"`known_covariates` must contain column '{required}'.")
+            if names:
+                missing_in_covs = [n for n in names if n not in kc_cols]
+                if missing_in_covs:
+                    raise ValueError(
+                        f"`known_covariates` is missing columns listed in `known_covariates_names`: {missing_in_covs}."
+                    )
+                extra_in_covs = [c for c in kc_cols if c not in names and c not in (id_column, timestamp_column)]
+                if extra_in_covs:
+                    logger.warning(
+                        f"`known_covariates` has columns not listed in `known_covariates_names`: {extra_in_covs}. "
+                        "These will be ignored by the predictor."
+                    )
+
+        if names:
+            train_data = loaded.get("train_data")
+            if isinstance(train_data, pd.DataFrame):
+                missing_in_train = [n for n in names if n not in train_data.columns]
+                if missing_in_train:
+                    raise ValueError(
+                        f"`train_data` is missing columns listed in `known_covariates_names`: {missing_in_train}."
+                    )
+
+        return loaded

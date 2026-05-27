@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
-
-from autogluon.common.loaders import load_pd
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from .cloud_predictor import CloudPredictor
@@ -18,23 +15,6 @@ logger = logging.getLogger(__name__)
 class TimeSeriesCloudPredictor(CloudPredictor):
     predictor_file_name = "TimeSeriesCloudPredictor.pkl"
     backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
-
-    def __init__(
-        self,
-        local_output_path: Optional[str] = None,
-        cloud_output_path: Optional[str] = None,
-        backend: str = SAGEMAKER,
-        verbosity: int = 2,
-    ) -> None:
-        super().__init__(
-            local_output_path=local_output_path,
-            cloud_output_path=cloud_output_path,
-            backend=backend,
-            verbosity=verbosity,
-        )
-        self.target_column: Optional[str] = None
-        self.id_column: Optional[str] = None
-        self.timestamp_column: Optional[str] = None
 
     @property
     def predictor_type(self):
@@ -123,29 +103,21 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
 
-        self.target_column = predictor_init_args.get("target", "target")
-        self.id_column = id_column
-        self.timestamp_column = timestamp_column
-
-        # Create predictor metadata dict
-        predictor_metadata = {
-            "id_column": self.id_column,
-            "timestamp_column": self.timestamp_column,
-            "target_column": self.target_column,
+        predictor_fit_args = dict(predictor_fit_args)
+        data_channels = {
+            "train_data": predictor_fit_args.pop("train_data"),
+            "tuning_data": predictor_fit_args.pop("tuning_data", None),
+            "known_covariates": predictor_fit_args.pop("known_covariates", None),
+            "static_features": static_features,
         }
-
-        # Add to backend kwargs
-        backend_kwargs.setdefault("autogluon_sagemaker_estimator_kwargs", {}).setdefault("hyperparameters", {})[
-            "predictor_metadata"
-        ] = json.dumps(predictor_metadata)
 
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            data_channels=data_channels,
             id_column=id_column,
             timestamp_column=timestamp_column,
-            static_features=static_features,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,
@@ -160,7 +132,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def predict_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
+        data: Union[str, pd.DataFrame],
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         known_covariates: Optional[pd.DataFrame] = None,
         accept: str = "application/x-parquet",
@@ -171,10 +143,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
 
+        ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
+
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced.
+        data: Union(str, pandas.DataFrame)
+            The data to forecast from.
             Can be a pandas.DataFrame or a local path to a csv file.
         static_features: Optional[pd.DataFrame]
              An optional data frame describing the metadata attributes of individual items in the item index.
@@ -196,18 +170,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Pandas.DataFrame
         Predict results in DataFrame
         """
-        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
-            raise ValueError(
-                "Please set id_column, timestamp_column and target_column before calling predict_real_time"
-            )
         return self.backend.predict_real_time(
-            test_data=test_data,
-            id_column=self.id_column,
-            timestamp_column=self.timestamp_column,
-            target=self.target_column,
+            test_data=data,
             static_features=static_features,
+            known_covariates=known_covariates,
             accept=accept,
-            inference_kwargs=dict(known_covariates=known_covariates, **kwargs),
+            inference_kwargs=kwargs,
         )
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
@@ -215,8 +183,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def predict(
         self,
-        test_data: Union[str, pd.DataFrame],
+        data: Union[str, pd.DataFrame],
         static_features: Optional[Union[str, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         predictor_path: Optional[str] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
@@ -234,20 +203,19 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
         then create a transformer with it, and call transform in the end.
 
-        Note that batch prediction with `known_covariates` is currently not supported.  Please use `predict_real_time`
-        to predict with `known_covariates` instead.
+        ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
 
         Parameters
         ----------
-        test_data: str
-            The test data to be inferenced.
+        data: Union(str, pandas.DataFrame)
+            The data to forecast from.
             Can be a pandas.DataFrame or a local path to a csv file.
         static_features: Optional[Union[str, pd.DataFrame]]
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        target: str
-            Name of column that contains the target values to forecast
+        known_covariates: Optional[Union[str, pd.DataFrame]]
+            Future values of the known covariates over the forecast horizon.
         predictor_path: str
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
@@ -295,14 +263,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
-        if self.id_column is None or self.timestamp_column is None or self.target_column is None:
-            raise ValueError("Please set id_column, timestamp_column and target_column before calling predict")
         return self.backend.predict(
-            test_data=test_data,
-            id_column=self.id_column,
-            timestamp_column=self.timestamp_column,
-            target=self.target_column,
+            test_data=data,
             static_features=static_features,
+            known_covariates=known_covariates,
             predictor_path=predictor_path,
             framework_version=framework_version,
             job_name=job_name,
@@ -398,20 +362,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             )
         predictor_fit_args["train_data"] = train_data
         if known_covariates is not None:
-            known_covariates = self._validate_known_covariates(
-                known_covariates=known_covariates,
-                train_data=train_data,
-                predictor_init_args=predictor_init_args,
-                id_column=id_column,
-                timestamp_column=timestamp_column,
-            )
             predictor_fit_args["known_covariates"] = known_covariates
 
         if backend_kwargs is None:
             backend_kwargs = {}
         else:
             backend_kwargs = dict(backend_kwargs)
-        backend_kwargs["predict_after_fit"] = True
+        backend_kwargs["extra_ag_args"] = {"predict_after_fit": True}
 
         self.fit(
             predictor_init_args=predictor_init_args,
@@ -438,62 +395,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         return self.get_fit_predict_results(save_path=save_path)
 
-    def _validate_known_covariates(
-        self,
-        *,
-        known_covariates: Union[str, pd.DataFrame],
-        train_data: Union[str, pd.DataFrame],
-        predictor_init_args: Dict[str, Any],
-        id_column: str,
-        timestamp_column: str,
-    ) -> pd.DataFrame:
-        """Validate ``known_covariates`` against ``predictor_init_args`` and ``train_data``.
-
-        Loads str paths via ``load_pd.load`` so column checks can run client-side before the SageMaker job launches.
-        Returns the (possibly loaded) DataFrame so the caller can reuse it.
-        """
-        names = predictor_init_args.get("known_covariates_names")
-        if not names:
-            raise ValueError(
-                "`known_covariates` was passed but `predictor_init_args['known_covariates_names']` is missing or "
-                "empty. Add the covariate column names so the predictor knows which columns to treat as covariates."
-            )
-        if isinstance(names, str) or not isinstance(names, (list, tuple)):
-            raise ValueError(
-                f"`predictor_init_args['known_covariates_names']` must be a list or tuple of strings, got {type(names).__name__}."
-            )
-
-        if isinstance(known_covariates, str):
-            known_covariates = load_pd.load(known_covariates)
-
-        kc_cols = known_covariates.columns.tolist()
-        for required in (id_column, timestamp_column):
-            if required not in kc_cols:
-                raise ValueError(f"`known_covariates` must contain column '{required}'.")
-        missing_in_covs = [n for n in names if n not in kc_cols]
-        if missing_in_covs:
-            raise ValueError(
-                f"`known_covariates` is missing columns listed in `known_covariates_names`: {missing_in_covs}."
-            )
-        extra_in_covs = [c for c in kc_cols if c not in names and c not in (id_column, timestamp_column)]
-        if extra_in_covs:
-            logger.warning(
-                f"`known_covariates` has columns not listed in `known_covariates_names`: {extra_in_covs}. "
-                "These will be ignored by the predictor."
-            )
-
-        # If train_data is already in memory, also check that covariate columns exist there. Skip the check when
-        # train_data is a str path to avoid forcing a potentially large download just for validation.
-        if isinstance(train_data, pd.DataFrame):
-            train_cols = train_data.columns.tolist()
-            missing_in_train = [n for n in names if n not in train_cols]
-            if missing_in_train:
-                raise ValueError(
-                    f"`train_data` is missing columns listed in `known_covariates_names`: {missing_in_train}."
-                )
-
-        return known_covariates
-
     def get_fit_predict_results(self, save_path: Optional[str] = None) -> pd.DataFrame:
         """
         Retrieve predictions produced by a completed ``fit_predict`` job.
@@ -517,24 +418,3 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             predictions.to_csv(output_file, index=False)
             logger.log(20, f"fit_predict results saved to {output_file}")
         return predictions
-
-    def attach_job(self, job_name: str) -> TimeSeriesCloudPredictor:
-        """Attach to existing training job"""
-        super().attach_job(job_name)
-
-        # Get full job description including hyperparameters
-        job_desc = self.backend.get_fit_job_info()
-        hyperparameters = job_desc.get("hyperparameters", {})
-
-        # Extract and set predictor metadata
-        if hyperparameters and "predictor_metadata" in hyperparameters:
-            metadata = hyperparameters["predictor_metadata"]
-            self.id_column = metadata.get("id_column")
-            self.timestamp_column = metadata.get("timestamp_column")
-            self.target_column = metadata.get("target_column")
-        else:
-            logger.warning(
-                "No predictor metadata found in training job. Please set id_column, timestamp_column and target_column manually."
-            )
-
-        return self

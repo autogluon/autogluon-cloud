@@ -85,9 +85,7 @@ class FoundationModel:
         ...
 
     @abstractmethod
-    def _build_predictor_fit_args(
-        self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Build predictor_fit_args dict. Subclasses override with task-specific logic."""
         ...
 
@@ -261,13 +259,10 @@ class TimeSeriesFoundationModel(FoundationModel):
         )
         return TimeSeriesEndpoint(self._backend.endpoint)
 
-    def _build_predictor_fit_args(
-        self, train_data, hyperparameters: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         model_name = self._config["model_name"]
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
         return {
-            "train_data": train_data,
             "hyperparameters": {model_name: merged_hp},
             "skip_model_selection": True,
         }
@@ -355,22 +350,24 @@ class TimeSeriesFoundationModel(FoundationModel):
             quantile_levels=quantile_levels,
         )
 
-        predictor_fit_args = self._build_predictor_fit_args(data, hyperparameters)
-
-        if known_covariates is not None:
-            predictor_fit_args["known_covariates"] = known_covariates
+        predictor_fit_args = self._build_predictor_fit_args(hyperparameters)
+        data_channels = {
+            "train_data": data,
+            "known_covariates": known_covariates,
+            "static_features": static_features,
+        }
 
         self._backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            data_channels=data_channels,
             id_column=id_column,
             timestamp_column=timestamp_column,
-            static_features=static_features,
             framework_version=framework_version,
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            predict_after_fit=True,
+            extra_ag_args={"predict_after_fit": True},
             **backend_kwargs,
         )
 
