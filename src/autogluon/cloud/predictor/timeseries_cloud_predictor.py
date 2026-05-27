@@ -343,7 +343,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must
             have ``s3:PutObject`` permission for this location. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``.
+            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical column
+            names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
 
         Returns
         -------
