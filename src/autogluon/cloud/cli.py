@@ -1,12 +1,8 @@
-"""
-Command-line interface for AutoGluon-Cloud setup.
+"""Command-line interface for AutoGluon-Cloud setup.
 
 Wraps the four public functions in :mod:`autogluon.cloud`
 (``bootstrap``, ``register``, ``status``, ``teardown``) with Click commands +
-Rich-based prompts. The Python API is the source of truth for behavior;
-this module only handles user interaction (prompting for missing
-values, formatting output, confirming destructive operations) and translates
-Python exceptions into clean CLI exit codes.
+Rich-based prompts. The Python API is the source of truth for behavior.
 """
 
 from __future__ import annotations
@@ -24,8 +20,10 @@ from . import bootstrap as _bootstrap
 from . import register as _register
 from . import status as _status
 from . import teardown as _teardown
-from .backend.constant import SUPPORTED_BACKENDS
 from .config import load_config
+
+# Backends exposed in the CLI. See all supported backends at backend.constant.SUPPORTED_BACKENDS
+_CLI_BACKENDS = ("sagemaker",)
 
 _console = Console()
 
@@ -57,13 +55,13 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--backend", type=click.Choice(SUPPORTED_BACKENDS), default=None, help="Which backend to use.")
+@click.option("--backend", type=click.Choice(_CLI_BACKENDS), default="sagemaker", show_default=True)
 @click.option("--region", default=None, help="AWS region for the stack.")
 @click.option("--stack-name", default=None, help="CloudFormation stack name.")
 @click.option("--aws-profile", default=None, help="AWS profile from ~/.aws/credentials.")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 def bootstrap(
-    backend: Optional[str],
+    backend: str,
     region: Optional[str],
     stack_name: Optional[str],
     aws_profile: Optional[str],
@@ -71,13 +69,6 @@ def bootstrap(
 ) -> None:
     """One-time setup to run AutoGluon-Cloud on AWS."""
     _console.print("\nOne-time setup to run AutoGluon-Cloud on AWS.\n")
-
-    if backend is None:
-        backend = Prompt.ask(
-            "Which backend?",
-            choices=list(SUPPORTED_BACKENDS),
-            default="sagemaker",
-        )
 
     if region is None:
         detected = boto3.Session(profile_name=aws_profile).region_name if aws_profile else boto3.Session().region_name
@@ -130,7 +121,7 @@ def bootstrap(
 
 
 @cli.command()
-@click.option("--backend", type=click.Choice(SUPPORTED_BACKENDS), default="sagemaker", show_default=True)
+@click.option("--backend", type=click.Choice(_CLI_BACKENDS), default="sagemaker", show_default=True)
 @click.option("--role", default=None, help="IAM role ARN.")
 @click.option("--bucket", default=None, help="S3 bucket name.")
 @click.option("--region", default=None, help="AWS region for the resources.")
@@ -184,7 +175,8 @@ def status(region: Optional[str], aws_profile: Optional[str]) -> None:
             table.add_row("Stack", report.config.stack_name)
         table.add_section()
         for check_name, result in report.checks.items():
-            color = "green" if result.startswith("ok") else "red"
+            healthy = result.startswith("ok") or result.endswith("_COMPLETE")
+            color = "green" if healthy else "red"
             table.add_row(check_name, f"[{color}]{result}[/{color}]")
         _console.print(table)
 
@@ -192,7 +184,7 @@ def status(region: Optional[str], aws_profile: Optional[str]) -> None:
 @cli.command()
 @click.option(
     "--backend",
-    type=click.Choice(SUPPORTED_BACKENDS),
+    type=click.Choice(_CLI_BACKENDS),
     default=None,
     help="Only tear down this backend (default: all).",
 )

@@ -85,12 +85,12 @@ def test_bootstrap_aborts_when_user_says_no(runner, monkeypatch):
     assert "bootstrap" not in calls  # function was never called
 
 
-def test_bootstrap_prompts_for_missing_backend(runner, monkeypatch):
+def test_bootstrap_defaults_backend_to_sagemaker(runner, monkeypatch):
     calls = {}
     _stub_python_api(monkeypatch, calls=calls)
 
-    # Prompts: backend ('sagemaker'), stack name (accept default).
-    result = runner.invoke(cli, ["bootstrap", "--region", "us-east-1", "--yes"], input="sagemaker\n\n")
+    # No --backend flag: defaults to sagemaker without prompting; only the stack-name prompt remains.
+    result = runner.invoke(cli, ["bootstrap", "--region", "us-east-1", "--yes"], input="\n")
     assert result.exit_code == 0, result.output
     assert calls["bootstrap"][0]["backend"] == "sagemaker"
 
