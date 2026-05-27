@@ -115,12 +115,20 @@ def test_timeseries(test_helper, framework_version, retail_sales_dataset):
 def test_timeseries_fit_predict_chronos(
     test_helper, framework_version, retail_sales_dataset, model_name, hyperparameters, with_covariates
 ):
+    import boto3
+
     ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
     known_covariates = ds["known_covariates"] if with_covariates else None
     predictor_init_args = dict(target=ds["target"], prediction_length=ds["prediction_length"])
     if with_covariates:
         predictor_init_args["known_covariates_names"] = ds["known_covariates_names"]
+
+    bucket = "autogluon-cloud-ci"
+    predictions_key = (
+        f"test-timeseries-fit-predict-{model_name}/{framework_version}/{timestamp}/custom_predictions.parquet"
+    )
+    predictions_path = f"s3://{bucket}/{predictions_key}"
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
@@ -130,7 +138,7 @@ def test_timeseries_fit_predict_chronos(
 
         cloud_predictor = TimeSeriesCloudPredictor(
             cloud_output_path=(
-                f"s3://autogluon-cloud-ci/test-timeseries-fit-predict-{model_name}/{framework_version}/{timestamp}"
+                f"s3://{bucket}/test-timeseries-fit-predict-{model_name}/{framework_version}/{timestamp}"
             ),
             local_output_path=f"test_timeseries_fit_predict_{model_name}_cloud_predictor",
         )
@@ -144,9 +152,13 @@ def test_timeseries_fit_predict_chronos(
             timestamp_column=ds["timestamp_column"],
             framework_version=framework_version,
             custom_image_uri=training_custom_image_uri,
+            predictions_path=predictions_path,
         )
 
         _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+
+        head = boto3.client("s3").head_object(Bucket=bucket, Key=predictions_key)
+        assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
 
         info = cloud_predictor.info()
         assert info["local_output_path"] is not None
