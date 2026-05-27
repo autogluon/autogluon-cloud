@@ -50,6 +50,7 @@ def bootstrap(
     backend: BackendName = "sagemaker",
     stack_name: Optional[str] = None,
     session: Optional[boto3.Session] = None,
+    verbose: bool = True,
 ) -> None:
     """Deploy the CloudFormation stack and persist resource identifiers.
 
@@ -63,12 +64,14 @@ def bootstrap(
     Parameters
     ----------
     backend
-        Which AG-Cloud backend to provision.
+        Which AutoGluon-Cloud backend to provision.
     stack_name
         CloudFormation stack name. Auto-generated as ``ag-cloud-<backend>`` if not given.
     session
         A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is constructed from the standard
         credential chain (env vars, ``~/.aws/credentials``, SSO, instance profile).
+    verbose
+        If ``True`` (default), print progress messages to stdout.
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
@@ -82,9 +85,11 @@ def bootstrap(
         )
     stack_name = stack_name or f"ag-cloud-{backend.replace('_', '-')}"
 
-    print(f"Deploying CloudFormation stack {stack_name!r} (account {account}, region {region}, ~1 minute)...")
+    if verbose:
+        print(f"Deploying CloudFormation stack {stack_name!r} (account {account}, region {region}, ~1 minute)...")
     role_arn, bucket = _provision_stack(session, stack_name=stack_name, backend=backend)
-    print(f"Stack {stack_name!r} deployed.")
+    if verbose:
+        print(f"Stack {stack_name!r} deployed.")
 
     register(
         role=role_arn,
@@ -92,6 +97,7 @@ def bootstrap(
         region=region,
         backend=backend,
         stack_name=stack_name,
+        verbose=verbose,
     )
 
 
@@ -102,11 +108,12 @@ def register(
     region: str,
     backend: BackendName = "sagemaker",
     stack_name: Optional[str] = None,
+    verbose: bool = True,
 ) -> None:
     """Persist resource identifiers to ``~/.autogluon/cloud.yaml`` under the given backend key.
 
     Use this when you already have an IAM role and S3 bucket — for example, centrally provisioned by your platform
-    team — and just want AG-Cloud to remember them.
+    team — and just want AutoGluon-Cloud to remember them.
 
     If a config entry already exists for ``backend``, it is overwritten. Other backends in the file are left
     untouched.
@@ -117,15 +124,17 @@ def register(
         ARN of an IAM role suitable for SageMaker / Ray to assume. Named ``role`` for consistency with the SageMaker
         Python SDK (which uses ``role`` as the parameter name).
     bucket
-        S3 bucket name where AG-Cloud will read/write artifacts.
+        S3 bucket name where AutoGluon-Cloud will read/write artifacts.
     region
-        AWS region for AG-Cloud operations.
+        AWS region for AutoGluon-Cloud operations.
     backend
-        Which AG-Cloud backend the resources are intended for. Selects the slot in ``cloud.yaml``.
+        Which AutoGluon-Cloud backend the resources are intended for. Selects the slot in ``cloud.yaml``.
     stack_name
         Optional CloudFormation stack name. If you deployed the resources via your own CFN stack and want
         :func:`teardown` to be able to delete it later, pass the name here. Defaults to ``None``, meaning teardown
         will only remove the config entry, not touch AWS.
+    verbose
+        If ``True`` (default), print progress messages to stdout.
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
@@ -137,7 +146,8 @@ def register(
         stack_name=stack_name,
     )
     save_config(config)
-    print(f"Saved AG-Cloud config for backend {backend!r} to {get_config_path()}")
+    if verbose:
+        print(f"Saved AutoGluon-Cloud config for backend {backend!r} to {get_config_path()}")
 
 
 def status(
@@ -200,7 +210,7 @@ def teardown(
     """
     config = load_config()
     if config is None or not config.backends:
-        print("No AG-Cloud config found — nothing to tear down.")
+        print("No AutoGluon-Cloud config found — nothing to tear down.")
         return
 
     if backend is not None and backend not in config.backends:

@@ -42,7 +42,7 @@ def test_register_writes_file(capsys):
     assert sage.bucket == "b1"
     assert sage.region == "us-east-1"
     assert sage.stack_name is None
-    assert "Saved AG-Cloud config for backend 'sagemaker'" in capsys.readouterr().out
+    assert "Saved AutoGluon-Cloud config for backend 'sagemaker'" in capsys.readouterr().out
 
 
 def test_register_overwrites_same_backend():

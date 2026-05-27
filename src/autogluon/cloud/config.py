@@ -46,7 +46,7 @@ def get_config_path() -> Path:
 
 @dataclass
 class BackendConfig:
-    """Persisted identifiers for a single AG-Cloud backend."""
+    """Persisted identifiers for a single AutoGluon-Cloud backend."""
 
     region: str
     role_arn: str
