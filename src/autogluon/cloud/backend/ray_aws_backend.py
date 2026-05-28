@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 import boto3
 
@@ -58,11 +58,6 @@ class RayAWSBackend(RayBackend):
         assert self.region is not None, (
             "Please setup a region via `export AWS_DEFAULT_REGION=YOUR_REGION` in the terminal"
         )
-
-    @staticmethod
-    def generate_default_permission(**kwargs) -> Dict[str, str]:
-        """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
-        return RayAWSClusterManager.generate_default_permission(**kwargs)
 
     def _setup_role_and_permission(self):
         """

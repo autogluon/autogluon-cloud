@@ -1,7 +1,7 @@
 import logging
 import os
 import subprocess
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from .cluster_manager import ClusterManager
 
@@ -9,13 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class RayClusterManager(ClusterManager):
-    @staticmethod
-    def generate_default_permission() -> Dict[str, str]:
-        """
-        Generate default permission required to manage cluster
-        """
-        raise NotImplementedError
-
     def up(self, config: Optional[str] = None, ray_up_args: Optional[List[str]] = None, **kwargs) -> None:
         """
         Launch up the cluster with a given config
