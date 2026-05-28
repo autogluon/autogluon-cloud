@@ -54,21 +54,21 @@ class AutoGluonSerializer(SimpleBaseSerializer):
         Returns:
             bytes: UTF-8 JSON containing base64-encoded parquet bytes and inference args
         """
-        if isinstance(data, AutoGluonSerializationWrapper):
-            inference_kwargs = data.inference_kwargs or {}
-            _ensure_json_serializable(inference_kwargs)
-            package = {
-                "version": AUTOGLUON_SERDE_VERSION,
-                "data": _dataframe_to_b64(data.data),
-                "inference_kwargs": inference_kwargs,
-            }
-            if data.static_features is not None:
-                package["static_features"] = _dataframe_to_b64(data.static_features)
-            if data.known_covariates is not None:
-                package["known_covariates"] = _dataframe_to_b64(data.known_covariates)
-            return json.dumps(package).encode("utf-8")
+        if not isinstance(data, AutoGluonSerializationWrapper):
+            raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
 
-        raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
+        inference_kwargs = data.inference_kwargs or {}
+        _ensure_json_serializable(inference_kwargs)
+        package = {
+            "version": AUTOGLUON_SERDE_VERSION,
+            "data": _dataframe_to_b64(data.data),
+            "inference_kwargs": inference_kwargs,
+        }
+        if data.static_features is not None:
+            package["static_features"] = _dataframe_to_b64(data.static_features)
+        if data.known_covariates is not None:
+            package["known_covariates"] = _dataframe_to_b64(data.known_covariates)
+        return json.dumps(package).encode("utf-8")
 
 
 class MultiModalSerializer(SimpleBaseSerializer):
@@ -105,29 +105,29 @@ class MultiModalSerializer(SimpleBaseSerializer):
         Returns:
             bytes: UTF-8 JSON containing both data and inference args
         """
-        if isinstance(data, AutoGluonSerializationWrapper):
-            inference_kwargs = data.inference_kwargs or {}
-            _ensure_json_serializable(inference_kwargs)
+        if not isinstance(data, AutoGluonSerializationWrapper):
+            raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")
 
-            if isinstance(data.data, pd.DataFrame):
-                package = {
-                    "version": AUTOGLUON_SERDE_VERSION,
-                    "data": _dataframe_to_b64(data.data),
-                    "inference_kwargs": inference_kwargs,
-                }
-                return json.dumps(package).encode("utf-8")
+        inference_kwargs = data.inference_kwargs or {}
+        _ensure_json_serializable(inference_kwargs)
 
-            if isinstance(data.data, np.ndarray):
-                # The array holds base85-encoded image strings produced by read_image_bytes_and_encode.
-                package = {
-                    "version": AUTOGLUON_SERDE_VERSION,
-                    "data": data.data.tolist(),
-                    "inference_kwargs": inference_kwargs,
-                }
-                return json.dumps(package).encode("utf-8")
+        if isinstance(data.data, pd.DataFrame):
+            package = {
+                "version": AUTOGLUON_SERDE_VERSION,
+                "data": _dataframe_to_b64(data.data),
+                "inference_kwargs": inference_kwargs,
+            }
+            return json.dumps(package).encode("utf-8")
 
-            raise ValueError(
-                f"{data} format is not supported. Please provide a `DataFrame, or numpy array.` being wrapped by `AutoGluonSerializationWrapper`"
-            )
+        if isinstance(data.data, np.ndarray):
+            package = {
+                "version": AUTOGLUON_SERDE_VERSION,
+                "data": data.data.tolist(),
+                "inference_kwargs": inference_kwargs,
+            }
+            return json.dumps(package).encode("utf-8")
 
-        raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")
+        raise ValueError(
+            f"{data.data} format is not supported. Please provide a DataFrame or numpy array"
+            " wrapped by `AutoGluonSerializationWrapper`."
+        )
