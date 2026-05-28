@@ -7,6 +7,7 @@ Rich-based prompts. The Python API is the source of truth for behavior.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import boto3
@@ -98,14 +99,20 @@ def bootstrap(
     if not yes and not Confirm.ask("Proceed?", default=True):
         raise click.Abort()
 
-    with _console.status(f"Deploying stack '{effective_stack}'...", spinner="dots"):
-        _abort_on_error(
-            _bootstrap,
-            backend=backend,
-            stack_name=effective_stack,
-            session=session,
-            verbose=False,
-        )
+    # Silence the python-API's INFO logs so they don't fight the spinner; warnings still surface.
+    cloud_logger = logging.getLogger("autogluon.cloud")
+    prior_level = cloud_logger.level
+    cloud_logger.setLevel(logging.WARNING)
+    try:
+        with _console.status(f"Deploying stack '{effective_stack}'...", spinner="dots"):
+            _abort_on_error(
+                _bootstrap,
+                backend=backend,
+                stack_name=effective_stack,
+                session=session,
+            )
+    finally:
+        cloud_logger.setLevel(prior_level)
 
     config = load_config()
     if config and backend in config.backends:
