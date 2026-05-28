@@ -107,6 +107,11 @@ class TestMultiModalSerializer:
 
         assert payload["inference_kwargs"] == {}
 
+    def test_unsupported_data_type_raises(self):
+        wrapper = AutoGluonSerializationWrapper(data=["not", "a", "df", "or", "array"], inference_kwargs={})
+        with pytest.raises(ValueError, match="format is not supported"):
+            MultiModalSerializer().serialize(wrapper)
+
 
 class TestServerSideParsing:
     """Simulate the server-side parsing logic from the serve scripts."""
