@@ -60,6 +60,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
 
     elif input_content_type == "application/x-autogluon":
         payload = json.loads(request_body)
+        if payload.get("version") != 1:
+            raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
         data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
         inference_kwargs = payload.get("inference_kwargs", {})
         data = _align_columns(data, column_names)

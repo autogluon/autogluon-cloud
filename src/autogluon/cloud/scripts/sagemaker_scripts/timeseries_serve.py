@@ -39,6 +39,8 @@ def model_fn(model_dir):
 def _parse_autogluon_payload(request_body, *, id_column, timestamp_column):
     """Parse x-autogluon payload. Returns (data, known_covariates, inference_kwargs)."""
     payload = json.loads(request_body)
+    if payload.get("version") != 1:
+        raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
     inference_kwargs = payload.get("inference_kwargs") or {}
 
     data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))

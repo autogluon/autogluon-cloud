@@ -7,6 +7,12 @@ import numpy as np
 import pandas as pd
 from sagemaker.serializers import SimpleBaseSerializer
 
+AUTOGLUON_SERDE_VERSION = 1
+
+
+def _dataframe_to_b64(df: pd.DataFrame) -> str:
+    return base64.b64encode(df.to_parquet()).decode("ascii")
+
 
 def _ensure_json_serializable(inference_kwargs: Dict[str, Any]) -> None:
     try:
@@ -68,7 +74,6 @@ class AutoGluonSerializer(SimpleBaseSerializer):
                 request data (default: "application/x-autogluon").
         """
         super(AutoGluonSerializer, self).__init__(content_type=content_type)
-        self.parquet_serializer = ParquetSerializer()
 
     def serialize(self, data: AutoGluonSerializationWrapper):
         """Serialize data to a JSON envelope with base64-encoded parquet payloads.
@@ -83,17 +88,14 @@ class AutoGluonSerializer(SimpleBaseSerializer):
             inference_kwargs = data.inference_kwargs or {}
             _ensure_json_serializable(inference_kwargs)
             package = {
-                "data": base64.b64encode(self.parquet_serializer.serialize(data.data)).decode("ascii"),
+                "version": AUTOGLUON_SERDE_VERSION,
+                "data": _dataframe_to_b64(data.data),
                 "inference_kwargs": inference_kwargs,
             }
             if data.static_features is not None:
-                package["static_features"] = base64.b64encode(
-                    self.parquet_serializer.serialize(data.static_features)
-                ).decode("ascii")
+                package["static_features"] = _dataframe_to_b64(data.static_features)
             if data.known_covariates is not None:
-                package["known_covariates"] = base64.b64encode(
-                    self.parquet_serializer.serialize(data.known_covariates)
-                ).decode("ascii")
+                package["known_covariates"] = _dataframe_to_b64(data.known_covariates)
             return json.dumps(package).encode("utf-8")
 
         raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
@@ -118,7 +120,6 @@ class MultiModalSerializer(SimpleBaseSerializer):
                 `initial_args` of `predict()` call to endpoints.
         """
         super(MultiModalSerializer, self).__init__(content_type=content_type)
-        self.parquet_serializer = ParquetSerializer()
 
     def serialize(self, data):
         """Serialize data to a JSON envelope.
@@ -140,7 +141,8 @@ class MultiModalSerializer(SimpleBaseSerializer):
 
             if isinstance(data.data, pd.DataFrame):
                 package = {
-                    "data": base64.b64encode(self.parquet_serializer.serialize(data.data)).decode("ascii"),
+                    "version": AUTOGLUON_SERDE_VERSION,
+                    "data": _dataframe_to_b64(data.data),
                     "inference_kwargs": inference_kwargs,
                 }
                 return json.dumps(package).encode("utf-8")
@@ -148,6 +150,7 @@ class MultiModalSerializer(SimpleBaseSerializer):
             if isinstance(data.data, np.ndarray):
                 # The array holds base85-encoded image strings produced by read_image_bytes_and_encode.
                 package = {
+                    "version": AUTOGLUON_SERDE_VERSION,
                     "data": data.data.tolist(),
                     "inference_kwargs": inference_kwargs,
                 }
