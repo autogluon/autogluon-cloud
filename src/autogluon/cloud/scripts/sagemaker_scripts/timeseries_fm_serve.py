@@ -15,6 +15,7 @@ from autogluon.timeseries import TimeSeriesDataFrame
 from autogluon.timeseries.models import ModelRegistry
 
 _SERVE_CONFIG = json.loads(os.environ.get("AG_SERVE_CONFIG", "{}"))
+_SUPPORTED_INPUT_CONTENT_TYPES = {"application/x-autogluon", "application/json"}
 
 
 def model_fn(model_dir):
@@ -44,6 +45,11 @@ def model_fn(model_dir):
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
     """Run inference with per-request prediction_length, quantile_levels, etc."""
+    if input_content_type not in _SUPPORTED_INPUT_CONTENT_TYPES:
+        raise ValueError(
+            f"{input_content_type} input content type not supported. "
+            f"Supported: {sorted(_SUPPORTED_INPUT_CONTENT_TYPES)}"
+        )
     tsdf, known_covariates, inference_kwargs = parse_payload(request_body, input_content_type)
 
     model.target = inference_kwargs.get("target", "target")
