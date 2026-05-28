@@ -4,13 +4,19 @@ Config comes from the AG_SERVE_CONFIG env var (set by the backend at deploy time
     {"model_name": "Chronos", "hyperparameters": {"model_path": "amazon/chronos-bolt-base", ...}}
 """
 
-import base64
 import json
 import os
-from io import BytesIO
 
 import numpy as np
 import pandas as pd
+from timeseries_serve_utils import (
+    APPLICATION_JSON,
+    X_AUTOGLUON,
+    parse_jumpstart_payload,
+    parse_x_autogluon_payload,
+    render_dataframe,
+    render_jumpstart,
+)
 
 from autogluon.timeseries import TimeSeriesDataFrame
 from autogluon.timeseries.models import ModelRegistry
@@ -43,45 +49,12 @@ def model_fn(model_dir):
     return model
 
 
-def _parse_autogluon_payload(request_body):
-    """Parse x-autogluon payload. Returns (data, known_covariates, inference_kwargs)."""
-    payload = json.loads(request_body)
-    if payload.get("version") != 1:
-        raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
-    inference_kwargs = payload.get("inference_kwargs") or {}
-
-    try:
-        id_column = inference_kwargs.pop("id_column")
-        timestamp_column = inference_kwargs.pop("timestamp_column")
-    except KeyError as e:
-        raise ValueError(f"`application/x-autogluon` payload must include {e.args[0]!r} in inference_kwargs.") from e
-
-    data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
-    static_features = payload.get("static_features")
-    if static_features is not None:
-        static_features = pd.read_parquet(BytesIO(base64.b64decode(static_features)))
-
-    tsdf = TimeSeriesDataFrame.from_data_frame(
-        data, id_column=id_column, timestamp_column=timestamp_column, static_features_df=static_features
-    )
-
-    known_covariates = payload.get("known_covariates")
-    if known_covariates is not None:
-        known_covariates = TimeSeriesDataFrame.from_data_frame(
-            pd.read_parquet(BytesIO(base64.b64decode(known_covariates))),
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-        )
-
-    return tsdf, known_covariates, inference_kwargs
-
-
 def transform_fn(model, request_body, input_content_type, output_content_type="application/x-parquet"):
     """Run inference with per-request prediction_length, quantile_levels, etc."""
-    if input_content_type == "application/x-autogluon":
-        tsdf, known_covariates, inference_kwargs = _parse_autogluon_payload(request_body)
-    elif input_content_type == "application/json":
-        raise NotImplementedError("JumpStart JSON input schema is not yet supported")
+    if input_content_type == X_AUTOGLUON:
+        tsdf, known_covariates, inference_kwargs = parse_x_autogluon_payload(request_body)
+    elif input_content_type == APPLICATION_JSON:
+        tsdf, known_covariates, inference_kwargs = parse_jumpstart_payload(request_body)
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
 
@@ -95,20 +68,8 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         model.quantile_levels = sorted(quantile_levels)
 
     predictions = model.predict(tsdf, known_covariates=known_covariates)
-    predictions = predictions.to_data_frame().reset_index()
+    predictions_df = predictions.to_data_frame().reset_index()
 
-    # Serialize response — output_content_type may be a comma-separated accept list
-    if "application/x-parquet" in output_content_type:
-        predictions.columns = predictions.columns.astype(str)
-        output = predictions.to_parquet()
-        output_content_type = "application/x-parquet"
-    elif "text/csv" in output_content_type:
-        output = predictions.to_csv()
-        output_content_type = "text/csv"
-    elif "application/json" in output_content_type:
-        output = predictions.to_json()
-        output_content_type = "application/json"
-    else:
-        raise ValueError(f"{output_content_type} content type not supported")
-
-    return output, output_content_type
+    if input_content_type == APPLICATION_JSON:
+        return render_jumpstart(predictions_df)
+    return render_dataframe(predictions_df, output_content_type)

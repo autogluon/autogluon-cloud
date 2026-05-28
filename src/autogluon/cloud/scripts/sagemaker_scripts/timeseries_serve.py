@@ -1,13 +1,21 @@
 # flake8: noqa
-import base64
 import json
 import os
 import shutil
-from io import BytesIO, StringIO
 
 import pandas as pd
 
-from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
+from autogluon.timeseries import TimeSeriesPredictor
+
+from timeseries_serve_utils import (
+    APPLICATION_JSON,
+    X_AUTOGLUON,
+    parse_dataframe_payload,
+    parse_jumpstart_payload,
+    parse_x_autogluon_payload,
+    render_dataframe,
+    render_jumpstart,
+)
 
 
 def model_fn(model_dir):
@@ -36,76 +44,28 @@ def model_fn(model_dir):
     return model
 
 
-def _parse_autogluon_payload(request_body, *, id_column, timestamp_column):
-    """Parse x-autogluon payload. Returns (data, known_covariates, inference_kwargs)."""
-    payload = json.loads(request_body)
-    if payload.get("version") != 1:
-        raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
-    inference_kwargs = payload.get("inference_kwargs") or {}
-
-    data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
-    static_features = payload.get("static_features")
-    if static_features is not None:
-        static_features = pd.read_parquet(BytesIO(base64.b64decode(static_features)))
-
-    tsdf = TimeSeriesDataFrame.from_data_frame(
-        data, id_column=id_column, timestamp_column=timestamp_column, static_features_df=static_features
-    )
-
-    known_covariates = payload.get("known_covariates")
-    if known_covariates is not None:
-        known_covariates = TimeSeriesDataFrame.from_data_frame(
-            pd.read_parquet(BytesIO(base64.b64decode(known_covariates))),
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-        )
-
-    return tsdf, known_covariates, inference_kwargs
-
-
-def _parse_simple_payload(request_body, content_type, *, id_column, timestamp_column):
-    """Parse plain parquet/csv/json payloads using the column names recorded at fit time."""
-    if content_type == "application/x-parquet":
-        data = pd.read_parquet(BytesIO(request_body))
-    elif content_type == "text/csv":
-        data = pd.read_csv(StringIO(request_body))
-    elif content_type == "application/json":
-        data = pd.read_json(StringIO(request_body))
-    elif content_type == "application/jsonl":
-        data = pd.read_json(StringIO(request_body), orient="records", lines=True)
-    else:
-        raise ValueError(f"{content_type} input content type not supported.")
-
-    tsdf = TimeSeriesDataFrame.from_data_frame(data, id_column=id_column, timestamp_column=timestamp_column)
-    return tsdf, None, {}
-
-
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
     id_column = model._id_column
     timestamp_column = model._timestamp_column
-    if input_content_type == "application/x-autogluon":
-        tsdf, known_covariates, inference_kwargs = _parse_autogluon_payload(
+
+    if input_content_type == X_AUTOGLUON:
+        tsdf, known_covariates, inference_kwargs = parse_x_autogluon_payload(
             request_body, id_column=id_column, timestamp_column=timestamp_column
         )
+    elif input_content_type == APPLICATION_JSON:
+        tsdf, known_covariates, inference_kwargs = parse_jumpstart_payload(
+            request_body, target_column=model.target, id_column=id_column, timestamp_column=timestamp_column
+        )
     else:
-        tsdf, known_covariates, inference_kwargs = _parse_simple_payload(
+        tsdf, known_covariates, inference_kwargs = parse_dataframe_payload(
             request_body, input_content_type, id_column=id_column, timestamp_column=timestamp_column
         )
 
-    prediction = model.predict(tsdf, known_covariates=known_covariates, **inference_kwargs)
-    prediction = pd.DataFrame(prediction)
+    predictions = model.predict(tsdf, known_covariates=known_covariates, **inference_kwargs)
 
-    if "application/x-parquet" in output_content_type:
-        prediction.columns = prediction.columns.astype(str)
-        output = prediction.to_parquet()
-        output_content_type = "application/x-parquet"
-    elif "application/json" in output_content_type:
-        output = prediction.to_json()
-        output_content_type = "application/json"
-    elif "text/csv" in output_content_type:
-        output = prediction.to_csv(index=None)
-        output_content_type = "text/csv"
-    else:
-        raise ValueError(f"{output_content_type} content type not supported")
-
-    return output, output_content_type
+    if input_content_type == APPLICATION_JSON:
+        return render_jumpstart(
+            predictions.to_data_frame().reset_index(), id_column=id_column, timestamp_column=timestamp_column
+        )
+    # Preserve legacy wire format: keep the (item_id, timestamp) multiindex on the dataframe.
+    return render_dataframe(pd.DataFrame(predictions), output_content_type)
