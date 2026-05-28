@@ -27,13 +27,13 @@ def jumpstart_payload():
     }
 
 
-def test_when_jumpstart_payload_valid_then_tsdf_and_parameters_returned(jumpstart_payload):
-    tsdf, known_covariates, parameters = u.parse_payload(
+def test_when_jumpstart_payload_valid_then_tsdf_and_inference_kwargs_returned(jumpstart_payload):
+    tsdf, known_covariates, inference_kwargs = u.parse_payload(
         json.dumps(jumpstart_payload).encode("utf-8"), "application/json"
     )
 
     assert known_covariates is None
-    assert parameters == {"prediction_length": 2, "freq": "D", "quantile_levels": [0.1, 0.9]}
+    assert inference_kwargs == {"prediction_length": 2, "freq": "D", "quantile_levels": [0.1, 0.9]}
     assert tsdf.item_ids.tolist() == ["A", "B"]
     assert tsdf.loc["A", "target"].tolist() == [1.0, 2.0, 3.0, 4.0, 5.0]
     assert tsdf.loc["B", "target"].tolist() == [10.0, 20.0, 30.0]

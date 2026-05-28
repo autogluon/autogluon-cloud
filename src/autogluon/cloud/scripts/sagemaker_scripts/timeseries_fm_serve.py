@@ -44,13 +44,13 @@ def model_fn(model_dir):
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
     """Run inference with per-request prediction_length, quantile_levels, etc."""
-    tsdf, known_covariates, parameters = parse_payload(request_body, input_content_type)
+    tsdf, known_covariates, inference_kwargs = parse_payload(request_body, input_content_type)
 
-    model.target = parameters.get("target", "target")
-    model.freq = parameters.get("freq", "D")
-    model.prediction_length = parameters.get("prediction_length", 1)
-    if "quantile_levels" in parameters:
-        model.quantile_levels = sorted(parameters["quantile_levels"])
+    model.target = inference_kwargs.get("target", "target")
+    model.freq = inference_kwargs.get("freq", "D")
+    model.prediction_length = inference_kwargs.get("prediction_length", 1)
+    if "quantile_levels" in inference_kwargs:
+        model.quantile_levels = sorted(inference_kwargs["quantile_levels"])
 
     predictions = model.predict(tsdf, known_covariates=known_covariates)
     return render_response(predictions, output_content_type)
