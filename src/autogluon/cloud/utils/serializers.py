@@ -72,11 +72,10 @@ class AutoGluonSerializer(SimpleBaseSerializer):
 
 
 class MultiModalSerializer(SimpleBaseSerializer):
-    """
-    Serializer for multi-modal use case.
-    When passed in a dataframe, the serializer will serialize the data to be parquet format.
-    When passed in a numpy array, the serializer will serialize the data to be numpy format.
-    Both allow passing optional inference arguments along with the data
+    """Serializer for multi-modal use case.
+
+    Produces a JSON envelope containing either base64-encoded parquet (for DataFrames) or a
+    JSON list of base85-encoded image strings (for numpy arrays), plus inference kwargs.
     """
 
     def __init__(self, content_type="application/x-autogluon-parquet"):

@@ -166,7 +166,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             static_features=static_features,
             known_covariates=known_covariates,
         )
-        # Pickle the request body to disk and pass the path through. Force content_type / split_type so
+        # Write the serialized request body to disk. Force content_type / split_type so
         # SageMaker sends the whole body in one transform_fn call — preserves static_features /
         # known_covariates side channels.
         payload_dir = os.path.join(self.local_output_path, "utils")
