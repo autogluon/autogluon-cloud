@@ -1,50 +1,36 @@
-import pickle
+import base64
+import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-from sagemaker.serializers import NumpySerializer, SimpleBaseSerializer
+from sagemaker.serializers import SimpleBaseSerializer
+
+AUTOGLUON_SERDE_VERSION = 1
+
+
+def _dataframe_to_b64(df: pd.DataFrame) -> str:
+    return base64.b64encode(df.to_parquet()).decode("ascii")
+
+
+def _ensure_json_serializable(inference_kwargs: Dict[str, Any]) -> None:
+    try:
+        json.dumps(inference_kwargs)
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            "`inference_kwargs` must be JSON-serializable; got value that cannot be encoded as JSON."
+        ) from e
 
 
 @dataclass
 class AutoGluonSerializationWrapper:
+    """Container for data, inference kwargs, and optional side inputs to be serialized into a single request payload."""
+
     data: pd.DataFrame
     inference_kwargs: Dict[str, Any]
     static_features: Optional[pd.DataFrame] = field(default=None)
     known_covariates: Optional[pd.DataFrame] = field(default=None)
-
-
-class ParquetSerializer(SimpleBaseSerializer):
-    """Serialize data to a buffer using the .parquet format."""
-
-    def __init__(self, content_type="application/x-parquet"):
-        """Initialize a ``ParquetSerializer`` instance.
-
-        Args:
-            content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/x-parquet").
-        """
-        super(ParquetSerializer, self).__init__(content_type=content_type)
-
-    def serialize(self, data):
-        """Serialize data to a buffer using the .parquet format.
-
-        Args:
-            data (object): Data to be serialized. Can be a Pandas Dataframe,
-                file, or buffer.
-
-        Returns:
-            io.BytesIO: A buffer containing data serialized in the .parquet format.
-        """
-        if isinstance(data, pd.DataFrame):
-            return data.to_parquet()
-
-        # files and buffers. Assumed to hold parquet-formatted data.
-        if hasattr(data, "read"):
-            return data.read()
-
-        raise ValueError(f"{data} format is not supported. Please provide a DataFrame, parquet file, or buffer.")
 
 
 class AutoGluonSerializer(SimpleBaseSerializer):
@@ -58,34 +44,38 @@ class AutoGluonSerializer(SimpleBaseSerializer):
                 request data (default: "application/x-autogluon").
         """
         super(AutoGluonSerializer, self).__init__(content_type=content_type)
-        self.parquet_serializer = ParquetSerializer()
 
     def serialize(self, data: AutoGluonSerializationWrapper):
-        """Serialize data to a buffer using the .parquet format.
+        """Serialize data to a JSON envelope with base64-encoded parquet payloads.
 
         Args:
             data (object): Data to be serialized. An AutoGluonSerializationWrapper object
 
         Returns:
-            bytese: Bytes containing both data and inference args
+            bytes: UTF-8 JSON containing base64-encoded parquet bytes and inference args
         """
-        if isinstance(data, AutoGluonSerializationWrapper):
-            package = {"data": self.parquet_serializer.serialize(data.data), "inference_kwargs": data.inference_kwargs}
-            if data.static_features is not None:
-                package["static_features"] = self.parquet_serializer.serialize(data.static_features)
-            if data.known_covariates is not None:
-                package["known_covariates"] = self.parquet_serializer.serialize(data.known_covariates)
-            return pickle.dumps(package)
+        if not isinstance(data, AutoGluonSerializationWrapper):
+            raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
 
-        raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
+        inference_kwargs = data.inference_kwargs or {}
+        _ensure_json_serializable(inference_kwargs)
+        package = {
+            "version": AUTOGLUON_SERDE_VERSION,
+            "data": _dataframe_to_b64(data.data),
+            "inference_kwargs": inference_kwargs,
+        }
+        if data.static_features is not None:
+            package["static_features"] = _dataframe_to_b64(data.static_features)
+        if data.known_covariates is not None:
+            package["known_covariates"] = _dataframe_to_b64(data.known_covariates)
+        return json.dumps(package).encode("utf-8")
 
 
 class MultiModalSerializer(SimpleBaseSerializer):
-    """
-    Serializer for multi-modal use case.
-    When passed in a dataframe, the serializer will serialize the data to be parquet format.
-    When passed in a numpy array, the serializer will serialize the data to be numpy format.
-    Both allow passing optional inference arguments along with the data
+    """Serializer for multi-modal use case.
+
+    Produces a JSON envelope containing either base64-encoded parquet (for DataFrames) or a
+    JSON list of base85-encoded image strings (for numpy arrays), plus inference kwargs.
     """
 
     def __init__(self, content_type="application/x-autogluon-parquet"):
@@ -99,64 +89,44 @@ class MultiModalSerializer(SimpleBaseSerializer):
                 `initial_args` of `predict()` call to endpoints.
         """
         super(MultiModalSerializer, self).__init__(content_type=content_type)
-        self.parquet_serializer = ParquetSerializer()
-        self.numpy_serializer = NumpySerializer()
 
     def serialize(self, data):
-        """Serialize data to a buffer using the .parquet format or numpy format.
+        """Serialize data to a JSON envelope.
+
+        For DataFrame inputs, ``data`` is base64-encoded parquet bytes.
+        For numpy/list image inputs, ``data`` is a JSON list of base85-encoded image strings.
 
         Args:
             data (object): Data to be serialized.
                 An AutoGluonSerializationWrapper, which its data can be a Pandas Dataframe,
-                or a numpy array
+                or a numpy array of base85-encoded image strings.
 
         Returns:
-            bytese: Bytes containing both data and inference args
+            bytes: UTF-8 JSON containing both data and inference args
         """
-        if isinstance(data, AutoGluonSerializationWrapper):
-            if isinstance(data.data, pd.DataFrame):
-                package = {
-                    "data": self.parquet_serializer.serialize(data.data),
-                    "inference_kwargs": data.inference_kwargs,
-                }
-                return pickle.dumps(package)
+        if not isinstance(data, AutoGluonSerializationWrapper):
+            raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")
 
-            if isinstance(data.data, np.ndarray):
-                package = {
-                    "data": self.numpy_serializer.serialize(data.data),
-                    "inference_kwargs": data.inference_kwargs,
-                }
-                return pickle.dumps(package)
+        inference_kwargs = data.inference_kwargs or {}
+        _ensure_json_serializable(inference_kwargs)
 
-            raise ValueError(
-                f"{data} format is not supported. Please provide a `DataFrame, or numpy array.` being wrapped by `AutoGluonSerializationWrapper`"
-            )
+        if isinstance(data.data, pd.DataFrame):
+            package = {
+                "version": AUTOGLUON_SERDE_VERSION,
+                "data": _dataframe_to_b64(data.data),
+                "inference_kwargs": inference_kwargs,
+            }
+            return json.dumps(package).encode("utf-8")
 
-        raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")
+        if isinstance(data.data, np.ndarray):
+            package = {
+                "version": AUTOGLUON_SERDE_VERSION,
+                "data": data.data.tolist(),
+                "inference_kwargs": inference_kwargs,
+            }
+            return json.dumps(package).encode("utf-8")
 
-
-class JsonLineSerializer(SimpleBaseSerializer):
-    """Serialize data to a buffer using the .jsonl format."""
-
-    def __init__(self, content_type="application/jsonl"):
-        """Initialize a ``JsonLineSerializer`` instance.
-
-        Args:
-            content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/jsonl").
-        """
-        super(JsonLineSerializer, self).__init__(content_type=content_type)
-
-    def serialize(self, data):
-        """Serialize data to a buffer using the .jsonl format.
-
-        Args:
-            data (pd.DataFrame): Data to be serialized.
-
-        Returns:
-            io.StringIO: A buffer containing data serialized in the .jsonl format.
-        """
-        if isinstance(data, pd.DataFrame):
-            return data.to_json(orient="records", lines=True)
-
-        raise ValueError(f"{data} format is not supported. Please provide a DataFrame.")
+        raise ValueError(
+            f"{data.data} format is not supported. Please provide a DataFrame or numpy array"
+            " wrapped by `AutoGluonSerializationWrapper`."
+        )

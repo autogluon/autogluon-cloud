@@ -1,7 +1,7 @@
 # flake8: noqa
+import base64
 import json
 import os
-import pickle
 import shutil
 from io import BytesIO, StringIO
 
@@ -38,13 +38,15 @@ def model_fn(model_dir):
 
 def _parse_autogluon_payload(request_body, *, id_column, timestamp_column):
     """Parse x-autogluon payload. Returns (data, known_covariates, inference_kwargs)."""
-    payload = pickle.loads(request_body)
+    payload = json.loads(request_body)
+    if payload.get("version") != 1:
+        raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
     inference_kwargs = payload.get("inference_kwargs") or {}
 
-    data = pd.read_parquet(BytesIO(payload["data"]))
+    data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
     static_features = payload.get("static_features")
     if static_features is not None:
-        static_features = pd.read_parquet(BytesIO(static_features))
+        static_features = pd.read_parquet(BytesIO(base64.b64decode(static_features)))
 
     tsdf = TimeSeriesDataFrame.from_data_frame(
         data, id_column=id_column, timestamp_column=timestamp_column, static_features_df=static_features
@@ -53,7 +55,9 @@ def _parse_autogluon_payload(request_body, *, id_column, timestamp_column):
     known_covariates = payload.get("known_covariates")
     if known_covariates is not None:
         known_covariates = TimeSeriesDataFrame.from_data_frame(
-            pd.read_parquet(BytesIO(known_covariates)), id_column=id_column, timestamp_column=timestamp_column
+            pd.read_parquet(BytesIO(base64.b64decode(known_covariates))),
+            id_column=id_column,
+            timestamp_column=timestamp_column,
         )
 
     return tsdf, known_covariates, inference_kwargs

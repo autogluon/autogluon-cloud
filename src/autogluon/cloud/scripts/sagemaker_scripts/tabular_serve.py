@@ -1,8 +1,8 @@
 # flake8: noqa
 import base64
 import hashlib
+import json
 import os
-import pickle
 from io import BytesIO, StringIO
 
 import pandas as pd
@@ -59,9 +59,10 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
         data = _read_with_fallback(lambda b: pd.read_json(b, orient="records", lines=True), buf, column_names)
 
     elif input_content_type == "application/x-autogluon":
-        buf = bytes(request_body)
-        payload = pickle.loads(buf)
-        data = pd.read_parquet(BytesIO(payload["data"]))
+        payload = json.loads(request_body)
+        if payload.get("version") != 1:
+            raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
+        data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
         inference_kwargs = payload.get("inference_kwargs", {})
         data = _align_columns(data, column_names)
 
