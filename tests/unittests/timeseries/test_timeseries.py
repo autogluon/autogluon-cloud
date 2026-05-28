@@ -1,6 +1,11 @@
+import base64
+import io
+import itertools
+import json
 import os
 import tempfile
 
+import boto3
 import pandas as pd
 import pytest
 
@@ -16,6 +21,74 @@ def _assert_timeseries_predictions(predictions: pd.DataFrame, expected_item_ids:
     counts = predictions.groupby("item_id").size()
     assert (counts == prediction_length).all()
     assert len(predictions) == len(expected_item_ids) * prediction_length
+
+
+def _build_request_bodies(
+    data: pd.DataFrame, *, id_column: str, timestamp_column: str, target: str, prediction_length: int
+) -> dict:
+    """Encode the same dataset in every supported request format, keyed by Content-Type."""
+    return {
+        "application/x-autogluon": json.dumps(
+            {
+                "version": 1,
+                "data": base64.b64encode(data.to_parquet()).decode(),
+                "inference_kwargs": {
+                    "id_column": id_column,
+                    "timestamp_column": timestamp_column,
+                    "target": target,
+                    "prediction_length": prediction_length,
+                },
+            }
+        ).encode(),
+        "application/json": json.dumps(
+            {
+                "inputs": [
+                    {
+                        "item_id": str(item_id),
+                        "start": group[timestamp_column].iloc[0].isoformat(),
+                        "target": group[target].astype(float).tolist(),
+                    }
+                    for item_id, group in data.groupby(id_column, sort=False)
+                ],
+                "parameters": {"prediction_length": prediction_length, "freq": "MS"},
+            }
+        ).encode(),
+        "application/x-parquet": data.to_parquet(),
+        "text/csv": data.to_csv(index=False).encode(),
+        "application/jsonl": data.to_json(orient="records", lines=True).encode(),
+    }
+
+
+def _count_predictions(body: bytes, content_type: str) -> tuple[set, int]:
+    """Return ``(item_ids, total_rows)`` from a response body in any supported format."""
+    if content_type == "application/x-parquet":
+        df = pd.read_parquet(io.BytesIO(body))
+        if isinstance(df.index, pd.MultiIndex):
+            df = df.reset_index()
+        return set(df["item_id"].astype(str)), len(df)
+    if content_type == "text/csv":
+        df = pd.read_csv(io.BytesIO(body))
+        return set(df["item_id"].astype(str)), len(df)
+    if content_type == "application/json":
+        forecasts = json.loads(body)["predictions"]
+        return {f["item_id"] for f in forecasts}, sum(len(f["mean"]) for f in forecasts)
+    raise AssertionError(f"unexpected response content type: {content_type}")
+
+
+def _exercise_endpoint(
+    endpoint_name: str, bodies: dict, format_pairs, *, expected_item_ids, prediction_length
+) -> None:
+    """Invoke ``endpoint_name`` with each (content_type, accept) pair and verify the predictions shape."""
+    sm = boto3.client("sagemaker-runtime")
+    expected_ids = set(map(str, expected_item_ids))
+    expected_rows = len(expected_item_ids) * prediction_length
+    for content_type, accept in format_pairs:
+        response = sm.invoke_endpoint(
+            EndpointName=endpoint_name, ContentType=content_type, Accept=accept, Body=bodies[content_type]
+        )
+        item_ids, rows = _count_predictions(response["Body"].read(), response["ContentType"])
+        assert item_ids == expected_ids, f"item_id mismatch (content={content_type}, accept={accept})"
+        assert rows == expected_rows, f"row count {rows} != {expected_rows} (content={content_type}, accept={accept})"
 
 
 @pytest.fixture(scope="module")
@@ -76,6 +149,34 @@ def test_timeseries(test_helper, framework_version, retail_sales_dataset):
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
 
+        bodies = _build_request_bodies(
+            ds["train_data"],
+            id_column=ds["id_column"],
+            timestamp_column=ds["timestamp_column"],
+            target=ds["target"],
+            prediction_length=ds["prediction_length"],
+        )
+        # CloudPredictor accepts every input format; supported response formats are parquet/json/csv.
+        cp_inputs = [
+            "application/x-autogluon",
+            "application/json",
+            "application/x-parquet",
+            "text/csv",
+            "application/jsonl",
+        ]
+        cp_accepts = ["application/x-parquet", "application/json", "text/csv"]
+        cp_format_pairs = list(itertools.product(cp_inputs, cp_accepts))
+        expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
+
+        def extra_endpoint_check(endpoint_name: str) -> None:
+            _exercise_endpoint(
+                endpoint_name,
+                bodies,
+                cp_format_pairs,
+                expected_item_ids=expected_item_ids,
+                prediction_length=ds["prediction_length"],
+            )
+
         test_helper.test_functionality(
             cloud_predictor,
             predictor_init_args,
@@ -100,6 +201,7 @@ def test_timeseries(test_helper, framework_version, retail_sales_dataset):
                 static_features=ds["static_features"],
                 known_covariates=ds["known_covariates"],
             ),
+            extra_endpoint_check=extra_endpoint_check,
         )
 
 
@@ -223,5 +325,27 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
                 prediction_length=ds["prediction_length"],
             )
             _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+
+            bodies = _build_request_bodies(
+                ds["train_data"],
+                id_column=ds["id_column"],
+                timestamp_column=ds["timestamp_column"],
+                target=ds["target"],
+                prediction_length=ds["prediction_length"],
+            )
+            # FM only accepts the AG envelope and JumpStart input.
+            fm_format_pairs = list(
+                itertools.product(
+                    ["application/x-autogluon", "application/json"],
+                    ["application/x-parquet", "application/json", "text/csv"],
+                )
+            )
+            _exercise_endpoint(
+                endpoint.endpoint_name,
+                bodies,
+                fm_format_pairs,
+                expected_item_ids=expected_item_ids,
+                prediction_length=ds["prediction_length"],
+            )
         finally:
             endpoint.delete_endpoint()

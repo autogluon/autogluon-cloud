@@ -38,7 +38,11 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     # prediction_length / quantile_levels are baked into the predictor at fit time, so
     # any "parameters" block in a JumpStart payload is parsed but not applied.
     tsdf, known_covariates, _ = parse_payload(
-        request_body, input_content_type, id_column=model._id_column, timestamp_column=model._timestamp_column
+        request_body,
+        input_content_type,
+        id_column=model._id_column,
+        timestamp_column=model._timestamp_column,
+        target_column=model.target,
     )
     predictions = model.predict(tsdf, known_covariates=known_covariates)
     return render_response(predictions, output_content_type)

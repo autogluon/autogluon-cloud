@@ -62,7 +62,9 @@ class CloudTestHelper:
         return data
 
     @staticmethod
-    def test_endpoint(cloud_predictor, test_data, inference_kwargs=None, **predict_real_time_kwargs):
+    def test_endpoint(
+        cloud_predictor, test_data, inference_kwargs=None, extra_endpoint_check=None, **predict_real_time_kwargs
+    ):
         if inference_kwargs is None:
             inference_kwargs = {}
         try:
@@ -76,6 +78,8 @@ class CloudTestHelper:
                     test_data, **inference_kwargs, **predict_real_time_kwargs
                 )
                 assert isinstance(pred_proba, pd.DataFrame)
+            if extra_endpoint_check is not None:
+                extra_endpoint_check(cloud_predictor.endpoint_name)
         except Exception as e:
             cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
             raise e
@@ -141,6 +145,7 @@ class CloudTestHelper:
         predict_real_time_kwargs=None,
         inference_kwargs=None,
         predict_kwargs=None,
+        extra_endpoint_check=None,
     ):
         if fit_kwargs is None:
             fit_kwargs = dict(instance_type="ml.m5.2xlarge")
@@ -167,6 +172,7 @@ class CloudTestHelper:
             cloud_predictor,
             test_data,
             inference_kwargs=inference_kwargs,
+            extra_endpoint_check=extra_endpoint_check,
             **predict_real_time_kwargs,
         )
         detached_endpoint = cloud_predictor.detach_endpoint()

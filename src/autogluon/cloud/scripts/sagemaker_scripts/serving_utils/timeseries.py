@@ -19,12 +19,13 @@ def parse_payload(
     *,
     id_column: str = "item_id",
     timestamp_column: str = "timestamp",
+    target_column: str = "target",
 ) -> ParsedPayload:
     """Parse a request body into ``(past_data, known_covariates, inference_kwargs)``."""
     if content_type == "application/x-autogluon":
         return _parse_x_autogluon(request_body, id_column=id_column, timestamp_column=timestamp_column)
     elif content_type == "application/json":
-        return _parse_jumpstart(request_body)
+        return _parse_jumpstart(request_body, target_column=target_column)
     elif content_type == "application/x-parquet":
         data = pd.read_parquet(BytesIO(request_body))
     elif content_type == "text/csv":
@@ -65,7 +66,7 @@ def _parse_x_autogluon(request_body: bytes, *, id_column: str, timestamp_column:
     return tsdf, known_covariates, inference_kwargs
 
 
-def _parse_jumpstart(request_body: bytes) -> ParsedPayload:
+def _parse_jumpstart(request_body: bytes, *, target_column: str = "target") -> ParsedPayload:
     payload = json.loads(request_body)
     inputs = payload["inputs"]
     inference_kwargs = payload.get("parameters") or {}
@@ -80,7 +81,7 @@ def _parse_jumpstart(request_body: bytes) -> ParsedPayload:
                     "timestamp": pd.date_range(
                         start=pd.Timestamp(ts.get("start", "2020-01-01")), periods=len(ts["target"]), freq=freq
                     ),
-                    "target": ts["target"],
+                    target_column: ts["target"],
                     **(ts.get("past_covariates") or {}),
                 }
             )
