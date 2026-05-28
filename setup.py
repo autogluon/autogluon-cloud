@@ -139,7 +139,6 @@ install_requires = [
     "pyarrow>=11.0,<25",
     "PyYAML~=6.0",
     "Pillow>=10.2,<13",
-    "ray[default]>=2.10.0,<2.56",
     # CLI dependencies (autogluon-cloud command)
     "click>=8.0,<9",
     "rich>=13.0,<15",
@@ -147,7 +146,10 @@ install_requires = [
 
 extras_require = dict()
 
-all_requires = ["autogluon>=0.7,<1.6"]  # To allow user to pass ag objects
+ray_requires = ["ray[default]>=2.10.0,<2.56"]
+extras_require["ray"] = ray_requires
+
+all_requires = ["autogluon>=0.7,<1.6"] + ray_requires  # To allow user to pass ag objects
 extras_require["all"] = all_requires
 
 test_requirements = [
