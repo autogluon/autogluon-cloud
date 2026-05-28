@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
+
+from autogluon.common.utils.s3_utils import is_s3_url
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from .cloud_predictor import CloudPredictor
@@ -300,7 +301,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        save_path: Optional[str] = None,
+        predictions_path: Optional[str] = None,
         backend_kwargs: Optional[Dict] = None,
     ) -> Optional[pd.DataFrame]:
         """
@@ -310,8 +311,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         a pretrained model. Running fit and predict in the same job avoids the SageMaker startup overhead twice.
 
         Predictions are generated inside the training container against ``train_data`` (the standard time-series
-        forecasting flow where the last ``prediction_length`` steps of each series are forecast), saved to the job's
-        ``output.tar.gz``, then downloaded locally.
+        forecasting flow where the last ``prediction_length`` steps of each series are forecast) and written
+        directly to S3.
 
         Parameters
         ----------
@@ -338,15 +339,24 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         framework_version, job_name, instance_type, instance_count, volume_size, custom_image_uri, wait,
         backend_kwargs:
             Same semantics as ``fit()``.
-        save_path: Optional[str]
-            If set, the predictions are additionally written to ``<save_path>/predictions.csv``. If not set,
-            predictions are only returned in-memory.
+        predictions_path: Optional[str]
+            S3 URL where predictions will be written by the training container (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must
+            have ``s3:PutObject`` permission for this location. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical column
+            names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
 
         Returns
         -------
         Optional[pd.DataFrame]
             Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
         """
+        if predictions_path is not None:
+            if not is_s3_url(predictions_path) or not predictions_path.endswith((".csv", ".parquet")):
+                raise ValueError(
+                    f"`predictions_path` must be a full S3 URL ending in '.csv' or '.parquet' "
+                    f"(e.g. 's3://bucket/key/predictions.parquet'), got {predictions_path!r}."
+                )
         if predictor_fit_args is None:
             predictor_fit_args = {}
         else:
@@ -368,7 +378,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             backend_kwargs = {}
         else:
             backend_kwargs = dict(backend_kwargs)
-        backend_kwargs["extra_ag_args"] = {"predict_after_fit": True}
+        extra_ag_args = {"predict_after_fit": True}
+        if predictions_path is not None:
+            extra_ag_args["predictions_path"] = predictions_path
+        backend_kwargs["extra_ag_args"] = extra_ag_args
 
         self.fit(
             predictor_init_args=predictor_init_args,
@@ -393,28 +406,15 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             )
             return None
 
-        return self.get_fit_predict_results(save_path=save_path)
+        return self.get_fit_predict_results()
 
-    def get_fit_predict_results(self, save_path: Optional[str] = None) -> pd.DataFrame:
+    def get_fit_predict_results(self) -> pd.DataFrame:
         """
         Retrieve predictions produced by a completed ``fit_predict`` job.
-
-        Parameters
-        ----------
-        save_path: Optional[str], default = None
-            If set, the predictions are additionally written to ``<save_path>/predictions.csv``. The directory is
-            created if it does not exist. Regardless of this flag, the predictions are returned in-memory.
 
         Returns
         -------
         pd.DataFrame
             Predictions for the forecast horizon.
         """
-        predictions = self.backend.get_fit_predict_results()
-        if save_path is not None:
-            save_path = os.path.abspath(os.path.expanduser(save_path))
-            os.makedirs(save_path, exist_ok=True)
-            output_file = os.path.join(save_path, "predictions.csv")
-            predictions.to_csv(output_file, index=False)
-            logger.log(20, f"fit_predict results saved to {output_file}")
-        return predictions
+        return self.backend.get_fit_predict_results()

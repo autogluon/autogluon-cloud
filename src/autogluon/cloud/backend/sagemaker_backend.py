@@ -2,6 +2,7 @@ import copy
 import json
 import logging
 import os
+import pickle
 import tarfile
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -349,6 +350,8 @@ class SagemakerBackend(Backend):
             ag_args["image_column"] = image_column
         if extra_ag_args:
             ag_args.update(extra_ag_args)
+        if ag_args.get("predict_after_fit"):
+            ag_args.setdefault("predictions_path", f"{self.cloud_output_path}/{job_name}/predictions.csv")
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
@@ -1005,31 +1008,16 @@ class SagemakerBackend(Backend):
         return results_save_path
 
     def get_fit_predict_results(self) -> pd.DataFrame:
-        """Download and load predictions produced by a completed ``fit_predict`` job.
-
-        The fit_predict flow persists ``predictions.csv`` inside the training job's ``output.tar.gz``. This method
-        downloads the tarball, extracts the CSV, and returns it as a DataFrame.
-        """
-        import tempfile
-
-        job_name = self._fit_job.job_name
-        assert job_name is not None, "No fit job found. Call `fit_predict()` first."
-        output_tarball = self.cloud_output_path + f"/model/{job_name}/output/output.tar.gz"
-        assert is_s3_url(output_tarball), f"Expected an S3 URL, got {output_tarball!r}"
-
+        """Read predictions produced by a completed ``fit_predict`` job from S3."""
+        ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
+        with open(ag_args_path, "rb") as f:
+            ag_args = pickle.load(f)
+        predictions_path = ag_args.get("predictions_path")
+        assert predictions_path is not None, "No fit_predict job found. Call `fit_predict()` first."
+        bucket, key = s3_path_to_bucket_prefix(predictions_path)
         with tempfile.TemporaryDirectory(prefix="ag_fit_predict_") as tmpdir:
-            bucket, key = s3_path_to_bucket_prefix(output_tarball)
             self.sagemaker_session.download_data(path=tmpdir, bucket=bucket, key_prefix=key)
-            tarball_local = os.path.join(tmpdir, os.path.basename(key))
-            with tarfile.open(tarball_local) as tf:
-                try:
-                    fp = tf.extractfile("predictions.csv")
-                except KeyError as e:
-                    raise RuntimeError(
-                        f"predictions.csv not found in {tarball_local}. "
-                        "Did the training job run with `predict_after_fit=True`?"
-                    ) from e
-                return pd.read_csv(fp)
+            return load_pd.load(os.path.join(tmpdir, os.path.basename(key)))
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(

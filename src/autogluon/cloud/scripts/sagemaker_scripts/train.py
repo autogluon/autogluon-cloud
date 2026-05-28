@@ -5,13 +5,15 @@
 import argparse
 import json
 import os
-import pandas as pd
 import shutil
 from pprint import pprint
 
+import boto3
 import pickle
 
 from autogluon.common.loaders import load_pd
+from autogluon.common.savers import save_pd
+from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.tabular import TabularPredictor, TabularDataset
 from autogluon.timeseries import TimeSeriesDataFrame
 
@@ -180,10 +182,13 @@ if __name__ == "__main__":
             )
         print("Running in-job prediction for fit_predict")
         predictions = predictor.predict(training_data, known_covariates=known_covariates)
-        predictions = pd.DataFrame(predictions).reset_index()
-        predictions_path = os.path.join(args.output_data_dir, "predictions.csv")
-        predictions.to_csv(predictions_path, index=False)
-        print(f"Saved predictions to {predictions_path}")
+        predictions_path = ag_args["predictions_path"]
+        # Save locally then upload via boto3: s3fs/fsspec are not available in the training container.
+        local_path = os.path.join(args.output_data_dir, os.path.basename(predictions_path))
+        save_pd.save(path=local_path, df=predictions.to_data_frame().reset_index())
+        bucket, key = s3_path_to_bucket_prefix(predictions_path)
+        boto3.client("s3").upload_file(local_path, bucket, key)
+        print(f"Uploaded predictions to {predictions_path}")
 
     print("Saving serving script")
     serving_script_saving_path = os.path.join(save_path, "code")
