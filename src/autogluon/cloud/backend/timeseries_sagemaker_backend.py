@@ -171,7 +171,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         # known_covariates side channels.
         payload_dir = os.path.join(self.local_output_path, "utils")
         os.makedirs(payload_dir, exist_ok=True)
-        payload_path = os.path.join(payload_dir, "predict_payload.pkl")
+        payload_path = os.path.join(payload_dir, "predict_payload.json")
         with open(payload_path, "wb") as f:
             f.write(AutoGluonSerializer().serialize(wrapper))
         transform_kwargs = kwargs.pop("transform_kwargs", None) or {}
