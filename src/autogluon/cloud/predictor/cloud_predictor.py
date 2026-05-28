@@ -108,24 +108,6 @@ class CloudPredictor(ABC):
             return self.backend.endpoint.endpoint_name
         return None
 
-    @staticmethod
-    def generate_default_permission(backend: str = SAGEMAKER, **kwargs) -> Dict[str, str]:
-        """
-        Generate required permission file in json format for CloudPredictor with your choice of backend.
-        Users can use the generated files to create an entity for themselves.
-        IMPORTANT: Make sure you review both files before creating the entity!
-
-        Parameters
-        ----------
-        kwargs:
-            Refer to the `generate_default_permission` of the specified backend for a list of parameters
-
-        Return
-        ------
-        A dict containing the trust relationship and IAM policy files paths
-        """
-        return BackendFactory.get_backend_cls(backend=backend).generate_default_permission(**kwargs)
-
     def info(self) -> Dict[str, Any]:
         """
         Return general info about CloudPredictor

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Dict
 
 
 class ClusterManager(ABC):
@@ -11,12 +10,6 @@ class ClusterManager(ABC):
             Path to a yaml file defining the configuration of the cluster
         """
         self.config = config
-
-    @staticmethod
-    @abstractmethod
-    def generate_default_permission(self, **kwargs) -> Dict[str, str]:
-        """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
-        raise NotImplementedError
 
     @abstractmethod
     def up(self, config) -> None:

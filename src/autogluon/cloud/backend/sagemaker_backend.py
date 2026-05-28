@@ -28,14 +28,7 @@ from ..utils.ag_sagemaker import (
 from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
 from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
 from ..utils.dlc_utils import parse_framework_version
-from ..utils.iam import replace_iam_policy_place_holder, replace_trust_relationship_place_holder
 from ..utils.misc import MostRecentInsertedOrderedDict
-from ..utils.sagemaker_iam import (
-    SAGEMAKER_CLOUD_POLICY,
-    SAGEMAKER_IAM_POLICY_FILE_NAME,
-    SAGEMAKER_TRUST_RELATIONSHIP,
-    SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME,
-)
 from ..utils.serializers import AutoGluonSerializationWrapper
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
@@ -96,58 +89,6 @@ class SagemakerBackend(Backend):
         self._region = self.sagemaker_session.boto_region_name
         self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
         self._batch_transform_jobs = MostRecentInsertedOrderedDict()
-
-    @staticmethod
-    def generate_default_permission(
-        account_id: str, cloud_output_bucket: str, output_path: Optional[str] = None
-    ) -> Dict[str, str]:
-        """
-        Generate required trust relationship and IAM policy file in json format for CloudPredictor with SageMaker backend.
-        Users can use the generated files to create an IAM role for themselves.
-        IMPORTANT: Make sure you review both files before creating the role!
-
-        Parameters
-        ----------
-        account_id: str
-            The AWS account ID you plan to use for CloudPredictor.
-        cloud_output_bucket: str
-            s3 bucket name where intermediate artifacts will be uploaded and trained models should be saved.
-            You need to create this bucket beforehand and we would put this bucket in the policy being created.
-        output_path: str
-            Where you would like the generated file being written to.
-            If not specified, will write to the current folder.
-
-        Return
-        ------
-        A dict containing the trust relationship and IAM policy files paths
-        """
-        if output_path is None:
-            output_path = "."
-        trust_relationship_file_path = os.path.join(output_path, SAGEMAKER_TRUST_RELATIONSHIP_FILE_NAME)
-        iam_policy_file_path = os.path.join(output_path, SAGEMAKER_IAM_POLICY_FILE_NAME)
-
-        trust_relationship = replace_trust_relationship_place_holder(
-            trust_relationship_document=SAGEMAKER_TRUST_RELATIONSHIP, account_id=account_id
-        )
-        iam_policy = replace_iam_policy_place_holder(
-            policy_document=SAGEMAKER_CLOUD_POLICY, account_id=account_id, bucket=cloud_output_bucket
-        )
-        with open(trust_relationship_file_path, "w") as file:
-            json.dump(trust_relationship, file, indent=4)
-
-        with open(iam_policy_file_path, "w") as file:
-            json.dump(iam_policy, file, indent=4)
-
-        logger.info(f"Generated trust relationship to {trust_relationship_file_path}")
-        logger.info(f"Generated iam policy to {iam_policy_file_path}")
-        logger.info(
-            "IMPORTANT: Please review the trust relationship and iam policy before you use them to create an IAM role"
-        )
-        logger.info(
-            "Please refer to AWS documentation on how to create an IAM role: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html"
-        )
-
-        return {"trust_relationship": trust_relationship_file_path, "iam_policy": iam_policy_file_path}
 
     def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to fit call"""

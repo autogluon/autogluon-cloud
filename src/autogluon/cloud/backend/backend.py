@@ -33,11 +33,6 @@ class Backend(ABC):
         self.endpoint: Optional[Endpoint] = None
 
     @abstractmethod
-    def generate_default_permission(self, **kwargs) -> Dict[str, str]:
-        """Generate default permission file user could use to setup the corresponding entity, i.e. IAM Role in AWS"""
-        raise NotImplementedError
-
-    @abstractmethod
     def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
         """Parse backend specific kwargs and get them ready to be sent to fit call"""
         raise NotImplementedError

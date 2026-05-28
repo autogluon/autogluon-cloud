@@ -1,8 +1,5 @@
 from .constants import POLICY_ACCOUNT_PLACE_HOLDER, POLICY_BUCKET_PLACE_HOLDER
 
-RAY_AWS_TRUST_RELATIONSHIP_FILE_NAME = "ag_cloud_ray_aws_trust_relationship.json"
-RAY_AWS_IAM_POLICY_FILE_NAME = "ag_cloud_ray_aws_iam_policy.json"
-
 RAY_AWS_ROLE_NAME = "AGRayCluster-v1"
 RAY_AWS_POLICY_NAME = "AGRayClusterPolicy-v1"
 RAY_INSTANCE_PROFILE_NAME = RAY_AWS_ROLE_NAME
