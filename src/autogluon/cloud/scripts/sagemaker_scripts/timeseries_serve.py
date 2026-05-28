@@ -7,14 +7,10 @@ import pandas as pd
 
 from autogluon.timeseries import TimeSeriesPredictor
 
-from timeseries_serve_utils import (
-    APPLICATION_JSON,
-    X_AUTOGLUON,
+from serving_utils.timeseries import (
     parse_dataframe_payload,
-    parse_jumpstart_payload,
     parse_x_autogluon_payload,
     render_dataframe,
-    render_jumpstart,
 )
 
 
@@ -48,24 +44,14 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     id_column = model._id_column
     timestamp_column = model._timestamp_column
 
-    if input_content_type == X_AUTOGLUON:
-        tsdf, known_covariates, inference_kwargs = parse_x_autogluon_payload(
+    if input_content_type == "application/x-autogluon":
+        tsdf, known_covariates, _ = parse_x_autogluon_payload(
             request_body, id_column=id_column, timestamp_column=timestamp_column
         )
-    elif input_content_type == APPLICATION_JSON:
-        tsdf, known_covariates, inference_kwargs = parse_jumpstart_payload(
-            request_body, target_column=model.target, id_column=id_column, timestamp_column=timestamp_column
-        )
     else:
-        tsdf, known_covariates, inference_kwargs = parse_dataframe_payload(
+        tsdf, known_covariates, _ = parse_dataframe_payload(
             request_body, input_content_type, id_column=id_column, timestamp_column=timestamp_column
         )
 
-    predictions = model.predict(tsdf, known_covariates=known_covariates, **inference_kwargs)
-
-    if input_content_type == APPLICATION_JSON:
-        return render_jumpstart(
-            predictions.to_data_frame().reset_index(), id_column=id_column, timestamp_column=timestamp_column
-        )
-    # Preserve legacy wire format: keep the (item_id, timestamp) multiindex on the dataframe.
+    predictions = model.predict(tsdf, known_covariates=known_covariates)
     return render_dataframe(pd.DataFrame(predictions), output_content_type)

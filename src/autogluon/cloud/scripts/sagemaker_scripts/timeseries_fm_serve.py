@@ -9,9 +9,7 @@ import os
 
 import numpy as np
 import pandas as pd
-from timeseries_serve_utils import (
-    APPLICATION_JSON,
-    X_AUTOGLUON,
+from serving_utils.timeseries import (
     parse_jumpstart_payload,
     parse_x_autogluon_payload,
     render_dataframe,
@@ -51,25 +49,20 @@ def model_fn(model_dir):
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/x-parquet"):
     """Run inference with per-request prediction_length, quantile_levels, etc."""
-    if input_content_type == X_AUTOGLUON:
-        tsdf, known_covariates, inference_kwargs = parse_x_autogluon_payload(request_body)
-    elif input_content_type == APPLICATION_JSON:
-        tsdf, known_covariates, inference_kwargs = parse_jumpstart_payload(request_body)
+    if input_content_type == "application/x-autogluon":
+        tsdf, known_covariates, parameters = parse_x_autogluon_payload(request_body)
+    elif input_content_type == "application/json":
+        tsdf, known_covariates, parameters = parse_jumpstart_payload(request_body)
     else:
         raise ValueError(f"{input_content_type} input content type not supported.")
 
-    target = inference_kwargs.pop("target", "target")
-    prediction_length = inference_kwargs.pop("prediction_length", 1)
-    quantile_levels = inference_kwargs.pop("quantile_levels", None)
-
-    model.target = target
-    model.prediction_length = prediction_length
-    if quantile_levels is not None:
-        model.quantile_levels = sorted(quantile_levels)
+    model.target = parameters.get("target", "target")
+    model.freq = parameters.get("freq", "D")
+    model.prediction_length = parameters.get("prediction_length", 1)
+    if "quantile_levels" in parameters:
+        model.quantile_levels = sorted(parameters["quantile_levels"])
 
     predictions = model.predict(tsdf, known_covariates=known_covariates)
-    predictions_df = predictions.to_data_frame().reset_index()
-
-    if input_content_type == APPLICATION_JSON:
-        return render_jumpstart(predictions_df)
-    return render_dataframe(predictions_df, output_content_type)
+    if input_content_type == "application/json":
+        return render_jumpstart(predictions)
+    return render_dataframe(predictions.to_data_frame().reset_index(), output_content_type)

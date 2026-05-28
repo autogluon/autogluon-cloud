@@ -506,14 +506,13 @@ class SagemakerBackend(Backend):
         )
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
-        """Create a minimal model.tar.gz containing the serve script (and any sidecar utils) under code/."""
+        """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/."""
 
         tarball_dir = tempfile.mkdtemp(prefix="ag_serve_")
         tarball_path = os.path.join(tarball_dir, "model.tar.gz")
-        files = [serve_script_path, *ScriptManager.get_serve_dependencies(serve_script_path)]
         with tarfile.open(tarball_path, "w:gz") as tar:
-            for file_path in files:
-                tar.add(file_path, arcname=f"code/{os.path.basename(file_path)}")
+            tar.add(serve_script_path, arcname=f"code/{os.path.basename(serve_script_path)}")
+            tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
         s3_key = f"endpoints/{endpoint_name}/model/model.tar.gz"
         s3_path = self._upload_predictor(tarball_path, s3_key)
         return s3_path
@@ -1048,17 +1047,10 @@ class SagemakerBackend(Backend):
         return inputs
 
     def _upload_serving_files(self, entry_point: str, bucket: str, key_prefix: str) -> str:
-        """Upload the entry-point serve script and any sidecar utils as a single channel.
-
-        SageMaker channels are directories: every file uploaded under one prefix lands in the
-        ``SM_CHANNEL_SERVING`` directory inside the training container, where train.py can
-        copy them into the model artifact's ``code/`` subdirectory.
-        """
-        files = [entry_point, *ScriptManager.get_serve_dependencies(entry_point)]
         staging_dir = tempfile.mkdtemp(prefix="ag_serving_")
         try:
-            for path in files:
-                shutil.copy(path, os.path.join(staging_dir, os.path.basename(path)))
+            shutil.copy(entry_point, os.path.join(staging_dir, os.path.basename(entry_point)))
+            shutil.copytree(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, os.path.join(staging_dir, "serving_utils"))
             return self.sagemaker_session.upload_data(
                 path=staging_dir, bucket=bucket, key_prefix=key_prefix + "/serving"
             )

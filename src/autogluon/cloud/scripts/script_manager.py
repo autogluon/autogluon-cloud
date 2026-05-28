@@ -14,17 +14,12 @@ class ScriptManager:
     SAGEMAKER_MULTIMODAL_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "multimodal_serve.py")
     SAGEMAKER_TIMESERIES_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "timeseries_serve.py")
     SAGEMAKER_TIMESERIES_FM_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "timeseries_fm_serve.py")
-    SAGEMAKER_TIMESERIES_SERVE_UTILS_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "timeseries_serve_utils.py")
+    SAGEMAKER_SERVING_UTILS_DIR = os.path.join(SAGEMAKER_SCRIPTS_PATH, "serving_utils")
     RAY_TABULAR_TRAIN_SCRIPT_PATH = os.path.join(RAY_SCRIPTS_PATH, "train.py")
     _BACKEND_SERVE_SCRIPT_MAP = {
         TABULAR_SAGEMAKER: SAGEMAKER_TABULAR_SERVE_SCRIPT_PATH,
         MULTIMODL_SAGEMAKER: SAGEMAKER_MULTIMODAL_SERVE_SCRIPT_PATH,
         TIMESERIES_SAGEMAKER: SAGEMAKER_TIMESERIES_SERVE_SCRIPT_PATH,
-    }
-    # Extra files bundled alongside the entry-point script under code/ in the model tarball.
-    _SERVE_DEPENDENCIES_BY_ENTRY_POINT = {
-        SAGEMAKER_TIMESERIES_SERVE_SCRIPT_PATH: [SAGEMAKER_TIMESERIES_SERVE_UTILS_PATH],
-        SAGEMAKER_TIMESERIES_FM_SERVE_SCRIPT_PATH: [SAGEMAKER_TIMESERIES_SERVE_UTILS_PATH],
     }
     _BACKEND_TRAIN_MAP = {
         TABULAR_SAGEMAKER: SAGEMAKER_TRAIN_SCRIPT_PATH,
@@ -43,8 +38,3 @@ class ScriptManager:
     def get_serve_script(cls, backend_type, framework_version):
         assert backend_type in cls._BACKEND_SERVE_SCRIPT_MAP
         return cls._BACKEND_SERVE_SCRIPT_MAP[backend_type]
-
-    @classmethod
-    def get_serve_dependencies(cls, serve_script_path):
-        """Extra files bundled into the model tarball alongside the entry-point script."""
-        return cls._SERVE_DEPENDENCIES_BY_ENTRY_POINT.get(serve_script_path, [])

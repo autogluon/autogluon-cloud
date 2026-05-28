@@ -190,11 +190,5 @@ if __name__ == "__main__":
         boto3.client("s3").upload_file(local_path, bucket, key)
         print(f"Uploaded predictions to {predictions_path}")
 
-    print("Saving serving script(s)")
-    serving_script_saving_path = os.path.join(save_path, "code")
-    os.mkdir(serving_script_saving_path)
-    for filename in os.listdir(args.serving_script):
-        shutil.move(
-            os.path.join(args.serving_script, filename),
-            os.path.join(serving_script_saving_path, filename),
-        )
+    print("Saving serving artifacts")
+    shutil.copytree(args.serving_script, os.path.join(save_path, "code"))
