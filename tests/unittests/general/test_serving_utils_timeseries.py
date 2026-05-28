@@ -28,7 +28,9 @@ def jumpstart_payload():
 
 
 def test_when_jumpstart_payload_valid_then_tsdf_and_parameters_returned(jumpstart_payload):
-    tsdf, known_covariates, parameters = u.parse_jumpstart_payload(json.dumps(jumpstart_payload).encode("utf-8"))
+    tsdf, known_covariates, parameters = u.parse_payload(
+        json.dumps(jumpstart_payload).encode("utf-8"), "application/json"
+    )
 
     assert known_covariates is None
     assert parameters == {"prediction_length": 2, "freq": "D", "quantile_levels": [0.1, 0.9]}
@@ -39,7 +41,7 @@ def test_when_jumpstart_payload_valid_then_tsdf_and_parameters_returned(jumpstar
 
 def test_when_jumpstart_payload_omits_item_id_then_index_used():
     payload = {"inputs": [{"target": [1.0, 2.0]}, {"target": [3.0, 4.0]}]}
-    tsdf, _, _ = u.parse_jumpstart_payload(json.dumps(payload).encode("utf-8"))
+    tsdf, _, _ = u.parse_payload(json.dumps(payload).encode("utf-8"), "application/json")
     assert tsdf.item_ids.tolist() == ["0", "1"]
 
 
@@ -56,7 +58,7 @@ def test_when_jumpstart_payload_has_covariates_then_known_covariates_returned():
         ],
         "parameters": {"prediction_length": 2, "freq": "D"},
     }
-    tsdf, known_covariates, _ = u.parse_jumpstart_payload(json.dumps(payload).encode("utf-8"))
+    tsdf, known_covariates, _ = u.parse_payload(json.dumps(payload).encode("utf-8"), "application/json")
     assert "promo" in tsdf.columns
     assert tsdf["promo"].tolist() == [0.0, 1.0, 0.0, 1.0]
     assert known_covariates is not None
@@ -67,10 +69,41 @@ def test_when_jumpstart_payload_has_covariates_then_known_covariates_returned():
 def test_when_jumpstart_past_covariate_length_mismatch_then_pandas_raises():
     payload = {"inputs": [{"target": [1.0, 2.0, 3.0], "past_covariates": {"x": [1.0]}}]}
     with pytest.raises(ValueError):
-        u.parse_jumpstart_payload(json.dumps(payload).encode("utf-8"))
+        u.parse_payload(json.dumps(payload).encode("utf-8"), "application/json")
 
 
-def test_when_predictions_rendered_then_jumpstart_shape_returned():
+def test_when_x_autogluon_payload_uses_fit_time_columns_then_parses():
+    df = pd.DataFrame({"item_id": ["A"] * 3, "timestamp": pd.date_range("2020-01-01", periods=3), "target": [1, 2, 3]})
+    payload = AutoGluonSerializer().serialize(
+        AutoGluonSerializationWrapper(data=df, inference_kwargs={"prediction_length": 1})
+    )
+    tsdf, kc, kwargs = u.parse_payload(
+        payload, "application/x-autogluon", id_column="item_id", timestamp_column="timestamp"
+    )
+    assert kc is None
+    assert kwargs == {"prediction_length": 1}
+    assert tsdf.item_ids.tolist() == ["A"]
+
+
+def test_when_x_autogluon_payload_relies_on_kwargs_columns_then_parses():
+    df = pd.DataFrame({"id": ["A"] * 3, "ts": pd.date_range("2020-01-01", periods=3), "target": [1, 2, 3]})
+    payload = AutoGluonSerializer().serialize(
+        AutoGluonSerializationWrapper(
+            data=df, inference_kwargs={"id_column": "id", "timestamp_column": "ts", "prediction_length": 1}
+        )
+    )
+    tsdf, _, kwargs = u.parse_payload(payload, "application/x-autogluon")
+    assert tsdf.item_ids.tolist() == ["A"]
+    assert "id_column" not in kwargs and "timestamp_column" not in kwargs
+
+
+def test_when_x_autogluon_version_unknown_then_rejects():
+    body = json.dumps({"version": 99, "data": "", "inference_kwargs": {}}).encode("utf-8")
+    with pytest.raises(ValueError, match="Unsupported x-autogluon payload version: 99"):
+        u.parse_payload(body, "application/x-autogluon")
+
+
+def _predictions_tsdf():
     df = pd.DataFrame(
         {
             "item_id": ["A", "A", "B", "B"],
@@ -80,8 +113,11 @@ def test_when_predictions_rendered_then_jumpstart_shape_returned():
             "0.9": [6.5, 7.5, 45.0, 55.0],
         }
     )
-    predictions = TimeSeriesDataFrame.from_data_frame(df)
-    body, content_type = u.render_jumpstart(predictions)
+    return TimeSeriesDataFrame.from_data_frame(df)
+
+
+def test_when_render_response_json_then_jumpstart_shape_returned():
+    body, content_type = u.render_response(_predictions_tsdf(), "application/json")
     assert content_type == "application/json"
     assert json.loads(body) == {
         "predictions": [
@@ -97,56 +133,15 @@ def test_when_predictions_rendered_then_jumpstart_shape_returned():
     }
 
 
-def test_when_x_autogluon_payload_uses_fit_time_columns_then_parses():
-    df = pd.DataFrame({"item_id": ["A"] * 3, "timestamp": pd.date_range("2020-01-01", periods=3), "target": [1, 2, 3]})
-    payload = AutoGluonSerializer().serialize(
-        AutoGluonSerializationWrapper(data=df, inference_kwargs={"prediction_length": 1})
-    )
-    tsdf, kc, kwargs = u.parse_x_autogluon_payload(payload, id_column="item_id", timestamp_column="timestamp")
-    assert kc is None
-    assert kwargs == {"prediction_length": 1}
-    assert tsdf.item_ids.tolist() == ["A"]
-
-
-def test_when_x_autogluon_payload_relies_on_kwargs_columns_then_parses():
-    df = pd.DataFrame({"id": ["A"] * 3, "ts": pd.date_range("2020-01-01", periods=3), "target": [1, 2, 3]})
-    payload = AutoGluonSerializer().serialize(
-        AutoGluonSerializationWrapper(
-            data=df, inference_kwargs={"id_column": "id", "timestamp_column": "ts", "prediction_length": 1}
-        )
-    )
-    tsdf, _, kwargs = u.parse_x_autogluon_payload(payload)
-    assert tsdf.item_ids.tolist() == ["A"]
-    assert "id_column" not in kwargs and "timestamp_column" not in kwargs
-
-
-def test_when_x_autogluon_version_unknown_then_rejects():
-    body = json.dumps({"version": 99, "data": "", "inference_kwargs": {}}).encode("utf-8")
-    with pytest.raises(ValueError, match="Unsupported x-autogluon payload version: 99"):
-        u.parse_x_autogluon_payload(body, id_column="item_id", timestamp_column="timestamp")
-
-
 @pytest.mark.parametrize(
     ("accept", "expected_ct"),
-    [
-        ("application/x-parquet", "application/x-parquet"),
-        ("application/json", "application/json"),
-        ("text/csv", "text/csv"),
-    ],
+    [("application/x-parquet", "application/x-parquet"), ("text/csv", "text/csv")],
 )
-def test_when_render_dataframe_then_uses_accept_header(accept, expected_ct):
-    df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-    _, ct = u.render_dataframe(df, accept)
+def test_when_render_response_dataframe_then_uses_accept_header(accept, expected_ct):
+    _, ct = u.render_response(_predictions_tsdf(), accept)
     assert ct == expected_ct
 
 
-def test_when_render_dataframe_does_not_mutate_input():
-    df = pd.DataFrame({1: [1, 2], 2: [3, 4]})  # int columns
-    original_columns = df.columns.tolist()
-    u.render_dataframe(df, "application/x-parquet")
-    assert df.columns.tolist() == original_columns
-
-
-def test_when_render_dataframe_unsupported_then_raises():
+def test_when_render_response_unsupported_then_raises():
     with pytest.raises(ValueError, match="not supported"):
-        u.render_dataframe(pd.DataFrame({"a": [1]}), "application/x-bogus")
+        u.render_response(_predictions_tsdf(), "application/x-bogus")

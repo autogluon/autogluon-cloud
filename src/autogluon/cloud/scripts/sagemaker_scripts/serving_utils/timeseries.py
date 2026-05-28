@@ -10,83 +10,22 @@ import pandas as pd
 from autogluon.timeseries import TimeSeriesDataFrame
 from autogluon.timeseries.utils.forecast import make_future_data_frame
 
+ParsedPayload = Tuple[TimeSeriesDataFrame, Optional[TimeSeriesDataFrame], Dict[str, Any]]
 
-def parse_x_autogluon_payload(
+
+def parse_payload(
     request_body: bytes,
+    content_type: str,
     *,
     id_column: str = "item_id",
     timestamp_column: str = "timestamp",
-) -> Tuple[TimeSeriesDataFrame, Optional[TimeSeriesDataFrame], Dict[str, Any]]:
-    payload = json.loads(request_body)
-    if payload.get("version") != 1:
-        raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
-    inference_kwargs = payload.get("inference_kwargs") or {}
-    id_column = inference_kwargs.pop("id_column", id_column)
-    timestamp_column = inference_kwargs.pop("timestamp_column", timestamp_column)
-
-    data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
-    static_features = payload.get("static_features")
-    if static_features is not None:
-        static_features = pd.read_parquet(BytesIO(base64.b64decode(static_features)))
-
-    tsdf = TimeSeriesDataFrame.from_data_frame(
-        data, id_column=id_column, timestamp_column=timestamp_column, static_features_df=static_features
-    )
-
-    known_covariates = payload.get("known_covariates")
-    if known_covariates is not None:
-        known_covariates = TimeSeriesDataFrame.from_data_frame(
-            pd.read_parquet(BytesIO(base64.b64decode(known_covariates))),
-            id_column=id_column,
-            timestamp_column=timestamp_column,
-        )
-
-    return tsdf, known_covariates, inference_kwargs
-
-
-def parse_jumpstart_payload(
-    request_body: bytes,
-) -> Tuple[TimeSeriesDataFrame, Optional[TimeSeriesDataFrame], Dict[str, Any]]:
-    payload = json.loads(request_body)
-    inputs = payload["inputs"]
-    parameters = payload.get("parameters") or {}
-    freq = parameters.get("freq", "D")
-    prediction_length = parameters.get("prediction_length", 1)
-
-    past_df = pd.concat(
-        [
-            pd.DataFrame(
-                {
-                    "item_id": ts.get("item_id", str(i)),
-                    "timestamp": pd.date_range(
-                        start=pd.Timestamp(ts.get("start", "2020-01-01")),
-                        periods=len(ts["target"]),
-                        freq=freq,
-                    ),
-                    "target": ts["target"],
-                    **(ts.get("past_covariates") or {}),
-                }
-            )
-            for i, ts in enumerate(inputs)
-        ],
-        ignore_index=True,
-    )
-    tsdf = TimeSeriesDataFrame.from_data_frame(past_df)
-
-    if any("future_covariates" in ts for ts in inputs):
-        future_df = make_future_data_frame(tsdf, prediction_length=prediction_length, freq=freq)
-        future_covariates = pd.concat([pd.DataFrame(ts["future_covariates"]) for ts in inputs], ignore_index=True)
-        known_covariates = TimeSeriesDataFrame.from_data_frame(pd.concat([future_df, future_covariates], axis=1))
-    else:
-        known_covariates = None
-
-    return tsdf, known_covariates, parameters
-
-
-def parse_dataframe_payload(
-    request_body: bytes, content_type: str, *, id_column: str, timestamp_column: str
-) -> Tuple[TimeSeriesDataFrame, None, Dict[str, Any]]:
-    if content_type == "application/x-parquet":
+) -> ParsedPayload:
+    """Parse a request body into ``(past_data, known_covariates, parameters)``."""
+    if content_type == "application/x-autogluon":
+        return _parse_x_autogluon(request_body, id_column=id_column, timestamp_column=timestamp_column)
+    elif content_type == "application/json":
+        return _parse_jumpstart(request_body)
+    elif content_type == "application/x-parquet":
         data = pd.read_parquet(BytesIO(request_body))
     elif content_type == "text/csv":
         data = pd.read_csv(StringIO(request_body))
@@ -94,28 +33,95 @@ def parse_dataframe_payload(
         data = pd.read_json(StringIO(request_body), orient="records", lines=True)
     else:
         raise ValueError(f"{content_type} input content type not supported.")
-
     tsdf = TimeSeriesDataFrame.from_data_frame(data, id_column=id_column, timestamp_column=timestamp_column)
     return tsdf, None, {}
 
 
-def render_jumpstart(predictions: TimeSeriesDataFrame) -> Tuple[bytes, str]:
+def render_response(predictions: TimeSeriesDataFrame, accept: str) -> Tuple[Any, str]:
+    """Serialize predictions per the request's ``Accept`` header."""
+    if "application/json" in accept:
+        return _render_jumpstart(predictions), "application/json"
+    elif "application/x-parquet" in accept:
+        df = pd.DataFrame(predictions)
+        df.columns = df.columns.astype(str)
+        return df.to_parquet(), "application/x-parquet"
+    elif "text/csv" in accept:
+        return pd.DataFrame(predictions).to_csv(), "text/csv"
+    else:
+        raise ValueError(f"{accept} content type not supported")
+
+
+def _parse_x_autogluon(request_body: bytes, *, id_column: str, timestamp_column: str) -> ParsedPayload:
+    payload = json.loads(request_body)
+    if payload.get("version") != 1:
+        raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
+
+    inference_kwargs = payload.get("inference_kwargs") or {}
+    id_column = inference_kwargs.pop("id_column", id_column)
+    timestamp_column = inference_kwargs.pop("timestamp_column", timestamp_column)
+
+    static_features = _decode_parquet(payload.get("static_features"))
+    tsdf = TimeSeriesDataFrame.from_data_frame(
+        _decode_parquet(payload["data"]),
+        id_column=id_column,
+        timestamp_column=timestamp_column,
+        static_features_df=static_features,
+    )
+
+    known_covariates_df = _decode_parquet(payload.get("known_covariates"))
+    if known_covariates_df is not None:
+        known_covariates = TimeSeriesDataFrame.from_data_frame(
+            known_covariates_df, id_column=id_column, timestamp_column=timestamp_column
+        )
+    else:
+        known_covariates = None
+
+    return tsdf, known_covariates, inference_kwargs
+
+
+def _parse_jumpstart(request_body: bytes) -> ParsedPayload:
+    payload = json.loads(request_body)
+    inputs = payload["inputs"]
+    parameters = payload.get("parameters") or {}
+    freq = parameters.get("freq", "D")
+    prediction_length = parameters.get("prediction_length", 1)
+
+    past_df = pd.concat([_jumpstart_input_to_past_df(ts, i, freq) for i, ts in enumerate(inputs)], ignore_index=True)
+    tsdf = TimeSeriesDataFrame.from_data_frame(past_df)
+
+    if any("future_covariates" in ts for ts in inputs):
+        future_index_df = make_future_data_frame(tsdf, prediction_length=prediction_length, freq=freq)
+        future_values = pd.concat([pd.DataFrame(ts["future_covariates"]) for ts in inputs], ignore_index=True)
+        known_covariates = TimeSeriesDataFrame.from_data_frame(pd.concat([future_index_df, future_values], axis=1))
+    else:
+        known_covariates = None
+
+    return tsdf, known_covariates, parameters
+
+
+def _jumpstart_input_to_past_df(ts: Dict[str, Any], index: int, freq: str) -> pd.DataFrame:
+    timestamps = pd.date_range(start=pd.Timestamp(ts.get("start", "2020-01-01")), periods=len(ts["target"]), freq=freq)
+    return pd.DataFrame(
+        {
+            "item_id": ts.get("item_id", str(index)),
+            "timestamp": timestamps,
+            "target": ts["target"],
+            **(ts.get("past_covariates") or {}),
+        }
+    )
+
+
+def _render_jumpstart(predictions: TimeSeriesDataFrame) -> bytes:
     forecast_list = []
     for item_id, group in predictions.groupby("item_id", sort=False):
         forecast = {col: group[col].tolist() for col in group.columns}
         forecast["item_id"] = str(item_id)
         forecast["start"] = group.index.get_level_values("timestamp")[0].isoformat()
         forecast_list.append(forecast)
-    return json.dumps({"predictions": forecast_list}).encode("utf-8"), "application/json"
+    return json.dumps({"predictions": forecast_list}).encode("utf-8")
 
 
-def render_dataframe(predictions_df: pd.DataFrame, accept: str) -> Tuple[Any, str]:
-    if "application/x-parquet" in accept:
-        predictions_df = predictions_df.copy()
-        predictions_df.columns = predictions_df.columns.astype(str)
-        return predictions_df.to_parquet(), "application/x-parquet"
-    if "application/json" in accept:
-        return predictions_df.to_json(), "application/json"
-    if "text/csv" in accept:
-        return predictions_df.to_csv(index=False), "text/csv"
-    raise ValueError(f"{accept} content type not supported")
+def _decode_parquet(b64: Optional[str]) -> Optional[pd.DataFrame]:
+    if b64 is None:
+        return None
+    return pd.read_parquet(BytesIO(base64.b64decode(b64)))

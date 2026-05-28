@@ -3,15 +3,9 @@ import json
 import os
 import shutil
 
-import pandas as pd
-
 from autogluon.timeseries import TimeSeriesPredictor
 
-from serving_utils.timeseries import (
-    parse_dataframe_payload,
-    parse_x_autogluon_payload,
-    render_dataframe,
-)
+from serving_utils.timeseries import parse_payload, render_response
 
 
 def model_fn(model_dir):
@@ -41,17 +35,10 @@ def model_fn(model_dir):
 
 
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
-    id_column = model._id_column
-    timestamp_column = model._timestamp_column
-
-    if input_content_type == "application/x-autogluon":
-        tsdf, known_covariates, _ = parse_x_autogluon_payload(
-            request_body, id_column=id_column, timestamp_column=timestamp_column
-        )
-    else:
-        tsdf, known_covariates, _ = parse_dataframe_payload(
-            request_body, input_content_type, id_column=id_column, timestamp_column=timestamp_column
-        )
-
+    # prediction_length / quantile_levels are baked into the predictor at fit time, so
+    # any "parameters" block in a JumpStart payload is parsed but not applied.
+    tsdf, known_covariates, _ = parse_payload(
+        request_body, input_content_type, id_column=model._id_column, timestamp_column=model._timestamp_column
+    )
     predictions = model.predict(tsdf, known_covariates=known_covariates)
-    return render_dataframe(pd.DataFrame(predictions), output_content_type)
+    return render_response(predictions, output_content_type)
