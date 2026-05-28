@@ -25,6 +25,8 @@ def _ensure_json_serializable(inference_kwargs: Dict[str, Any]) -> None:
 
 @dataclass
 class AutoGluonSerializationWrapper:
+    """Container for data, inference kwargs, and optional side inputs to be serialized into a single request payload."""
+
     data: pd.DataFrame
     inference_kwargs: Dict[str, Any]
     static_features: Optional[pd.DataFrame] = field(default=None)
@@ -129,30 +131,3 @@ class MultiModalSerializer(SimpleBaseSerializer):
             )
 
         raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")
-
-
-class JsonLineSerializer(SimpleBaseSerializer):
-    """Serialize data to a buffer using the .jsonl format."""
-
-    def __init__(self, content_type="application/jsonl"):
-        """Initialize a ``JsonLineSerializer`` instance.
-
-        Args:
-            content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/jsonl").
-        """
-        super(JsonLineSerializer, self).__init__(content_type=content_type)
-
-    def serialize(self, data):
-        """Serialize data to a buffer using the .jsonl format.
-
-        Args:
-            data (pd.DataFrame): Data to be serialized.
-
-        Returns:
-            io.StringIO: A buffer containing data serialized in the .jsonl format.
-        """
-        if isinstance(data, pd.DataFrame):
-            return data.to_json(orient="records", lines=True)
-
-        raise ValueError(f"{data} format is not supported. Please provide a DataFrame.")
