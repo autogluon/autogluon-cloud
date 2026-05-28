@@ -179,4 +179,5 @@ hidden:
 TabularCloudPredictor <api/autogluon.cloud.TabularCloudPredictor>
 MultiModalCloudPredictor <api/autogluon.cloud.MultiModalCloudPredictor>
 TimeSeriesCloudPredictor <api/autogluon.cloud.TimeSeriesCloudPredictor>
+TimeSeriesFoundationModel <api/autogluon.cloud.TimeSeriesFoundationModel>
 ```

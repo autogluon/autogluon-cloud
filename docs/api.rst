@@ -25,3 +25,9 @@ API
 
     TimeSeriesCloudPredictor
 
+.. autosummary::
+    :toctree: api
+    :template: foundation_model_class.rst
+
+    TimeSeriesFoundationModel
+
