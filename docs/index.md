@@ -55,6 +55,7 @@ Train a classification or regression model on tabular data.
 ```python
 from autogluon.cloud import TabularCloudPredictor
 
+# `train_data` and `test_data` can be a local path, S3 URL, or pandas DataFrame
 train_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv"
 test_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv"
 
@@ -86,6 +87,7 @@ Forecast future values of time series.
 ```python
 from autogluon.cloud import TimeSeriesCloudPredictor
 
+# `data` can be a local path, S3 URL, or pandas DataFrame
 data = "https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv"
 
 # Train
@@ -120,6 +122,7 @@ Zero-shot forecasts with a pretrained model — no training required.
 ```python
 from autogluon.cloud import TimeSeriesFoundationModel
 
+# `data` can be a local path, S3 URL, or pandas DataFrame
 data = "https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv"
 
 model = TimeSeriesFoundationModel("chronos-2")
