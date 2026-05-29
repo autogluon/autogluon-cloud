@@ -4,7 +4,7 @@ Time Series
 .. currentmodule:: autogluon.cloud
 
 .. autosummary::
-    :toctree: api
+    :toctree: .
     :template: custom_class.rst
 
     TimeSeriesCloudPredictor

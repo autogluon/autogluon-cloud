@@ -1,10 +1,10 @@
-Tabular
-=======
+Multimodal
+==========
 
 .. currentmodule:: autogluon.cloud
 
 .. autosummary::
-    :toctree: api
+    :toctree: .
     :template: custom_class.rst
 
-    TabularCloudPredictor
+    MultiModalCloudPredictor

@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 class TimeSeriesCloudPredictor(CloudPredictor):
+    """Train and deploy AutoGluon time series forecasting models on AWS SageMaker.
+
+    Wraps :class:`autogluon.timeseries.TimeSeriesPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_)
+    and runs ``fit``, ``predict``, and endpoint deployment as managed SageMaker jobs.
+    """
+
     predictor_file_name = "TimeSeriesCloudPredictor.pkl"
     backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
 

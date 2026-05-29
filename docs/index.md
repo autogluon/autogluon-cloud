@@ -174,10 +174,10 @@ maxdepth: 1
 hidden:
 ---
 
-Setup <api_setup>
-Tabular <api_tabular>
-Time Series <api_timeseries>
-Multimodal <api_multimodal>
+Setup <api/setup>
+Tabular <api/tabular>
+Time Series <api/timeseries>
+Multimodal <api/multimodal>
 ```
 
 ```{toctree}
