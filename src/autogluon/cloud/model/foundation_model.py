@@ -90,7 +90,7 @@ class FoundationModel:
         self._backend = BackendFactory.get_backend(
             backend=backend_name,
             local_output_path=self._tmpdir.name,
-            cloud_output_path=cloud_output_path,
+            cloud_output_path=self.cloud_output_path,
             predictor_type=self._predictor_type,
             role=role,
         )

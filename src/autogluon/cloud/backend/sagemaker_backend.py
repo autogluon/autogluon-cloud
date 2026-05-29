@@ -960,13 +960,7 @@ class SagemakerBackend(Backend):
         return results_save_path
 
     def get_fit_predict_results(self) -> pd.DataFrame:
-        """Read predictions produced by a completed ``fit_predict`` job from S3.
-
-        ``predictions_path`` is recovered from the ``ag_args`` input channel of the
-        SageMaker training job rather than from local disk, so this works regardless
-        of whether ``local_output_path`` still exists (e.g. ephemeral tmpdirs in
-        ``FoundationModel``) or whether the job was reattached in a fresh process.
-        """
+        """Read predictions produced by a completed ``fit_predict`` job from S3."""
         ag_args = self._download_ag_args_from_job()
         predictions_path = ag_args.get("predictions_path")
         assert predictions_path is not None, "No fit_predict job found. Call `fit_predict()` first."

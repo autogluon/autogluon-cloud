@@ -134,15 +134,13 @@ def test_resolve_path_uses_bucket_from_config_when_path_is_none(no_s3_check):
     assert resolved.startswith("s3://config-bucket/ag-")
 
 
-def test_resolve_path_raises_when_path_none_and_no_config(no_s3_check):
-    with pytest.raises(ValueError, match="No `cloud_output_path`"):
-        resolve_cloud_output_path(None, backend_name="sagemaker")
+def test_resolve_path_returns_none_when_path_none_and_no_config(no_s3_check):
+    assert resolve_cloud_output_path(None, backend_name="sagemaker") is None
 
 
-def test_resolve_path_raises_when_backend_not_in_config(no_s3_check):
+def test_resolve_path_returns_none_when_backend_not_in_config(no_s3_check):
     _save_bucket_in_config("ray_aws", "config-bucket")
-    with pytest.raises(ValueError, match="No `cloud_output_path`"):
-        resolve_cloud_output_path(None, backend_name="sagemaker")
+    assert resolve_cloud_output_path(None, backend_name="sagemaker") is None
 
 
 def _capture_aws_utils_logs(level: int) -> tuple[list[logging.LogRecord], logging.Handler]:

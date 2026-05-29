@@ -32,7 +32,7 @@ def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
     return sagemaker.get_execution_role()
 
 
-def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> str:
+def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optional[str]:
     """Resolve the S3 location where AutoGluon-Cloud will read/write artifacts.
 
     Resolution order for the bucket:
@@ -48,18 +48,14 @@ def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> str:
       will overwrite previously written artifacts; pick a fresh prefix per run if you
       want them kept side by side.
 
-    Raises ``ValueError`` if no path is given and no bucket is configured.
+    Returns ``None`` if no path is given and no bucket is configured. Callers that
+    require a path (e.g. ``fit()``) should check and raise at the point of use.
     """
     if path is None:
         config = load_config()
         entry = config.backends.get(backend_name) if config is not None else None
         if entry is None or not entry.bucket:
-            raise ValueError(
-                "No `cloud_output_path` was provided and no bucket is configured for backend "
-                f"{backend_name!r} in ~/.autogluon/cloud.yaml. Either pass `cloud_output_path=` "
-                "explicitly, or run `autogluon.cloud.bootstrap()` / `register(bucket=...)` once "
-                "to persist a bucket."
-            )
+            return None
         path = f"s3://{entry.bucket}"
         logger.info(f"Using bucket from ~/.autogluon/cloud.yaml: {entry.bucket}")
 

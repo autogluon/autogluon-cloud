@@ -19,7 +19,11 @@ class Backend(ABC):
     @property
     def cloud_output_path(self) -> str:
         if not self._cloud_output_path:
-            raise ValueError(f"cloud_output_path is needed. Please pass it during init of {self.__class__.__name__}")
+            raise ValueError(
+                "No `cloud_output_path` was provided and no bucket is configured in "
+                "~/.autogluon/cloud.yaml. Either pass `cloud_output_path=` explicitly, or run "
+                "`autogluon.cloud.bootstrap()` / `register(bucket=...)` once to persist a bucket."
+            )
         return self._cloud_output_path
 
     def initialize(
