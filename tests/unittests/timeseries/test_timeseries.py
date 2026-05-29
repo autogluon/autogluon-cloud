@@ -373,13 +373,13 @@ def test_foundation_model_endpoint_payload_formats(test_helper, framework_versio
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=True)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
 
         model = FoundationModel(
             "chronos-bolt-tiny",
             cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-formats/{framework_version}/{timestamp}",
         )
-        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri)
+        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri, instance_type="ml.m5.2xlarge")
         try:
             format_pairs = list(
                 itertools.product(
