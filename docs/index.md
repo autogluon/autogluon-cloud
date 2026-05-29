@@ -52,17 +52,11 @@ from autogluon.cloud import TabularCloudPredictor
 train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv")
 test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv")
 test_data.drop(columns=["class"], inplace=True)
-predictor_init_args = {
-    "label": "class"
-}  # args used when creating TabularPredictor()
-predictor_fit_args = {
-    "time_limit": 120
-}  # args passed to TabularPredictor.fit()
 cloud_predictor = TabularCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
-    train_data=train_data,
-    predictor_init_args=predictor_init_args,
-    predictor_fit_args=predictor_fit_args,
+    train_data=train_data,  # path or DataFrame
+    predictor_init_args={"label": "class"},  # passed to TabularPredictor()
+    predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
 )
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(test_data)
@@ -84,15 +78,10 @@ from autogluon.cloud import MultiModalCloudPredictor
 train_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/train.parquet")
 test_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/dev.parquet")
 test_data.drop(columns=["label"], inplace=True)
-predictor_init_args = {
-    "label": "label"
-}  # args used when creating MultiModalPredictor()
-predictor_fit_args = {}  # args passed to MultiModalPredictor.fit()
 cloud_predictor = MultiModalCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
-    train_data=train_data,
-    predictor_init_args=predictor_init_args,
-    predictor_fit_args=predictor_fit_args,
+    train_data=train_data,  # path or DataFrame
+    predictor_init_args={"label": "label"},  # passed to MultiModalPredictor()
 )
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(test_data)
@@ -113,18 +102,11 @@ from autogluon.cloud import TimeSeriesCloudPredictor
 
 data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv")
 
-predictor_init_args = {
-    "target": "target",
-    "prediction_length" : 24,
-}  # args used when creating TimeSeriesPredictor()
-predictor_fit_args = {
-    "time_limit": 120,
-}  # args passed to TimeSeriesPredictor.fit()
 cloud_predictor = TimeSeriesCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
-    train_data=data,
-    predictor_init_args=predictor_init_args,
-    predictor_fit_args=predictor_fit_args,
+    train_data=data,  # path or DataFrame
+    predictor_init_args={"target": "target", "prediction_length": 24},  # passed to TimeSeriesPredictor()
+    predictor_fit_args={"time_limit": 120},  # passed to TimeSeriesPredictor.fit()
     id_column="item_id",
     timestamp_column="timestamp",
 )
