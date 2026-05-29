@@ -93,7 +93,10 @@ def bootstrap(
         default_stack = f"ag-cloud-{backend.replace('_', '-')}"
         stack_name = Prompt.ask("Stack name", default=default_stack)
     effective_stack = stack_name
-    template_url = f"https://github.com/autogluon/autogluon-cloud/blob/master/cloudformation/ag_cloud_{backend}.yaml"
+    template_url = (
+        f"https://github.com/autogluon/autogluon-cloud/blob/master/"
+        f"src/autogluon/cloud/templates/ag_cloud_{backend}.yaml"
+    )
 
     _console.print(
         f"This will use CloudFormation to create AWS resources (IAM roles, S3 bucket, etc.) "

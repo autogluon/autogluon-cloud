@@ -1,5 +1,4 @@
 import os
-import shutil
 
 from setuptools import setup
 
@@ -15,25 +14,6 @@ def create_version_file(*, version):
     with open(version_path, "w") as f:
         f.write(f'"""This is the {AUTOGLUON}.{CLOUD} version file."""\n')
         f.write("__version__ = '{}'\n".format(version))
-
-
-def sync_templates():
-    """Copy canonical CloudFormation templates into the package so they ship in the wheel.
-
-    The templates at repo-root `/cloudformation/` are the source of truth (referenced
-    from docs by public URL). At build time we mirror them under the `autogluon.cloud`
-    package so `importlib.resources` can locate them at runtime without depending on the
-    repo layout.
-    """
-    src_dir = "cloudformation"
-    dst_dir = os.path.join("src", AUTOGLUON, CLOUD, "templates")
-    if not os.path.isdir(src_dir):
-        # Building from an sdist that already has the copies — nothing to do.
-        return
-    os.makedirs(dst_dir, exist_ok=True)
-    for filename in os.listdir(src_dir):
-        if filename.endswith(".yaml"):
-            shutil.copyfile(os.path.join(src_dir, filename), os.path.join(dst_dir, filename))
 
 
 def update_version(version, use_file_if_exists=True, create_file=False):
@@ -165,7 +145,6 @@ extras_require["tests"] = test_requirements
 
 if __name__ == "__main__":
     create_version_file(version=version)
-    sync_templates()
     setup_args = default_setup_args(version=version)
     setup(
         install_requires=install_requires,

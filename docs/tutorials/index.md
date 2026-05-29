@@ -3,6 +3,12 @@
 ::::{grid} 2
   :gutter: 3
 
+:::{grid-item-card} Setup
+  :link: setup.html
+
+  Set up AutoGluon-Cloud on AWS in one command with `bootstrap`, or register existing AWS resources you already have.
+:::
+
 :::{grid-item-card} AutoGluon-Cloud
   :link: autogluon-cloud.html
 
@@ -21,6 +27,7 @@ maxdepth: 2
 hidden: true
 ---
 
+Setup <setup>
 Essentials <autogluon-cloud>
 Foundation Models <foundation_model>
 Image Modality <image-modality>
