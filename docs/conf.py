@@ -33,6 +33,9 @@ myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "html_image", 
 
 autosummary_generate = True
 numpydoc_show_class_members = False
+# Merge __init__ docstring (with Parameters) into the class docstring,
+# and suppress the long signature lines on class/__init__ headers.
+autoclass_content = "both"
 
 googleanalytics_id = "UA-96378503-20"
 
