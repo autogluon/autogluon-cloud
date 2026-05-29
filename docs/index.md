@@ -67,31 +67,6 @@ result = cloud_predictor.predict(test_data)
 :::
 
 
-:::{dropdown} Multimodal
-:animate: fade-in-slide-down
-:color: primary
-
-```python
-import pandas as pd
-from autogluon.cloud import MultiModalCloudPredictor
-
-train_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/train.parquet")
-test_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/dev.parquet")
-test_data.drop(columns=["label"], inplace=True)
-cloud_predictor = MultiModalCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
-cloud_predictor.fit(
-    train_data=train_data,  # path or DataFrame
-    predictor_init_args={"label": "label"},  # passed to MultiModalPredictor()
-)
-cloud_predictor.deploy()
-result = cloud_predictor.predict_real_time(test_data)
-cloud_predictor.cleanup_deployment()
-# Batch inference
-result = cloud_predictor.predict(test_data)
-```
-:::
-
-
 :::{dropdown} TimeSeries
 :animate: fade-in-slide-down
 :color: primary
@@ -115,6 +90,31 @@ result = cloud_predictor.predict_real_time(data)
 cloud_predictor.cleanup_deployment()
 # Batch inference
 result = cloud_predictor.predict(data)
+```
+:::
+
+
+:::{dropdown} Multimodal
+:animate: fade-in-slide-down
+:color: primary
+
+```python
+import pandas as pd
+from autogluon.cloud import MultiModalCloudPredictor
+
+train_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/train.parquet")
+test_data = pd.read_parquet("https://autogluon-text.s3-accelerate.amazonaws.com/glue/sst/dev.parquet")
+test_data.drop(columns=["label"], inplace=True)
+cloud_predictor = MultiModalCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
+cloud_predictor.fit(
+    train_data=train_data,  # path or DataFrame
+    predictor_init_args={"label": "label"},  # passed to MultiModalPredictor()
+)
+cloud_predictor.deploy()
+result = cloud_predictor.predict_real_time(test_data)
+cloud_predictor.cleanup_deployment()
+# Batch inference
+result = cloud_predictor.predict(test_data)
 ```
 :::
 
@@ -154,13 +154,31 @@ Versions <versions.rst>
 
 ```{toctree}
 ---
-caption: API
+caption: Tabular API
 maxdepth: 1
 hidden:
 ---
 
 TabularCloudPredictor <api/autogluon.cloud.TabularCloudPredictor>
-MultiModalCloudPredictor <api/autogluon.cloud.MultiModalCloudPredictor>
+```
+
+```{toctree}
+---
+caption: Time Series API
+maxdepth: 1
+hidden:
+---
+
 TimeSeriesCloudPredictor <api/autogluon.cloud.TimeSeriesCloudPredictor>
 TimeSeriesFoundationModel <api/autogluon.cloud.TimeSeriesFoundationModel>
+```
+
+```{toctree}
+---
+caption: Multimodal API
+maxdepth: 1
+hidden:
+---
+
+MultiModalCloudPredictor <api/autogluon.cloud.MultiModalCloudPredictor>
 ```
