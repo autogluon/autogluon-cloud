@@ -14,7 +14,7 @@ ParsedPayload = Tuple[TimeSeriesDataFrame, Optional[TimeSeriesDataFrame], Dict[s
 
 
 def parse_payload(
-    request_body: bytes,
+    request_body,
     content_type: str,
     *,
     id_column: str = "item_id",
@@ -22,6 +22,9 @@ def parse_payload(
     target_column: str = "target",
 ) -> ParsedPayload:
     """Parse a request body into ``(past_data, known_covariates, inference_kwargs)``."""
+    # SageMaker passes ``str`` for text content types (csv/json) and ``bytes`` for binary ones.
+    if isinstance(request_body, str):
+        request_body = request_body.encode()
     if content_type == "application/x-autogluon":
         return _parse_x_autogluon(request_body, id_column=id_column, timestamp_column=timestamp_column)
     elif content_type == "application/json":
