@@ -329,6 +329,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        predictions_path: Optional[str] = None,
         **backend_kwargs,
     ) -> Optional[pd.DataFrame]:
         """
@@ -366,6 +367,13 @@ class TimeSeriesFoundationModel(FoundationModel):
             Custom Docker image URI for the container.
         wait
             If True, block and return DataFrame. If False, return the job handle.
+        predictions_path
+            S3 URL where predictions will be written by the prediction job (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
+            role must have ``s3:PutObject`` permission for this location. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical
+            column names ``item_id`` and ``timestamp``, regardless of the ``id_column`` /
+            ``timestamp_column`` passed in.
         **backend_kwargs
             Additional backend-specific arguments (e.g., job_name, volume_size,
             autogluon_sagemaker_estimator_kwargs).
@@ -390,6 +398,10 @@ class TimeSeriesFoundationModel(FoundationModel):
             "static_features": static_features,
         }
 
+        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True}
+        if predictions_path is not None:
+            extra_ag_args["predictions_path"] = predictions_path
+
         self._backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -400,7 +412,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            extra_ag_args={"predict_after_fit": True},
+            extra_ag_args=extra_ag_args,
             **backend_kwargs,
         )
 

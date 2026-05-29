@@ -175,8 +175,14 @@ def test_timeseries_fit_predict_chronos(
 
 def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset):
     """Test FoundationModel batch prediction via the fit_predict training job pattern."""
+    import boto3
+
     ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
+
+    bucket = "autogluon-cloud-ci"
+    predictions_key = f"test-fm-predict/{framework_version}/{timestamp}/custom_predictions.parquet"
+    predictions_path = f"s3://{bucket}/{predictions_key}"
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
@@ -184,7 +190,7 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
 
         model = FoundationModel(
             "chronos-2",
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-predict/{framework_version}/{timestamp}",
+            cloud_output_path=f"s3://{bucket}/test-fm-predict/{framework_version}/{timestamp}",
         )
 
         predictions = model.predict(
@@ -195,9 +201,13 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
             prediction_length=ds["prediction_length"],
             known_covariates=ds["known_covariates"],
             instance_type="ml.m5.2xlarge",
+            predictions_path=predictions_path,
         )
 
         _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+
+        head = boto3.client("s3").head_object(Bucket=bucket, Key=predictions_key)
+        assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
 
 
 def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset):

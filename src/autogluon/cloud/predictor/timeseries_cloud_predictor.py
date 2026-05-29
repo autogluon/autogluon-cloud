@@ -7,8 +7,6 @@ from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
-from autogluon.common.utils.s3_utils import is_s3_url
-
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from .cloud_predictor import CloudPredictor
 
@@ -391,12 +389,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Optional[pd.DataFrame]
             Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
         """
-        if predictions_path is not None:
-            if not is_s3_url(predictions_path) or not predictions_path.endswith((".csv", ".parquet")):
-                raise ValueError(
-                    f"`predictions_path` must be a full S3 URL ending in '.csv' or '.parquet' "
-                    f"(e.g. 's3://bucket/key/predictions.parquet'), got {predictions_path!r}."
-                )
         if backend_kwargs is None:
             backend_kwargs = {}
         else:
