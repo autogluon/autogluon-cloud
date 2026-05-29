@@ -3,6 +3,7 @@ import logging
 from autogluon.common.utils.log_utils import _add_stream_handler
 
 from .cloud_setup import bootstrap, register, status, teardown
+from .endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from .model.foundation_model import TimeSeriesFoundationModel
 from .predictor import MultiModalCloudPredictor, TabularCloudPredictor, TimeSeriesCloudPredictor
 
@@ -13,6 +14,7 @@ __all__ = [
     "MultiModalCloudPredictor",
     "TabularCloudPredictor",
     "TimeSeriesCloudPredictor",
+    "TimeSeriesEndpoint",
     "TimeSeriesFoundationModel",
     "bootstrap",
     "register",

@@ -195,6 +195,8 @@ class FoundationModel:
         -------
         FoundationModel
             New instance with hyperparameters pointing to the fine-tuned artifact.
+
+        :meta private:
         """
         if not self._config.get("fine_tunable", False):
             raise ValueError(f"Model '{self.model_id}' does not support fine-tuning.")
@@ -216,6 +218,8 @@ class FoundationModel:
         -------
         str
             S3 path to the cached artifact.
+
+        :meta private:
         """
         raise NotImplementedError
 
@@ -325,22 +329,25 @@ class TimeSeriesFoundationModel(FoundationModel):
         Parameters
         ----------
         data
-            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
+            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to
+            a data file. See the `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
+            for the expected format.
         target
-            Name of the target column to forecast.
+            Name of the column that contains the target values to forecast.
         id_column
-            Name of the item ID column.
+            Name of the column with the unique identifier of each time series (item).
         timestamp_column
-            Name of the timestamp column.
+            Name of the column with the observation timestamps.
         known_covariates
-            Future values of known covariates over the forecast horizon. Covariate column names are
+            Future values of the known covariates over the forecast horizon. Covariate column names are
             inferred from the columns (excluding ``id_column`` and ``timestamp_column``).
         static_features
-            Metadata attributes of individual items.
+            Static (time-independent) features describing each individual time series.
         prediction_length
-            Number of time steps to forecast.
+            Forecast horizon: how many time steps into the future the model should predict.
         quantile_levels
-            Quantiles to predict.
+            List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults
+            to ``[0.1, 0.2, ..., 0.9]``.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type

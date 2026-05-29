@@ -33,6 +33,9 @@ myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "html_image", 
 
 autosummary_generate = True
 numpydoc_show_class_members = False
+# Merge __init__ docstring (with Parameters) into the class docstring,
+# and suppress the long signature lines on class/__init__ headers.
+autoclass_content = "both"
 
 googleanalytics_id = "UA-96378503-20"
 
@@ -43,7 +46,7 @@ nb_merge_streams = True
 
 nb_execution_excludepatterns = ["jupyter_execute"]
 
-nb_dirs_to_exec = [os.path.join("tutorials", tag) for tag in tags if os.path.isdir(os.path.join("tutorials", tag))]
+nb_dirs_to_exec = [os.path.join("tutorials", tag) for tag in tags if os.path.isdir(os.path.join("tutorials", tag))]  # noqa: F821
 
 if len(nb_dirs_to_exec) > 0:
     nb_dirs_to_exclude = [
@@ -90,3 +93,14 @@ html_favicon = "_static/favicon.ico"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_js_files = ["custom.js"]
+
+
+def _skip_meta_private(app, what, name, obj, skip, options):
+    doc = getattr(obj, "__doc__", None) or ""
+    if ":meta private:" in doc:
+        return True
+    return None
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", _skip_meta_private)
