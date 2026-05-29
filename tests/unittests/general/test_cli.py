@@ -70,7 +70,6 @@ def test_bootstrap_with_yes_skips_confirm_and_calls_python_api(runner, monkeypat
             "backend": "sagemaker",
             "stack_name": "my-stack",
             "session": pytest.approx(calls["bootstrap"][0]["session"]),
-            "verbose": False,
         }
     ]
 

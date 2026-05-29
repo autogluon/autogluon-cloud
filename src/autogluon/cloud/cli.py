@@ -7,6 +7,8 @@ Rich-based prompts. The Python API is the source of truth for behavior.
 
 from __future__ import annotations
 
+import logging
+from contextlib import contextmanager
 from typing import Optional
 
 import boto3
@@ -46,6 +48,18 @@ def _abort_on_error(fn, *args, **kwargs):
         return fn(*args, **kwargs)
     except (RuntimeError, ValueError) as e:
         raise click.ClickException(str(e)) from e
+
+
+@contextmanager
+def _quiet_logger(name: str, level: int = logging.WARNING):
+    """Temporarily raise a logger's level so its INFO output doesn't fight the rich spinner."""
+    logger = logging.getLogger(name)
+    prior = logger.level
+    logger.setLevel(level)
+    try:
+        yield
+    finally:
+        logger.setLevel(prior)
 
 
 @click.group()
@@ -98,14 +112,8 @@ def bootstrap(
     if not yes and not Confirm.ask("Proceed?", default=True):
         raise click.Abort()
 
-    with _console.status(f"Deploying stack '{effective_stack}'...", spinner="dots"):
-        _abort_on_error(
-            _bootstrap,
-            backend=backend,
-            stack_name=effective_stack,
-            session=session,
-            verbose=False,
-        )
+    with _quiet_logger("autogluon.cloud"), _console.status(f"Deploying stack '{effective_stack}'...", spinner="dots"):
+        _abort_on_error(_bootstrap, backend=backend, stack_name=effective_stack, session=session)
 
     config = load_config()
     if config and backend in config.backends:

@@ -12,6 +12,7 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from importlib import resources
 from typing import Dict, Literal, Optional
@@ -30,6 +31,8 @@ from .config import (
 )
 
 __all__ = ["bootstrap", "register", "status", "teardown", "StatusReport"]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -50,7 +53,6 @@ def bootstrap(
     backend: BackendName = "sagemaker",
     stack_name: Optional[str] = None,
     session: Optional[boto3.Session] = None,
-    verbose: bool = True,
 ) -> None:
     """Deploy the CloudFormation stack and persist resource identifiers.
 
@@ -70,8 +72,6 @@ def bootstrap(
     session
         A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is constructed from the standard
         credential chain (env vars, ``~/.aws/credentials``, SSO, instance profile).
-    verbose
-        If ``True`` (default), print progress messages to stdout.
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
@@ -85,11 +85,9 @@ def bootstrap(
         )
     stack_name = stack_name or f"ag-cloud-{backend.replace('_', '-')}"
 
-    if verbose:
-        print(f"Deploying CloudFormation stack {stack_name!r} (account {account}, region {region}, ~1 minute)...")
+    logger.info(f"Deploying CloudFormation stack {stack_name!r} (account {account}, region {region}, ~1 minute)...")
     role_arn, bucket = _provision_stack(session, stack_name=stack_name, backend=backend)
-    if verbose:
-        print(f"Stack {stack_name!r} deployed.")
+    logger.info(f"Stack {stack_name!r} deployed.")
 
     register(
         role=role_arn,
@@ -97,7 +95,6 @@ def bootstrap(
         region=region,
         backend=backend,
         stack_name=stack_name,
-        verbose=verbose,
     )
 
 
@@ -108,7 +105,6 @@ def register(
     region: str,
     backend: BackendName = "sagemaker",
     stack_name: Optional[str] = None,
-    verbose: bool = True,
 ) -> None:
     """Persist resource identifiers to ``~/.autogluon/cloud.yaml`` under the given backend key.
 
@@ -133,8 +129,6 @@ def register(
         Optional CloudFormation stack name. If you deployed the resources via your own CFN stack and want
         :func:`teardown` to be able to delete it later, pass the name here. Defaults to ``None``, meaning teardown
         will only remove the config entry, not touch AWS.
-    verbose
-        If ``True`` (default), print progress messages to stdout.
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
@@ -146,8 +140,7 @@ def register(
         stack_name=stack_name,
     )
     save_config(config)
-    if verbose:
-        print(f"Saved AutoGluon-Cloud config for backend {backend!r} to {get_config_path()}")
+    logger.info(f"Saved AutoGluon-Cloud config for backend {backend!r} to {get_config_path()}")
 
 
 def status(
@@ -210,36 +203,36 @@ def teardown(
     """
     config = load_config()
     if config is None or not config.backends:
-        print("No AutoGluon-Cloud config found — nothing to tear down.")
+        logger.warning("No AutoGluon-Cloud config found — nothing to tear down.")
         return
 
     if backend is not None and backend not in config.backends:
-        print(f"Backend {backend!r} not in config. Available: {sorted(config.backends)}")
+        logger.warning(f"Backend {backend!r} not in config. Available: {sorted(config.backends)}")
         return
 
     targets = [backend] if backend is not None else list(config.backends)
     for name in targets:
         backend_config = config.backends[name]
         if backend_config.stack_name is None:
-            print(f"[{name}] no stack to delete.")
+            logger.info(f"[{name}] no stack to delete.")
         else:
             sess, account = _verified_session(session or boto3.Session(region_name=backend_config.region))
-            print(
+            logger.info(
                 f"[{name}] Deleting CloudFormation stack {backend_config.stack_name!r} "
                 f"(account {account}, region {backend_config.region}, ~1 minute)..."
             )
             cfn = sess.client("cloudformation")
             cfn.delete_stack(StackName=backend_config.stack_name)
             cfn.get_waiter("stack_delete_complete").wait(StackName=backend_config.stack_name)
-            print(f"[{name}] Stack {backend_config.stack_name!r} deleted.")
+            logger.info(f"[{name}] Stack {backend_config.stack_name!r} deleted.")
         del config.backends[name]
 
     if config.backends:
         save_config(config)
-        print(f"Removed {targets} from config; remaining backends: {sorted(config.backends)}.")
+        logger.info(f"Removed {targets} from config; remaining backends: {sorted(config.backends)}.")
     else:
         delete_config()
-        print("Removed config file.")
+        logger.info("Removed config file.")
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +273,7 @@ def _provision_stack(session: boto3.Session, *, stack_name: str, backend: Backen
         if e.response["Error"]["Code"] != "AlreadyExistsException":
             raise
         stack_existed = True
-        print(f"Stack {stack_name!r} already exists — reusing it.")
+        logger.warning(f"Stack {stack_name!r} already exists — reusing it.")
 
     if not stack_existed:
         cfn.get_waiter("stack_create_complete").wait(StackName=stack_name)

@@ -1,5 +1,7 @@
 """Tests for the ``autogluon.cloud`` setup API."""
 
+import logging
+
 import pytest
 
 from autogluon.cloud import bootstrap, register, status, teardown
@@ -18,6 +20,13 @@ def isolated_config_dir(tmp_path, monkeypatch):
     yield tmp_path
 
 
+@pytest.fixture(autouse=True)
+def _propagate_autogluon_logger(monkeypatch):
+    # autogluon.common's _add_stream_handler() sets propagate=False on the `autogluon` logger,
+    # which prevents caplog from seeing records. Flip it on for the duration of each test.
+    monkeypatch.setattr(logging.getLogger("autogluon"), "propagate", True)
+
+
 def _register_default(backend="sagemaker"):
     register(
         role="arn:aws:iam::111122223333:role/x",
@@ -32,8 +41,9 @@ def _register_default(backend="sagemaker"):
 # ---------------------------------------------------------------------------
 
 
-def test_register_writes_file(capsys):
-    _register_default()
+def test_register_writes_file(caplog):
+    with caplog.at_level("INFO", logger="autogluon.cloud.cloud_setup"):
+        _register_default()
 
     cfg = load_config()
     assert "sagemaker" in cfg.backends
@@ -42,7 +52,7 @@ def test_register_writes_file(capsys):
     assert sage.bucket == "b1"
     assert sage.region == "us-east-1"
     assert sage.stack_name is None
-    assert "Saved AutoGluon-Cloud config for backend 'sagemaker'" in capsys.readouterr().out
+    assert any("Saved AutoGluon-Cloud config for backend 'sagemaker'" in r.message for r in caplog.records)
 
 
 def test_register_overwrites_same_backend():
@@ -97,7 +107,7 @@ def test_register_records_stack_name_when_given():
 # ---------------------------------------------------------------------------
 
 
-def test_bootstrap_calls_cfn_then_registers(monkeypatch, capsys):
+def test_bootstrap_calls_cfn_then_registers(monkeypatch, caplog):
     class FakeSession:
         region_name = "us-east-1"
 
@@ -113,17 +123,18 @@ def test_bootstrap_calls_cfn_then_registers(monkeypatch, capsys):
         lambda session, stack_name, backend: ("arn:aws:iam::123:role/r", "ag-cloud-bucket"),
     )
 
-    bootstrap(backend="sagemaker", stack_name="my-stack")
+    with caplog.at_level("INFO", logger="autogluon.cloud.cloud_setup"):
+        bootstrap(backend="sagemaker", stack_name="my-stack")
 
     cfg = load_config()
     assert cfg.backends["sagemaker"].role_arn == "arn:aws:iam::123:role/r"
     assert cfg.backends["sagemaker"].bucket == "ag-cloud-bucket"
     assert cfg.backends["sagemaker"].stack_name == "my-stack"
 
-    out = capsys.readouterr().out
-    assert "Deploying CloudFormation stack 'my-stack'" in out
-    assert "account 123456789012" in out
-    assert "deployed" in out
+    messages = " ".join(r.message for r in caplog.records)
+    assert "Deploying CloudFormation stack 'my-stack'" in messages
+    assert "account 123456789012" in messages
+    assert "deployed" in messages
 
 
 def test_bootstrap_returns_none(monkeypatch):
@@ -232,19 +243,21 @@ def test_check_role_returns_unverified_on_access_denied():
 # ---------------------------------------------------------------------------
 
 
-def test_teardown_without_config_is_noop(capsys):
-    assert teardown() is None
-    assert "nothing to tear down" in capsys.readouterr().out
+def test_teardown_without_config_is_noop(caplog):
+    with caplog.at_level("WARNING", logger="autogluon.cloud.cloud_setup"):
+        assert teardown() is None
+    assert any("nothing to tear down" in r.message for r in caplog.records)
 
 
-def test_teardown_no_stacks_just_removes_config(capsys):
+def test_teardown_no_stacks_just_removes_config(caplog):
     """Backends registered without stack_name → only the config is removed."""
     _register_default()
-    teardown()
+    with caplog.at_level("INFO", logger="autogluon.cloud.cloud_setup"):
+        teardown()
     assert load_config() is None
-    out = capsys.readouterr().out
-    assert "no stack to delete" in out
-    assert "Removed config" in out
+    messages = " ".join(r.message for r in caplog.records)
+    assert "no stack to delete" in messages
+    assert "Removed config" in messages
 
 
 def test_teardown_with_stack_deletes_each_backend(monkeypatch):
@@ -310,9 +323,9 @@ def test_teardown_specific_backend_keeps_others():
     assert set(cfg.backends) == {"ray_aws"}
 
 
-def test_teardown_unknown_backend_is_friendly(capsys):
+def test_teardown_unknown_backend_is_friendly(caplog):
     _register_default(backend="sagemaker")
-    teardown(backend="ray_aws")  # not registered
-    out = capsys.readouterr().out
-    assert "not in config" in out
+    with caplog.at_level("WARNING", logger="autogluon.cloud.cloud_setup"):
+        teardown(backend="ray_aws")  # not registered
+    assert any("not in config" in r.message for r in caplog.records)
     assert load_config() is not None  # nothing was removed
