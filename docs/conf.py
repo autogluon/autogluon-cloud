@@ -16,10 +16,17 @@ extensions = [
     "sphinx_togglebutton",  # sphinx-togglebutton.readthedocs.io
     "sphinx.ext.autodoc",  # www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
     "sphinx.ext.autosummary",  # www.sphinx-doc.org/en/master/usage/extensions/autosummary.html
+    "sphinx.ext.extlinks",  # www.sphinx-doc.org/en/master/usage/extensions/extlinks.html
     "sphinx.ext.napoleon",  # www.sphinx-doc.org/en/master/usage/extensions/napoleon.html
     "sphinx.ext.viewcode",  # www.sphinx-doc.org/en/master/usage/extensions/viewcode.html
     "sphinxcontrib.googleanalytics",  # github.com/sphinx-contrib/googleanalytics
 ]
+
+# Pin links to repo files at the current release tag so released docs don't dangle on master.
+# Usage in markdown: {repo-file}`src/autogluon/cloud/templates/ag_cloud_sagemaker.yaml`
+extlinks = {
+    "repo-file": (f"https://github.com/autogluon/autogluon-cloud/blob/v{release}/%s", "%s"),
+}
 
 # See https://myst-parser.readthedocs.io/en/latest/syntax/optional.html
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "html_image", "substitution"]
