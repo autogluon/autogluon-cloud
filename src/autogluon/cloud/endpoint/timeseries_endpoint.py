@@ -41,21 +41,24 @@ class TimeSeriesEndpoint:
         Parameters
         ----------
         data
-            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
+            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to
+            a data file. See the `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
+            for the expected format.
         known_covariates
-            Future values of known covariates over the forecast horizon.
+            Future values of the known covariates over the forecast horizon.
         static_features
-            Metadata attributes of individual items.
+            Static (time-independent) features describing each individual time series.
         prediction_length
-            Number of time steps to forecast.
+            Forecast horizon: how many time steps into the future the model should predict.
         target
-            Name of the target column.
+            Name of the column that contains the target values to forecast.
         id_column
-            Name of the item ID column.
+            Name of the column with the unique identifier of each time series (item).
         timestamp_column
-            Name of the timestamp column.
+            Name of the column with the observation timestamps.
         quantile_levels
-            Quantiles to predict.
+            List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults
+            to ``[0.1, 0.2, ..., 0.9]``.
         accept
             Response format. Options: 'application/x-parquet', 'text/csv', 'application/json'.
 

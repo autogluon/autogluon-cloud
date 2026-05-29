@@ -60,21 +60,29 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         ----------
         train_data: Union[str, pathlib.Path, pd.DataFrame]
             Training time series in long format, as a DataFrame or local/S3 path to a data file.
+            See the `TimeSeriesPredictor.fit docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html>`_
+            for the expected format.
         tuning_data: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
             Optional tuning data in long format, as a DataFrame or local/S3 path to a data file.
         known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Future values of known covariates over the forecast horizon.
+            Future values of the known covariates over the forecast horizon. Must be provided if
+            ``known_covariates_names`` was specified in ``predictor_init_args``. See the
+            `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
+            for details.
         static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Metadata attributes of individual items.
+            Static (time-independent) features describing each individual time series.
         predictor_init_args: dict
-            Init args for the predictor.
+            Arguments forwarded to ``TimeSeriesPredictor()``. See the
+            `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
+            for available options (e.g. ``target``, ``prediction_length``, ``freq``, ``eval_metric``,
+            ``quantile_levels``, ``known_covariates_names``).
         predictor_fit_args: Optional[dict], default = None
             Additional fit args forwarded to ``TimeSeriesPredictor.fit()``. Must NOT contain ``train_data``,
             ``tuning_data``, or ``known_covariates`` — pass those as explicit arguments above.
         id_column: str, default = "item_id"
-            Name of the item ID column.
+            Name of the column with the unique identifier of each time series (item).
         timestamp_column: str, default = "timestamp"
-            Name of the timestamp column.
+            Name of the column with the observation timestamps.
         framework_version: str, default = `latest`
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
@@ -176,11 +184,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         data: Union(str, pandas.DataFrame)
-            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
+            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to
+            a data file.
         static_features: Optional[pd.DataFrame]
-            Metadata attributes of individual items.
+            Static (time-independent) features describing each individual time series.
         known_covariates : Optional[pd.DataFrame]
-            Future values of known covariates over the forecast horizon.
+            Future values of the known covariates over the forecast horizon. Must be provided if
+            ``known_covariates_names`` was specified at fit time.
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
@@ -233,11 +243,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         data: Union(str, pandas.DataFrame)
-            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
+            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to
+            a data file.
         static_features: Optional[Union[str, pd.DataFrame]]
-            Metadata attributes of individual items.
+            Static (time-independent) features describing each individual time series.
         known_covariates: Optional[Union[str, pd.DataFrame]]
-            Future values of known covariates over the forecast horizon.
+            Future values of the known covariates over the forecast horizon. Must be provided if
+            ``known_covariates_names`` was specified at fit time.
         predictor_path: str
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
@@ -341,21 +353,24 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Historical time series in long format to train on and forecast from, as a DataFrame or local/S3
-            path to a data file.
+            Historical time series to train on and forecast from, in long format, as a DataFrame or
+            local/S3 path to a data file.
         known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Future values of known covariates over the forecast horizon.
+            Future values of the known covariates over the forecast horizon. Must be provided if
+            ``known_covariates_names`` was specified in ``predictor_init_args``.
         static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Metadata attributes of individual items.
+            Static (time-independent) features describing each individual time series.
         predictor_init_args: dict
-            Init args for the predictor (must include ``prediction_length``).
+            Arguments forwarded to ``TimeSeriesPredictor()``. Must include ``prediction_length``. See the
+            `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
+            for available options.
         predictor_fit_args: Optional[dict], default = None
-            Additional fit args for the predictor. Must NOT contain ``train_data``, ``tuning_data``, or
-            ``known_covariates`` — pass those as explicit arguments above.
+            Additional fit args forwarded to ``TimeSeriesPredictor.fit()``. Must NOT contain ``train_data``,
+            ``tuning_data``, or ``known_covariates`` — pass those as explicit arguments above.
         id_column: str, default = "item_id"
-            Name of the item ID column.
+            Name of the column with the unique identifier of each time series (item).
         timestamp_column: str, default = "timestamp"
-            Name of the timestamp column.
+            Name of the column with the observation timestamps.
         framework_version, job_name, instance_type, instance_count, volume_size, custom_image_uri, wait,
         backend_kwargs:
             Same semantics as ``fit()``.
