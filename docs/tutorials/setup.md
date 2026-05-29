@@ -1,11 +1,29 @@
 # Set Up AutoGluon-Cloud on AWS
 
-AutoGluon-Cloud needs two AWS resources to operate:
+AutoGluon-Cloud trains and deploys models on AWS SageMaker on your behalf. To do that, every `CloudPredictor` or `FoundationModel` you create needs two AWS resources:
 
 - An **IAM role** that SageMaker assumes to run training and inference jobs.
-- An **S3 bucket** where training artifacts and trained models are stored.
+- An **S3 bucket** to stage training data and store trained models.
 
-The fastest way to set both up is the `autogluon-cloud bootstrap` command shipped with the package. If you already have a role and bucket, use `register` instead. This page walks through both paths and the day-2 commands (`status`, `teardown`).
+You have two options for supplying them:
+
+1. **Save them once** to `~/.autogluon/cloud.yaml`, and AutoGluon-Cloud will pick them up automatically on every call. This is the recommended path — set it up with [`bootstrap`](#bootstrap) or [`register`](#register) below.
+2. **Pass them explicitly** to each `CloudPredictor` / `FoundationModel`, e.g. `CloudPredictor(role="arn:aws:iam::...", cloud_output_path="s3://my-bucket/...")`. Useful if you need different roles or buckets per call, or if you don't want a config file on disk.
+
+The rest of this page covers option 1.
+
+## Commands
+
+AutoGluon-Cloud ships four commands for managing the saved configuration:
+
+| Command | What it does | When to use it |
+|---|---|---|
+| [`bootstrap`](#bootstrap) | Provisions a role and bucket via CloudFormation, then saves them. | First-time setup with no existing AWS resources. |
+| [`register`](#register) | Saves an existing role and bucket without provisioning anything. | Your platform team already gave you a role and bucket. |
+| [`status`](#status) | Verifies the saved resources still exist and are accessible. | Sanity-check before training, or after IAM/S3 changes. |
+| [`teardown`](#teardown) | Deletes resources created by `bootstrap` and the saved config. | Cleanup when you're done with AutoGluon-Cloud. |
+
+Each command is available both as a CLI subcommand (`autogluon-cloud <command>`) and as a Python function (`from autogluon.cloud import <command>`). The sections below show both forms.
 
 ## Install
 
@@ -16,9 +34,11 @@ pip install -U autogluon.cloud
 This installs the `autogluon-cloud` CLI alongside the Python API.
 
 
-## Quickstart: `bootstrap`
+## `bootstrap`
 
-If you have AWS credentials configured (via `aws configure`, `AWS_*` env vars, SSO, or an instance profile), run:
+Provisions an IAM role and S3 bucket via CloudFormation, then saves them to `~/.autogluon/cloud.yaml`. Use this if you don't already have AWS resources for AutoGluon-Cloud.
+
+`bootstrap` uses the [standard boto3 credential resolution order](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials) to find your AWS credentials, so anything that works for the AWS CLI or boto3 will work here (`aws configure`, `AWS_*` environment variables, an active SSO session, or an instance profile). Run:
 
 ::::{tab-set}
 :::{tab-item} CLI
@@ -37,16 +57,16 @@ bootstrap()
 :::
 ::::
 
-This deploys a CloudFormation stack (`ag-cloud-sagemaker` by default), creates the IAM role and S3 bucket, and saves both to `~/.autogluon/cloud.yaml`. Subsequent `CloudPredictor` calls pick the saved values up automatically.
+The CloudFormation stack is named `ag-cloud-sagemaker` by default. Subsequent `CloudPredictor` calls pick the saved values up automatically.
 
 ```{note}
 Review the CloudFormation template before deploying: {repo-file}`src/autogluon/cloud/templates/ag_cloud_sagemaker.yaml`.
 ```
 
 
-## Already have a role and bucket? Use `register`
+## `register`
 
-If your platform team has provisioned an IAM role and S3 bucket for you, skip CloudFormation entirely and just tell AutoGluon-Cloud about them:
+Tells AutoGluon-Cloud to use an IAM role and S3 bucket you already have. Use this when your platform team has provisioned them for you and you want to skip CloudFormation.
 
 ::::{tab-set}
 :::{tab-item} CLI
@@ -72,12 +92,12 @@ register(
 :::
 ::::
 
-`register` makes no AWS calls — it only persists the values to `~/.autogluon/cloud.yaml`. The IAM role must trust `sagemaker.amazonaws.com` and have permissions equivalent to AWS's `AmazonSageMakerFullAccess` managed policy plus read/write access to your bucket.
+`register` makes no AWS calls — it only persists the values to `~/.autogluon/cloud.yaml`. The IAM role must trust `sagemaker.amazonaws.com` and have permissions equivalent to AWS's [`AmazonSageMakerFullAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSageMakerFullAccess.html) managed policy plus read/write access to your bucket.
 
 
-## Check your setup: `status`
+## `status`
 
-Verify the saved resources still exist and are accessible:
+Verifies that the saved IAM role, S3 bucket, and (if applicable) CloudFormation stack still exist and are accessible.
 
 ::::{tab-set}
 :::{tab-item} CLI
@@ -96,12 +116,12 @@ reports = status()
 :::
 ::::
 
-Each backend's bucket, role, and (if applicable) CloudFormation stack are checked. `ok` means the resource exists; `ok (unverified ...)` means the caller lacks the IAM permission to verify (the resource is probably fine, but `status` couldn't confirm).
+`ok` means the resource exists; `ok (unverified ...)` means the caller lacks the IAM permission to verify (the resource is probably fine, but `status` couldn't confirm).
 
 
-## Tear down: `teardown`
+## `teardown`
 
-When you're done with AutoGluon-Cloud and want to remove everything it created:
+Deletes the CloudFormation stacks created by `bootstrap` and removes `~/.autogluon/cloud.yaml`. Backends added via `register` only have their config entry removed — your existing role and bucket are left untouched.
 
 ::::{tab-set}
 :::{tab-item} CLI
@@ -119,8 +139,6 @@ teardown()
 ```
 :::
 ::::
-
-This deletes the CloudFormation stack(s) created by `bootstrap` and removes `~/.autogluon/cloud.yaml`. Backends added via `register` (no stack) only have their config entry removed — your existing role and bucket are left untouched.
 
 ```{warning}
 CloudFormation refuses to delete non-empty S3 buckets. If your bucket holds training artifacts you want to discard, empty it first with `aws s3 rm s3://<bucket> --recursive`.
