@@ -991,6 +991,7 @@ class SagemakerBackend(Backend):
             f"Training job {job_name!r} has no `ag_args` input channel — cannot recover predictions_path."
         )
         bucket, key = s3_path_to_bucket_prefix(ag_args_uri)
+        assert key.endswith(".pkl"), f"Expected ag_args channel to point to a .pkl file, got {ag_args_uri!r}"
         with tempfile.TemporaryDirectory(prefix="ag_args_") as tmpdir:
             local_path = os.path.join(tmpdir, os.path.basename(key))
             self.sagemaker_session.boto_session.client("s3").download_file(bucket, key, local_path)
