@@ -15,7 +15,11 @@ cloud_predictor = TabularCloudPredictor(
 And you would call fit as normal
 
 ```python
-cloud_predictor.fit(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
+cloud_predictor.fit(
+    train_data=train_data,
+    predictor_init_args=predictor_init_args,
+    predictor_fit_args=predictor_fit_args,
+)
 ```
 
 ## How to Control Number of Instances in the Cluster

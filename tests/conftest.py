@@ -83,9 +83,11 @@ class CloudTestHelper:
     @staticmethod
     def test_basic_functionality(
         cloud_predictor,
+        train_data,
         predictor_init_args,
         predictor_fit_args,
         test_data,
+        tuning_data=None,
         fit_kwargs=None,
         deploy_kwargs=None,
         predict_real_time_kwargs=None,
@@ -94,6 +96,8 @@ class CloudTestHelper:
         if fit_kwargs is None:
             fit_kwargs = dict(instance_type="ml.m5.2xlarge")
         cloud_predictor.fit(
+            train_data=train_data,
+            tuning_data=tuning_data,
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             **fit_kwargs,
@@ -132,10 +136,12 @@ class CloudTestHelper:
     @staticmethod
     def test_functionality(
         cloud_predictor,
+        train_data,
         predictor_init_args,
         predictor_fit_args,
         cloud_predictor_no_train,
         test_data,
+        tuning_data=None,
         fit_kwargs=None,
         deploy_kwargs=None,
         predict_real_time_kwargs=None,
@@ -145,6 +151,8 @@ class CloudTestHelper:
         if fit_kwargs is None:
             fit_kwargs = dict(instance_type="ml.m5.2xlarge")
         cloud_predictor.fit(
+            train_data=train_data,
+            tuning_data=tuning_data,
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             **fit_kwargs,

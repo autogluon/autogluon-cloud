@@ -223,9 +223,11 @@ class SagemakerBackend(Backend):
         if data_channels.get("train_data") is None:
             raise ValueError("`data_channels['train_data']` is required.")
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
-        # Resolve any str paths into DataFrames so they can be CSV-uploaded as SageMaker channels.
+        # Resolve any path inputs (str or pathlib.Path) into DataFrames so they can be CSV-uploaded as SageMaker channels.
         data_channels = {
-            k: load_pd.load(v) if isinstance(v, str) else v for k, v in data_channels.items() if v is not None
+            k: load_pd.load(str(v)) if isinstance(v, (str, os.PathLike)) else v
+            for k, v in data_channels.items()
+            if v is not None
         }
         if custom_image_uri:
             framework_version, py_version = None, None

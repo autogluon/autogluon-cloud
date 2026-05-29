@@ -4,8 +4,10 @@ import io
 import logging
 import os
 import tarfile
+import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import boto3
@@ -175,9 +177,11 @@ class CloudPredictor(ABC):
 
     def fit(
         self,
+        train_data: Optional[Union[str, Path, pd.DataFrame]] = None,
         *,
+        tuning_data: Optional[Union[str, Path, pd.DataFrame]] = None,
         predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Dict[str, Any],
+        predictor_fit_args: Optional[Dict[str, Any]] = None,
         image_column: Optional[str] = None,
         leaderboard: bool = True,
         framework_version: str = "latest",
@@ -195,10 +199,15 @@ class CloudPredictor(ABC):
 
         Parameters
         ----------
+        train_data: Union[str, pathlib.Path, pd.DataFrame]
+            Training data, as a DataFrame or local/S3 path to a data file.
+        tuning_data: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+            Optional tuning data.
         predictor_init_args: dict
-            Init args for the predictor
-        predictor_fit_args: dict
-            Fit args for the predictor
+            Init args for the predictor.
+        predictor_fit_args: Optional[dict], default = None
+            Additional fit args forwarded to the underlying predictor's ``fit()``. Must NOT contain
+            ``train_data`` or ``tuning_data`` — pass those as explicit arguments above.
         image_column: str, default = None
             The column name in the training/tuning data that contains the image paths.
             The image paths MUST be absolute paths to you local system.
@@ -257,13 +266,25 @@ class CloudPredictor(ABC):
         )
         if backend_kwargs is None:
             backend_kwargs = {}
-        # Extract data inputs out of predictor_fit_args so they can be uploaded as separate SageMaker
-        # channels. predictor_fit_args itself becomes pure predictor.fit() kwargs.
-        predictor_fit_args = dict(predictor_fit_args)
-        data_channels = {
-            "train_data": predictor_fit_args.pop("train_data"),
-            "tuning_data": predictor_fit_args.pop("tuning_data", None),
-        }
+        predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
+        data_channels = {"train_data": train_data, "tuning_data": tuning_data}
+        for key in ("train_data", "tuning_data"):
+            if key in predictor_fit_args:
+                warnings.warn(
+                    f"Passing `{key}` via `predictor_fit_args` is deprecated and will be removed in autogluon.cloud 0.6.0. "
+                    f"Pass `{key}` as an explicit argument to `fit()` instead.",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+                if data_channels[key] is None:
+                    data_channels[key] = predictor_fit_args.pop(key)
+                else:
+                    raise TypeError(
+                        f"`{key}` was passed both as an explicit argument and via `predictor_fit_args`. "
+                        f"Pass it only as an explicit argument."
+                    )
+        if data_channels["train_data"] is None:
+            raise TypeError("fit() missing required argument: 'train_data'")
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,

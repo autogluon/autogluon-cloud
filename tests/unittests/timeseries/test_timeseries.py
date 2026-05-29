@@ -59,7 +59,6 @@ def test_timeseries(test_helper, framework_version, retail_sales_dataset):
             known_covariates_names=ds["known_covariates_names"],
         )
         predictor_fit_args = dict(
-            train_data=ds["train_data"],
             presets="medium_quality",
             time_limit=60,
         )
@@ -78,6 +77,7 @@ def test_timeseries(test_helper, framework_version, retail_sales_dataset):
 
         test_helper.test_functionality(
             cloud_predictor,
+            ds["train_data"],
             predictor_init_args,
             predictor_fit_args,
             cloud_predictor_no_train,

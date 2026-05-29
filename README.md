@@ -29,10 +29,12 @@ import pandas as pd
 train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv")
 test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv")
 test_data.drop(columns=['class'], inplace=True)
-predictor_init_args = {"label": "class"}  # init args you would pass to AG TabularPredictor
-predictor_fit_args = {"train_data": train_data, "time_limit": 120}  # fit args you would pass to AG TabularPredictor
 cloud_predictor = TabularCloudPredictor(cloud_output_path='YOUR_S3_BUCKET_PATH')
-cloud_predictor.fit(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
+cloud_predictor.fit(
+    train_data=train_data,  # path or DataFrame
+    predictor_init_args={"label": "class"},  # passed to TabularPredictor()
+    predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
+)
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(test_data)
 cloud_predictor.cleanup_deployment()

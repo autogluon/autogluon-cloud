@@ -21,7 +21,7 @@ def test_multimodal_tabular_text_image(test_helper, framework_version):
         predictor_init_args = dict(
             label="AdoptionSpeed",
         )
-        predictor_fit_args = dict(train_data=train_data, time_limit=time_limit)
+        predictor_fit_args = dict(time_limit=time_limit)
         cloud_predictor = MultiModalCloudPredictor(
             cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-tabular-text-image/{framework_version}/{timestamp}",
             local_output_path="test_multimodal_tabular_text_image_cloud_predictor",
@@ -30,6 +30,7 @@ def test_multimodal_tabular_text_image(test_helper, framework_version):
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
         test_helper.test_basic_functionality(
             cloud_predictor,
+            train_data,
             predictor_init_args,
             predictor_fit_args,
             test_data,

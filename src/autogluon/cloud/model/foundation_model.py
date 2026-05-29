@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from abc import abstractmethod
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import pandas as pd
@@ -123,7 +124,7 @@ class FoundationModel:
         ...
 
     @abstractmethod
-    def predict(self, data: Union[str, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
+    def predict(self, data: Union[str, Path, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
         """Subclasses override with task-specific signature."""
         ...
 
@@ -164,7 +165,7 @@ class FoundationModel:
 
     def fit(
         self,
-        train_data: Union[str, pd.DataFrame],
+        train_data: Union[str, Path, pd.DataFrame],
         output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
@@ -177,7 +178,7 @@ class FoundationModel:
         Parameters
         ----------
         train_data
-            Training data as DataFrame or S3 path.
+            Training data, as a DataFrame or local/S3 path to a data file.
         output_path
             S3 path to store fine-tuned model.
             If None, will auto-generate under cloud_output_path.
@@ -303,12 +304,12 @@ class TimeSeriesFoundationModel(FoundationModel):
 
     def predict(
         self,
-        data: Union[str, pd.DataFrame],
+        data: Union[str, Path, pd.DataFrame],
         target: str = "target",
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
+        static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
         prediction_length: int = 1,
         quantile_levels: Optional[List[float]] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
@@ -324,7 +325,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         Parameters
         ----------
         data
-            Historical time series in long format (DataFrame or S3 path).
+            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
         target
             Name of the target column to forecast.
         id_column
@@ -332,11 +333,10 @@ class TimeSeriesFoundationModel(FoundationModel):
         timestamp_column
             Name of the timestamp column.
         known_covariates
-            Future values of known covariates (DataFrame or S3 path).
-            Covariate column names are inferred from the DataFrame columns
-            (excluding id_column and timestamp_column).
+            Future values of known covariates over the forecast horizon. Covariate column names are
+            inferred from the columns (excluding ``id_column`` and ``timestamp_column``).
         static_features
-            Metadata attributes of individual items (DataFrame or S3 path).
+            Metadata attributes of individual items.
         prediction_length
             Number of time steps to forecast.
         quantile_levels
@@ -415,8 +415,8 @@ class TabularFoundationModel(FoundationModel):
 
     def predict(
         self,
-        train_data: Union[str, pd.DataFrame],
-        test_data: Union[str, pd.DataFrame],
+        train_data: Union[str, Path, pd.DataFrame],
+        test_data: Union[str, Path, pd.DataFrame],
         label: str = "target",
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
@@ -461,8 +461,8 @@ class TabularFoundationModel(FoundationModel):
 
     def predict_proba(
         self,
-        train_data: Union[str, pd.DataFrame],
-        test_data: Union[str, pd.DataFrame],
+        train_data: Union[str, Path, pd.DataFrame],
+        test_data: Union[str, Path, pd.DataFrame],
         label: str = "target",
         hyperparameters: Optional[Dict[str, Any]] = None,
         output_path: Optional[str] = None,

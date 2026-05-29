@@ -182,16 +182,14 @@ Currently, `autogluon.cloud` supports training/deploying `tabular`, `multimodal`
 
 ```python
 from autogluon.cloud import TabularCloudPredictor
-train_data = "train.csv"  # can be a DataFrame as well
-predictor_init_args = {"label": "label"}  # init args you would pass to AG TabularPredictor
-predictor_fit_args = {"train_data": train_data, "time_limit": 120}  # fit args you would pass to AG TabularPredictor
 cloud_predictor = TabularCloudPredictor(
     cloud_output_path="YOUR_S3_BUCKET_PATH"
 ).fit(
-    predictor_init_args=predictor_init_args,
-    predictor_fit_args=predictor_fit_args,
-    instance_type="ml.m5.2xlarge",  # Check out supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True,  # Set this to False to make it an unblocking call and immediately return
+    train_data="train.csv",  # path or DataFrame
+    predictor_init_args={"label": "label"},  # passed to TabularPredictor()
+    predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
+    instance_type="ml.m5.2xlarge",  # https://aws.amazon.com/sagemaker/pricing/
+    wait=True,  # Set this to False for an unblocking call
 )
 ```
 

@@ -28,7 +28,6 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
         text_model = "AG_TEXT_NN"
         image_model = "AG_IMAGE_NN"
         predictor_fit_args = dict(
-            train_data=train_data,
             time_limit=time_limit,
             hyperparameters={
                 "XGB": {},
@@ -45,6 +44,7 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
         test_helper.test_basic_functionality(
             cloud_predictor,
+            train_data,
             predictor_init_args,
             predictor_fit_args,
             test_data,
