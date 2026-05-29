@@ -72,6 +72,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         predictor_fit_args: Optional[dict], default = None
             Additional fit args forwarded to ``TimeSeriesPredictor.fit()``. Must NOT contain ``train_data``,
             ``tuning_data``, or ``known_covariates`` — pass those as explicit arguments above.
+        id_column: str, default = "item_id"
+            Name of the item ID column.
+        timestamp_column: str, default = "timestamp"
+            Name of the timestamp column.
         framework_version: str, default = `latest`
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
