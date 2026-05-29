@@ -132,6 +132,12 @@ def register(
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
+    bucket = bucket.removeprefix("s3://").rstrip("/")
+    if "/" in bucket:
+        raise ValueError(
+            f"`bucket` must be a bare bucket name without prefixes (got {bucket!r}). "
+            "Pass prefixes via `cloud_output_path=` on the predictor/model instead."
+        )
     config = load_config() or CloudConfig()
     config.backends[backend] = BackendConfig(
         region=region,

@@ -92,6 +92,25 @@ def test_register_rejects_unknown_backend():
         )
 
 
+def test_register_rejects_bucket_with_prefix():
+    with pytest.raises(ValueError, match="bare bucket name"):
+        register(
+            role="arn:aws:iam::111122223333:role/x",
+            bucket="my-bucket/some-prefix",
+            region="us-east-1",
+        )
+
+
+@pytest.mark.parametrize("bucket", ["s3://my-bucket", "s3://my-bucket/", "my-bucket/"])
+def test_register_normalizes_bucket(bucket):
+    register(
+        role="arn:aws:iam::111122223333:role/x",
+        bucket=bucket,
+        region="us-east-1",
+    )
+    assert load_config().backends["sagemaker"].bucket == "my-bucket"
+
+
 def test_register_records_stack_name_when_given():
     register(
         role="arn:aws:iam::111122223333:role/x",
