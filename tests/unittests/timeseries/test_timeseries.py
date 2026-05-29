@@ -1,6 +1,12 @@
+import base64
+import io
+import itertools
+import json
 import os
 import tempfile
 
+import boto3
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -223,5 +229,170 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
                 prediction_length=ds["prediction_length"],
             )
             _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+        finally:
+            endpoint.delete_endpoint()
+
+
+# ---------------------------------------------------------------------------
+# Endpoint payload-format coverage
+#
+# Two dedicated tests that deploy a "plain" predictor (no static_features, no
+# known_covariates) and probe every supported (Content-Type, Accept) pair
+# against the live endpoint.
+# ---------------------------------------------------------------------------
+
+_PLAIN_PREDICTION_LENGTH = 4
+_PLAIN_NUM_ITEMS = 5
+_PLAIN_NUM_TIMESTEPS = 30
+
+
+@pytest.fixture(scope="module")
+def plain_dataset():
+    """Tiny synthetic univariate dataset: only item_id / timestamp / target."""
+    rng = np.random.default_rng(seed=42)
+    rows = []
+    for item in range(_PLAIN_NUM_ITEMS):
+        timestamps = pd.date_range("2024-01-01", periods=_PLAIN_NUM_TIMESTEPS, freq="D")
+        target = np.sin(np.arange(_PLAIN_NUM_TIMESTEPS) / 5.0) + rng.normal(scale=0.1, size=_PLAIN_NUM_TIMESTEPS)
+        rows.append(pd.DataFrame({"item_id": str(item), "timestamp": timestamps, "target": target}))
+    return pd.concat(rows, ignore_index=True)
+
+
+def _build_request_bodies(data: pd.DataFrame, prediction_length: int) -> dict:
+    """Encode the same dataset in every supported request format, keyed by Content-Type."""
+    return {
+        "application/x-autogluon": json.dumps(
+            {
+                "version": 1,
+                "data": base64.b64encode(data.to_parquet()).decode(),
+                "inference_kwargs": {"prediction_length": prediction_length},
+            }
+        ).encode(),
+        "application/json": json.dumps(
+            {
+                "inputs": [
+                    {
+                        "item_id": str(item_id),
+                        "start": group["timestamp"].iloc[0].isoformat(),
+                        "target": group["target"].astype(float).tolist(),
+                    }
+                    for item_id, group in data.groupby("item_id", sort=False)
+                ],
+                "parameters": {"prediction_length": prediction_length, "freq": "D"},
+            }
+        ).encode(),
+        "application/x-parquet": data.to_parquet(),
+        "text/csv": data.to_csv(index=False).encode(),
+        "application/jsonl": data.to_json(orient="records", lines=True).encode(),
+    }
+
+
+def _count_predictions(body: bytes, content_type: str) -> tuple[set, int]:
+    """Return ``(item_ids, total_rows)`` from a response body in any supported format."""
+    if content_type == "application/x-parquet":
+        df = pd.read_parquet(io.BytesIO(body))
+        if isinstance(df.index, pd.MultiIndex):
+            df = df.reset_index()
+        return set(df["item_id"].astype(str)), len(df)
+    if content_type == "text/csv":
+        df = pd.read_csv(io.BytesIO(body))
+        return set(df["item_id"].astype(str)), len(df)
+    if content_type == "application/json":
+        forecasts = json.loads(body)["predictions"]
+        return {str(f["item_id"]) for f in forecasts}, sum(len(f["mean"]) for f in forecasts)
+    raise AssertionError(f"unexpected response content type: {content_type}")
+
+
+def _exercise_endpoint(
+    endpoint_name: str, bodies: dict, format_pairs, *, expected_item_ids, prediction_length
+) -> None:
+    """Invoke ``endpoint_name`` with each (content_type, accept) pair and verify the predictions shape."""
+    sm = boto3.client("sagemaker-runtime")
+    expected_ids = set(map(str, expected_item_ids))
+    expected_rows = len(expected_item_ids) * prediction_length
+    for content_type, accept in format_pairs:
+        response = sm.invoke_endpoint(
+            EndpointName=endpoint_name, ContentType=content_type, Accept=accept, Body=bodies[content_type]
+        )
+        item_ids, rows = _count_predictions(response["Body"].read(), response["ContentType"])
+        assert item_ids == expected_ids, f"item_id mismatch (content={content_type}, accept={accept})"
+        assert rows == expected_rows, f"row count {rows} != {expected_rows} (content={content_type}, accept={accept})"
+
+
+def test_timeseries_endpoint_payload_formats(test_helper, framework_version, plain_dataset):
+    """Probe a deployed CloudPredictor endpoint with every supported (Content-Type, Accept) combination."""
+    timestamp = test_helper.get_utc_timestamp_now()
+    expected_item_ids = sorted(plain_dataset["item_id"].unique())
+    bodies = _build_request_bodies(plain_dataset, prediction_length=_PLAIN_PREDICTION_LENGTH)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        cloud_predictor = TimeSeriesCloudPredictor(
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-ts-formats/{framework_version}/{timestamp}",
+            local_output_path="test_ts_formats_cloud_predictor",
+        )
+        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
+
+        cloud_predictor.fit(
+            predictor_init_args=dict(target="target", prediction_length=_PLAIN_PREDICTION_LENGTH),
+            predictor_fit_args=dict(train_data=plain_dataset, presets="medium_quality", time_limit=60),
+            framework_version=framework_version,
+            custom_image_uri=training_custom_image_uri,
+        )
+        cloud_predictor.deploy(framework_version=framework_version, custom_image_uri=inference_custom_image_uri)
+        try:
+            format_pairs = list(
+                itertools.product(
+                    [
+                        "application/x-autogluon",
+                        "application/json",
+                        "application/x-parquet",
+                        "text/csv",
+                        "application/jsonl",
+                    ],
+                    ["application/x-parquet", "application/json", "text/csv"],
+                )
+            )
+            _exercise_endpoint(
+                cloud_predictor.endpoint_name,
+                bodies,
+                format_pairs,
+                expected_item_ids=expected_item_ids,
+                prediction_length=_PLAIN_PREDICTION_LENGTH,
+            )
+        finally:
+            cloud_predictor.cleanup_deployment()
+
+
+def test_foundation_model_endpoint_payload_formats(test_helper, framework_version, plain_dataset):
+    """Probe a deployed FoundationModel endpoint with every supported (Content-Type, Accept) combination."""
+    timestamp = test_helper.get_utc_timestamp_now()
+    expected_item_ids = sorted(plain_dataset["item_id"].unique())
+    bodies = _build_request_bodies(plain_dataset, prediction_length=_PLAIN_PREDICTION_LENGTH)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
+
+        model = FoundationModel(
+            "chronos-bolt-tiny",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-formats/{framework_version}/{timestamp}",
+        )
+        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri, instance_type="ml.m5.2xlarge")
+        try:
+            format_pairs = list(
+                itertools.product(
+                    ["application/x-autogluon", "application/json"],
+                    ["application/x-parquet", "application/json", "text/csv"],
+                )
+            )
+            _exercise_endpoint(
+                endpoint.endpoint_name,
+                bodies,
+                format_pairs,
+                expected_item_ids=expected_item_ids,
+                prediction_length=_PLAIN_PREDICTION_LENGTH,
+            )
         finally:
             endpoint.delete_endpoint()

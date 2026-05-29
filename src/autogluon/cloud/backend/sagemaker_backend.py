@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import pickle
+import shutil
 import tarfile
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -507,12 +508,13 @@ class SagemakerBackend(Backend):
         )
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
-        """Create a minimal model.tar.gz containing only the serve script under code/."""
+        """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/."""
 
         tarball_dir = tempfile.mkdtemp(prefix="ag_serve_")
         tarball_path = os.path.join(tarball_dir, "model.tar.gz")
         with tarfile.open(tarball_path, "w:gz") as tar:
             tar.add(serve_script_path, arcname=f"code/{os.path.basename(serve_script_path)}")
+            tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
         s3_key = f"endpoints/{endpoint_name}/model/model.tar.gz"
         s3_path = self._upload_predictor(tarball_path, s3_key)
         return s3_path
@@ -1029,8 +1031,8 @@ class SagemakerBackend(Backend):
         inputs["ag_args"] = self.sagemaker_session.upload_data(
             path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix
         )
-        inputs["serving"] = self.sagemaker_session.upload_data(
-            path=serving_script, bucket=cloud_bucket, key_prefix=util_key_prefix
+        inputs["serving"] = self._upload_serving_files(
+            entry_point=serving_script, bucket=cloud_bucket, key_prefix=util_key_prefix
         )
 
         train_images_input = self._upload_fit_image_artifact(
@@ -1045,6 +1047,17 @@ class SagemakerBackend(Backend):
             inputs["tune_images"] = tune_images_input
 
         return inputs
+
+    def _upload_serving_files(self, entry_point: str, bucket: str, key_prefix: str) -> str:
+        staging_dir = tempfile.mkdtemp(prefix="ag_serving_")
+        try:
+            shutil.copy(entry_point, os.path.join(staging_dir, os.path.basename(entry_point)))
+            shutil.copytree(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, os.path.join(staging_dir, "serving_utils"))
+            return self.sagemaker_session.upload_data(
+                path=staging_dir, bucket=bucket, key_prefix=key_prefix + "/serving"
+            )
+        finally:
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
     def _upload_fit_image_artifact(self, image_dir_path, bucket, key_prefix):
         upload_image_path = None
