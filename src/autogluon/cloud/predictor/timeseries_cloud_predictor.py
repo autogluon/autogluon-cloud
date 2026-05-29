@@ -59,14 +59,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Training time-series data, as a DataFrame or local/S3 path to a data file.
+            Training time series in long format, as a DataFrame or local/S3 path to a data file.
         tuning_data: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Optional tuning data.
+            Optional tuning data in long format, as a DataFrame or local/S3 path to a data file.
         known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Future values of the known covariates over the forecast horizon.
+            Future values of known covariates over the forecast horizon.
         static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Optional metadata attributes for each item. For details, see the ``TimeSeriesDataFrame``
-            documentation: https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
+            Metadata attributes of individual items.
         predictor_init_args: dict
             Init args for the predictor.
         predictor_fit_args: Optional[dict], default = None
@@ -177,17 +176,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         data: Union(str, pandas.DataFrame)
-            The data to forecast from.
-            Can be a pandas.DataFrame or a local path to a csv file.
+            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
         static_features: Optional[pd.DataFrame]
-             An optional data frame describing the metadata attributes of individual items in the item index.
-             For more detail, please refer to `TimeSeriesDataFrame` documentation:
-             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
+            Metadata attributes of individual items.
         known_covariates : Optional[pd.DataFrame]
-            If ``known_covariates_names`` were specified when creating the predictor, it is necessary to provide the
-            values of the known covariates for each time series during the forecast horizon.
-            For more details, please refer to the `TimeSeriesPredictor.predictor` documentation:
-            https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
+            Future values of known covariates over the forecast horizon.
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
@@ -208,6 +201,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         )
 
     def predict_proba_real_time(self, **kwargs) -> pd.DataFrame:
+        """
+        :meta private:
+        """
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
     def predict(
@@ -237,14 +233,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         data: Union(str, pandas.DataFrame)
-            The data to forecast from.
-            Can be a pandas.DataFrame or a local path to a csv file.
+            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
         static_features: Optional[Union[str, pd.DataFrame]]
-             An optional data frame describing the metadata attributes of individual items in the item index.
-             For more detail, please refer to `TimeSeriesDataFrame` documentation:
-             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
+            Metadata attributes of individual items.
         known_covariates: Optional[Union[str, pd.DataFrame]]
-            Future values of the known covariates over the forecast horizon.
+            Future values of known covariates over the forecast horizon.
         predictor_path: str
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
@@ -310,6 +303,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         self,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
+        """
+        :meta private:
+        """
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
     def fit_predict(
@@ -345,14 +341,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Parameters
         ----------
         train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Historical time-series data to train on and forecast from, as a DataFrame or local/S3 path to
-            a data file.
+            Historical time series in long format to train on and forecast from, as a DataFrame or local/S3
+            path to a data file.
         known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Values of the known covariates for each time series during the forecast horizon. Forwarded to
-            ``TimeSeriesPredictor.predict`` in the container. For details, see:
-            https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
+            Future values of known covariates over the forecast horizon.
         static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Optional metadata attributes per item.
+            Metadata attributes of individual items.
         predictor_init_args: dict
             Init args for the predictor (must include ``prediction_length``).
         predictor_fit_args: Optional[dict], default = None

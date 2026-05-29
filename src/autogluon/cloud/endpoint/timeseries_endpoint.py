@@ -41,11 +41,11 @@ class TimeSeriesEndpoint:
         Parameters
         ----------
         data
-            Historical time series in long format.
+            Historical time series in long format, as a DataFrame or local/S3 path to a data file.
         known_covariates
-            Future values of known covariates.
+            Future values of known covariates over the forecast horizon.
         static_features
-            Static metadata for individual items.
+            Metadata attributes of individual items.
         prediction_length
             Number of time steps to forecast.
         target

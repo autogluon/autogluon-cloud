@@ -20,7 +20,8 @@ API
 
 .. autosummary::
     :toctree: api
-    :template: foundation_model_class.rst
+    :template: custom_class.rst
+    :methods:
 
     TimeSeriesFoundationModel
 
@@ -29,5 +30,11 @@ API
     :template: custom_class.rst
     :methods:
 
-    MultiModalCloudPredictor
+    TimeSeriesEndpoint
 
+.. autosummary::
+    :toctree: api
+    :template: custom_class.rst
+    :methods:
+
+    MultiModalCloudPredictor

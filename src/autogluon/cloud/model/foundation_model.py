@@ -195,6 +195,8 @@ class FoundationModel:
         -------
         FoundationModel
             New instance with hyperparameters pointing to the fine-tuned artifact.
+
+        :meta private:
         """
         if not self._config.get("fine_tunable", False):
             raise ValueError(f"Model '{self.model_id}' does not support fine-tuning.")
@@ -216,6 +218,8 @@ class FoundationModel:
         -------
         str
             S3 path to the cached artifact.
+
+        :meta private:
         """
         raise NotImplementedError
 
@@ -327,14 +331,13 @@ class TimeSeriesFoundationModel(FoundationModel):
         data
             Historical time series in long format, as a DataFrame or local/S3 path to a data file.
         target
-            Name of the target column to forecast.
+            Name of the target column.
         id_column
             Name of the item ID column.
         timestamp_column
             Name of the timestamp column.
         known_covariates
-            Future values of known covariates over the forecast horizon. Covariate column names are
-            inferred from the columns (excluding ``id_column`` and ``timestamp_column``).
+            Future values of known covariates over the forecast horizon.
         static_features
             Metadata attributes of individual items.
         prediction_length

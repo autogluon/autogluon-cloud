@@ -171,6 +171,7 @@ hidden:
 
 TimeSeriesCloudPredictor <api/autogluon.cloud.TimeSeriesCloudPredictor>
 TimeSeriesFoundationModel <api/autogluon.cloud.TimeSeriesFoundationModel>
+TimeSeriesEndpoint <api/autogluon.cloud.TimeSeriesEndpoint>
 ```
 
 ```{toctree}
