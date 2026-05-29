@@ -25,7 +25,6 @@ def test_distributed_training(test_helper, framework_version):
             train_data = train_data.sample(n=subsample_size, random_state=0)
         predictor_init_args = {"label": "class"}
         predictor_fit_args = {
-            "train_data": train_data,
             "hyperparameters": {
                 "GBM": {"num_leaves": space.Int(lower=26, upper=66, default=36)},
             },
@@ -41,6 +40,7 @@ def test_distributed_training(test_helper, framework_version):
         image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
         cp.fit(
+            train_data=train_data,
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             custom_image_uri=image_uri,

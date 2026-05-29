@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import warnings
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
@@ -31,12 +33,15 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def fit(
         self,
+        train_data: Optional[Union[str, Path, pd.DataFrame]] = None,
         *,
+        tuning_data: Optional[Union[str, Path, pd.DataFrame]] = None,
+        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
+        static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
         predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Dict[str, Any],
+        predictor_fit_args: Optional[Dict[str, Any]] = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -53,18 +58,20 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
+        train_data: Union[str, pathlib.Path, pd.DataFrame]
+            Training time-series data, as a DataFrame or local/S3 path to a data file.
+        tuning_data: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+            Optional tuning data.
+        known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+            Future values of the known covariates over the forecast horizon.
+        static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+            Optional metadata attributes for each item. For details, see the ``TimeSeriesDataFrame``
+            documentation: https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
         predictor_init_args: dict
-            Init args for the predictor
-        predictor_fit_args: dict
-            Fit args for the predictor
-        id_column: str, default = "item_id"
-            Name of the item ID column
-        timestamp_column: str, default = "timestamp"
-            Name of the timestamp column
-        static_features: Optional[pd.DataFrame]
-             An optional data frame describing the metadata attributes of individual items in the item index.
-             For more detail, please refer to `TimeSeriesDataFrame` documentation:
-             https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
+            Init args for the predictor.
+        predictor_fit_args: Optional[dict], default = None
+            Additional fit args forwarded to ``TimeSeriesPredictor.fit()``. Must NOT contain ``train_data``,
+            ``tuning_data``, or ``known_covariates`` — pass those as explicit arguments above.
         framework_version: str, default = `latest`
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
@@ -104,13 +111,30 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if backend_kwargs is None:
             backend_kwargs = {}
 
-        predictor_fit_args = dict(predictor_fit_args)
+        predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
         data_channels = {
-            "train_data": predictor_fit_args.pop("train_data"),
-            "tuning_data": predictor_fit_args.pop("tuning_data", None),
-            "known_covariates": predictor_fit_args.pop("known_covariates", None),
+            "train_data": train_data,
+            "tuning_data": tuning_data,
+            "known_covariates": known_covariates,
             "static_features": static_features,
         }
+        for key in ("train_data", "tuning_data", "known_covariates"):
+            if key in predictor_fit_args:
+                warnings.warn(
+                    f"Passing `{key}` via `predictor_fit_args` is deprecated and will be removed in autogluon.cloud 0.6.0. "
+                    f"Pass `{key}` as an explicit argument to `fit()` instead.",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+                if data_channels[key] is None:
+                    data_channels[key] = predictor_fit_args.pop(key)
+                else:
+                    raise TypeError(
+                        f"`{key}` was passed both as an explicit argument and via `predictor_fit_args`. "
+                        f"Pass it only as an explicit argument."
+                    )
+        if data_channels["train_data"] is None:
+            raise TypeError("fit() missing required argument: 'train_data'")
 
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
@@ -286,14 +310,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def fit_predict(
         self,
-        train_data: Union[str, pd.DataFrame],
+        train_data: Union[str, Path, pd.DataFrame],
         *,
+        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
+        static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Optional[Dict[str, Any]] = None,
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -316,26 +340,24 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
-        train_data: Union[str, pd.DataFrame]
-            The historical time-series data to train on and forecast from. Either a pandas DataFrame or a local / S3
-            path to a data file (CSV or Parquet).
+        train_data: Union[str, pathlib.Path, pd.DataFrame]
+            Historical time-series data to train on and forecast from, as a DataFrame or local/S3 path to
+            a data file.
+        known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+            Values of the known covariates for each time series during the forecast horizon. Forwarded to
+            ``TimeSeriesPredictor.predict`` in the container. For details, see:
+            https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
+        static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+            Optional metadata attributes per item.
         predictor_init_args: dict
             Init args for the predictor (must include ``prediction_length``).
         predictor_fit_args: Optional[dict], default = None
-            Additional fit args for the predictor. Must not contain a ``train_data`` key — pass ``train_data`` as the
-            explicit argument above.
-        known_covariates: Optional[Union[str, pd.DataFrame]], default = None
-            Values of the known covariates for each time series during the forecast horizon. Either a pandas
-            DataFrame or a local / S3 path to a data file (CSV or Parquet). Forwarded to
-            ``TimeSeriesPredictor.predict`` in the container.
-            For details, see:
-            https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.predict.html
+            Additional fit args for the predictor. Must NOT contain ``train_data``, ``tuning_data``, or
+            ``known_covariates`` — pass those as explicit arguments above.
         id_column: str, default = "item_id"
             Name of the item ID column.
         timestamp_column: str, default = "timestamp"
             Name of the timestamp column.
-        static_features: Optional[pd.DataFrame]
-            Optional metadata attributes per item.
         framework_version, job_name, instance_type, instance_count, volume_size, custom_image_uri, wait,
         backend_kwargs:
             Same semantics as ``fit()``.
@@ -357,23 +379,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
                     f"`predictions_path` must be a full S3 URL ending in '.csv' or '.parquet' "
                     f"(e.g. 's3://bucket/key/predictions.parquet'), got {predictions_path!r}."
                 )
-        if predictor_fit_args is None:
-            predictor_fit_args = {}
-        else:
-            predictor_fit_args = dict(predictor_fit_args)
-        if "train_data" in predictor_fit_args:
-            raise ValueError(
-                "`train_data` must be passed as an explicit argument to `fit_predict`, not via `predictor_fit_args`."
-            )
-        if "known_covariates" in predictor_fit_args:
-            raise ValueError(
-                "`known_covariates` must be passed as an explicit argument to `fit_predict`, "
-                "not via `predictor_fit_args`."
-            )
-        predictor_fit_args["train_data"] = train_data
-        if known_covariates is not None:
-            predictor_fit_args["known_covariates"] = known_covariates
-
         if backend_kwargs is None:
             backend_kwargs = {}
         else:
@@ -384,11 +389,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         backend_kwargs["extra_ag_args"] = extra_ag_args
 
         self.fit(
+            train_data=train_data,
+            known_covariates=known_covariates,
+            static_features=static_features,
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             id_column=id_column,
             timestamp_column=timestamp_column,
-            static_features=static_features,
             framework_version=framework_version,
             job_name=job_name,
             instance_type=instance_type,

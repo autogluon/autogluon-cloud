@@ -15,7 +15,7 @@ def test_multimodal_text_only(test_helper, framework_version):
         time_limit = 60
 
         predictor_init_args = dict(label="label", eval_metric="acc")
-        predictor_fit_args = dict(train_data=train_data, tuning_data=tune_data, time_limit=time_limit)
+        predictor_fit_args = dict(time_limit=time_limit)
         cloud_predictor = MultiModalCloudPredictor(
             cloud_output_path=f"s3://autogluon-cloud-ci/test-multimodal-text/{framework_version}/{timestamp}",
             local_output_path="test_multimodal_text_cloud_predictor",
@@ -24,9 +24,11 @@ def test_multimodal_text_only(test_helper, framework_version):
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
         test_helper.test_basic_functionality(
             cloud_predictor,
+            train_data,
             predictor_init_args,
             predictor_fit_args,
             test_data,
+            tuning_data=tune_data,
             fit_kwargs=dict(
                 instance_type="ml.g4dn.2xlarge",
                 volume_size=100,

@@ -56,12 +56,13 @@ predictor_init_args = {
     "label": "class"
 }  # args used when creating TabularPredictor()
 predictor_fit_args = {
-    "train_data": train_data,
     "time_limit": 120
 }  # args passed to TabularPredictor.fit()
 cloud_predictor = TabularCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
-    predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
+    train_data=train_data,
+    predictor_init_args=predictor_init_args,
+    predictor_fit_args=predictor_fit_args,
 )
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(test_data)
@@ -86,12 +87,12 @@ test_data.drop(columns=["label"], inplace=True)
 predictor_init_args = {
     "label": "label"
 }  # args used when creating MultiModalPredictor()
-predictor_fit_args = {
-    "train_data": train_data
-}  # args passed to MultiModalPredictor.fit()
+predictor_fit_args = {}  # args passed to MultiModalPredictor.fit()
 cloud_predictor = MultiModalCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
-    predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
+    train_data=train_data,
+    predictor_init_args=predictor_init_args,
+    predictor_fit_args=predictor_fit_args,
 )
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(test_data)
@@ -117,11 +118,11 @@ predictor_init_args = {
     "prediction_length" : 24,
 }  # args used when creating TimeSeriesPredictor()
 predictor_fit_args = {
-    "train_data": data,
     "time_limit": 120,
 }  # args passed to TimeSeriesPredictor.fit()
 cloud_predictor = TimeSeriesCloudPredictor(cloud_output_path="YOUR_S3_BUCKET_PATH")
 cloud_predictor.fit(
+    train_data=data,
     predictor_init_args=predictor_init_args,
     predictor_fit_args=predictor_fit_args,
     id_column="item_id",

@@ -21,14 +21,14 @@ def test_full_functionality(test_helper, framework_version):
         time_limit = 60
 
         predictor_init_args = dict(label="class", eval_metric="roc_auc")
-        predictor_fit_args = dict(
-            train_data=train_data,
-            tuning_data=tune_data,
-            time_limit=time_limit,
-        )
+        predictor_fit_args = dict(time_limit=time_limit)
         dummy_cloud_predictor = TabularCloudPredictor()
         with pytest.raises(ValueError):
-            dummy_cloud_predictor.fit(predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args)
+            dummy_cloud_predictor.fit(
+                train_data=train_data,
+                predictor_init_args=predictor_init_args,
+                predictor_fit_args=predictor_fit_args,
+            )
         cloud_predictor = TabularCloudPredictor(
             cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular/{framework_version}/{timestamp}",
             local_output_path="test_tabular_cloud_predictor",
@@ -41,10 +41,12 @@ def test_full_functionality(test_helper, framework_version):
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
         test_helper.test_functionality(
             cloud_predictor,
+            train_data,
             predictor_init_args,
             predictor_fit_args,
             cloud_predictor_no_train,
             test_data,
+            tuning_data=tune_data,
             fit_kwargs=dict(framework_version=framework_version, custom_image_uri=training_custom_image_uri),
             deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
             predict_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
