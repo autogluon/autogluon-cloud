@@ -2,7 +2,7 @@
 
 import base64
 import json
-from io import BytesIO, StringIO
+from io import BytesIO
 from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
@@ -29,9 +29,9 @@ def parse_payload(
     elif content_type == "application/x-parquet":
         data = pd.read_parquet(BytesIO(request_body))
     elif content_type == "text/csv":
-        data = pd.read_csv(StringIO(request_body))
+        data = pd.read_csv(BytesIO(request_body))
     elif content_type == "application/jsonl":
-        data = pd.read_json(StringIO(request_body), orient="records", lines=True)
+        data = pd.read_json(BytesIO(request_body), orient="records", lines=True)
     else:
         raise ValueError(f"{content_type} input content type not supported.")
     tsdf = TimeSeriesDataFrame.from_data_frame(data, id_column=id_column, timestamp_column=timestamp_column)
@@ -112,12 +112,12 @@ def render_response(predictions: TimeSeriesDataFrame, accept: str) -> Tuple[Any,
     """Serialize predictions per the request's ``Accept`` header."""
     if "application/json" in accept:
         return _render_jumpstart(predictions), "application/json"
-    elif "application/x-parquet" in accept:
-        df = pd.DataFrame(predictions)
-        df.columns = df.columns.astype(str)
+    df = pd.DataFrame(predictions).reset_index()
+    df.columns = df.columns.astype(str)
+    if "application/x-parquet" in accept:
         return df.to_parquet(), "application/x-parquet"
     elif "text/csv" in accept:
-        return pd.DataFrame(predictions).to_csv(), "text/csv"
+        return df.to_csv(index=False), "text/csv"
     else:
         raise ValueError(f"{accept} content type not supported")
 
