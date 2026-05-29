@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 from autogluon.cloud.utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
-from autogluon.timeseries import TimeSeriesDataFrame
 
 # serving_utils/ is bundled into the model tarball as a sibling of the entry-point script;
 # replicate that import path here so we test the same module the serve scripts load.
@@ -104,16 +103,23 @@ def test_when_x_autogluon_version_unknown_then_rejects():
 
 
 def _predictions_tsdf():
-    df = pd.DataFrame(
+    """Build a stand-in for TimeSeriesDataFrame: a DataFrame with an ``(item_id, timestamp)`` MultiIndex."""
+    return pd.DataFrame(
         {
-            "item_id": ["A", "A", "B", "B"],
-            "timestamp": pd.to_datetime(["2020-01-06", "2020-01-07", "2020-02-04", "2020-02-05"]),
             "mean": [6.0, 7.0, 40.0, 50.0],
             "0.1": [5.5, 6.5, 35.0, 45.0],
             "0.9": [6.5, 7.5, 45.0, 55.0],
-        }
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("A", pd.Timestamp("2020-01-06")),
+                ("A", pd.Timestamp("2020-01-07")),
+                ("B", pd.Timestamp("2020-02-04")),
+                ("B", pd.Timestamp("2020-02-05")),
+            ],
+            names=["item_id", "timestamp"],
+        ),
     )
-    return TimeSeriesDataFrame.from_data_frame(df)
 
 
 def test_when_render_response_json_then_jumpstart_shape_returned():
