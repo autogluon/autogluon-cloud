@@ -639,7 +639,7 @@ class SagemakerBackend(Backend):
         """Parse backend specific kwargs and get them ready to be sent to predict call"""
         download = kwargs.get("download", True)
         persist = kwargs.get("persist", True)
-        save_path = kwargs.get("persist", None)
+        save_path = kwargs.get("save_path", None)
         model_kwargs = kwargs.get("model_kwargs", None)
         transformer_kwargs = kwargs.get("transformer_kwargs", None)
         transform_kwargs = kwargs.get("transform_kwargs", None)
