@@ -424,14 +424,3 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             return None
 
         return self.get_fit_predict_results()
-
-    def get_fit_predict_results(self) -> pd.DataFrame:
-        """
-        Retrieve predictions produced by a completed ``fit_predict`` job.
-
-        Returns
-        -------
-        pd.DataFrame
-            Predictions for the forecast horizon.
-        """
-        return self.backend.get_fit_predict_results()
