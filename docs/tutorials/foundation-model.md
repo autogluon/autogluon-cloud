@@ -1,24 +1,42 @@
-# Run Foundation Models with AutoGluon-Cloud
+# Time Series Foundation Models on Amazon SageMaker with AutoGluon-Cloud
 
-AutoGluon-Cloud lets you run pretrained foundation models on Amazon SageMaker — deploy real-time or serverless endpoints, or run batch predictions, with no dataset-specific training.
-
-```{note}
-This tutorial assumes you've already set up AutoGluon-Cloud on AWS. If you haven't, see [Setup](setup.md) first.
-```
-
-```{attention}
-SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud is a free wrapper, but it's your responsibility to monitor usage to avoid unexpected charges.
-```
+AutoGluon-Cloud lets you run pretrained foundation models on Amazon SageMaker — deploy real-time endpoints or run batch predictions without any dataset-specific training.
 
 ## What are Foundation Models?
 
-Foundation models are large pretrained models that perform inference **zero-shot** — no fit step, no dataset-specific training. They've been trained on massive and diverse datasets, so they generalize to unseen data out of the box.
+Foundation models are large pretrained models that can perform inference **zero-shot** on new data, without requiring a separate fit step. They have been trained on massive and diverse datasets, allowing them to generalize to unseen data out of the box.
 
-The standard CloudPredictor workflow follows a **fit → deploy / predict** pattern. Foundation models skip the fit step entirely. {py:class}`~autogluon.cloud.TimeSeriesFoundationModel` is the entry point: pick a model, call `predict()` or `deploy()`, done.
+With the standard CloudPredictor workflow, you follow a **fit → deploy / predict** pattern: first fit a predictor on your data, then deploy or run batch inference. Foundation models skip the fit step entirely — you can run predictions right away.
+
+To support this workflow, AutoGluon-Cloud provides {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`: a new class that lets you go directly from model selection to inference. With it, you can:
+
+- **Deploy a real-time or serverless endpoint** in minutes and start getting predictions immediately
+- **Run batch predictions** on large datasets without provisioning a persistent endpoint
+- **Reduce costs** by eliminating the training step when zero-shot accuracy is sufficient
+
+AutoGluon-Cloud currently supports foundation models for time series forecasting via {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`.
+
+```{attention}
+Costs for running cloud compute are managed by Amazon SageMaker, and storage costs are managed by AWS S3. AutoGluon-Cloud is a wrapper to these services at no additional charge. It is the user's responsibility to monitor compute usage and delete endpoints when no longer needed.
+```
+
+In the following, we will guide you step-by-step through using time series foundation models in AutoGluon-Cloud with the {py:class}`~autogluon.cloud.TimeSeriesFoundationModel` class.
+
+## Prerequisites
+
+Install autogluon.cloud:
+
+```bash
+pip install autogluon.cloud
+```
+
+You also need an IAM role with SageMaker permissions. See the [AutoGluon-Cloud tutorial](./autogluon-cloud.md) for setup instructions.
 
 ## Time Series Forecasting
 
 ### Available Models
+
+The following table shows the time series foundation models currently supported by {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`. Some models, like Chronos-2, natively support covariates and cross-learning across items, while others are univariate-only.
 
 | Model ID | Model Family | Covariates |
 |----------|-------------|------------|
@@ -27,7 +45,9 @@ The standard CloudPredictor workflow follows a **fit → deploy / predict** patt
 | `chronos-bolt-small` | Chronos-Bolt | ❌ |
 | `chronos-bolt-base` | Chronos-Bolt | ❌ |
 
-[Chronos-2](https://huggingface.co/autogluon/chronos-2) is the recommended model — it supports covariates, cross-learning across items, and context lengths up to 8192 time steps. For background on Chronos, see the [Forecasting with Chronos-2](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-chronos.html) tutorial.
+[Chronos-2](https://huggingface.co/autogluon/chronos-2) is the recommended model — it supports covariates, cross-learning across items, and context lengths up to 8192 time steps.
+
+For background on Chronos models and their capabilities, see the [Forecasting with Chronos-2](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-chronos.html) tutorial.
 
 ### Choosing an Inference Option
 
@@ -48,6 +68,9 @@ AutoGluon-Cloud supports three ways to run predictions, each with different cost
     - ✅ Pay only for active compute time, no persistent infrastructure
     - ✅ Cost-efficient for large-scale prediction jobs
     - ❌ Job initialization takes a few minutes (not suitable for interactive use)
+    - ❌ Requires data to be uploaded to S3 (autogluon-cloud handles this for you)
+
+The examples below assume your data uses the default column names (`item_id`, `timestamp`, `target`). If your columns differ, pass `id_column=`, `timestamp_column=`, and `target=` to the relevant call.
 
 ### Batch Prediction
 
@@ -57,19 +80,13 @@ from autogluon.cloud import TimeSeriesFoundationModel
 
 data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv")
 
-# `known_covariates` is optional — pass it if you have future values of covariates available at prediction time
-# (e.g., holidays, promotions, weather forecasts).
-known_covariates = None
-
 model = TimeSeriesFoundationModel("chronos-2", cloud_output_path="s3://YOUR-BUCKET/ag-foundation-model")
 
 predictions = model.predict(
     data=data,
     prediction_length=24,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
-    known_covariates=known_covariates,
+    # If your data uses different column names, pass them here:
+    # id_column="my_id", timestamp_column="my_timestamp", target="my_target",
 )
 
 print(predictions.head())
@@ -79,13 +96,9 @@ The `predict()` method accepts the following key parameters:
 
 - `data` — historical time series as a DataFrame or S3 path (long format)
 - `prediction_length` — number of future time steps to predict
-- `target`, `id_column`, `timestamp_column` — column names in `data`; defaults shown above
-- `known_covariates` — DataFrame with future values of known covariates (see [Using Covariates with Chronos-2](#using-covariates-with-chronos-2))
 - `quantile_levels` — (optional) list of quantiles to predict (e.g., `[0.1, 0.5, 0.9]`)
 - `instance_type` — (optional) SageMaker instance type; defaults to the model registry value
 - `wait` — (optional) if `False`, returns immediately with a future; call `.result()` to retrieve predictions later
-
-The remaining examples in this tutorial assume the default column names.
 
 ### Real-Time Endpoint
 
@@ -127,13 +140,33 @@ endpoint = model.deploy(
 )
 ```
 
-`inference_config` keys are forwarded to [`sagemaker.serverless.ServerlessInferenceConfig`](https://sagemaker.readthedocs.io/en/stable/api/inference/serverless.html).
+`inference_config` keys are forwarded to [`sagemaker.serverless.ServerlessInferenceConfig`](https://sagemaker.readthedocs.io/en/stable/api/inference/serverless.html); invalid keys raise `TypeError`.
 
 ### Using Covariates with Chronos-2
 
-Chronos-2 natively supports two kinds of covariates — external variables that provide additional context for forecasting:
+Chronos-2 natively supports covariates — external variables that provide additional context for forecasting. Specifically, it supports:
 
-- **Known future covariates** — values are known at prediction time (e.g., holidays, promotions, weather forecasts). Pass via `known_covariates` (a DataFrame with `id_column`, `timestamp_column`, and one column per covariate).
-- **Past covariates** — only observed historically (e.g., past sales of related products). Include them as additional columns in `data`.
+- **Known future covariates** — variables whose future values are known at prediction time (e.g., holidays, promotions, weather forecasts)
+- **Past covariates** — variables that are only observed historically (e.g., past sales of related products)
 
-`known_covariates` is accepted by both `model.predict(...)` and `endpoint.predict(...)`; covariate column names are inferred from the DataFrame columns (excluding `id_column` and `timestamp_column`). Both `data` and `known_covariates` accept DataFrames or S3 paths.
+Pass known covariates via the `known_covariates` parameter:
+
+```python
+predictions = model.predict(
+    data=data,
+    prediction_length=24,
+    known_covariates=future_covariates_df,  # DataFrame with id_column, timestamp_column, and covariate columns
+)
+```
+
+The same parameter works on a deployed endpoint:
+
+```python
+predictions = endpoint.predict(
+    data=data,
+    prediction_length=24,
+    known_covariates=future_covariates_df,
+)
+```
+
+The covariate column names are automatically inferred from the DataFrame columns (excluding `id_column` and `timestamp_column`). Both `data` and `known_covariates` can be passed as DataFrames or S3 paths.
