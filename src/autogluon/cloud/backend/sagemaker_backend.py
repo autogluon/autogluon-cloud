@@ -502,6 +502,12 @@ class SagemakerBackend(Backend):
         if fm_serve_config is not None:
             model_kwargs_env["AG_SERVE_CONFIG"] = json.dumps(fm_serve_config)
 
+        if inference_mode == "serverless":
+            # Serverless containers run with `/` as cwd and a read-only root, so TorchServe's
+            # default `logs/` path resolves to `/logs` and startup fails. Redirect to /tmp.
+            model_kwargs_env.setdefault("LOG_LOCATION", "/tmp")
+            model_kwargs_env.setdefault("METRICS_LOCATION", "/tmp")
+
         model = model_cls(
             model_data=predictor_path,
             role=self.role_arn,
