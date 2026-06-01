@@ -210,6 +210,72 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
         assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
 
 
+def test_foundation_model_deploy_serverless(test_helper, framework_version, retail_sales_dataset):
+    """Deploy Chronos-2 to a serverless endpoint and predict (CPU-only)."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
+
+        model = FoundationModel(
+            "chronos-2",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-serverless/{framework_version}/{timestamp}",
+        )
+        endpoint = model.deploy(
+            custom_image_uri=inference_custom_image_uri,
+            inference_mode="serverless",
+            inference_config={"memory_size_in_mb": 6144},
+        )
+        try:
+            expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
+            predictions = endpoint.predict(
+                data=ds["train_data"],
+                target=ds["target"],
+                id_column=ds["id_column"],
+                timestamp_column=ds["timestamp_column"],
+                prediction_length=ds["prediction_length"],
+            )
+            _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+        finally:
+            endpoint.delete_endpoint()
+
+
+def test_foundation_model_deploy_async(test_helper, framework_version, retail_sales_dataset):
+    """Deploy Chronos-2 to an async endpoint, submit a request, and fetch the result (CPU instance)."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
+
+        model = FoundationModel(
+            "chronos-2",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-async/{framework_version}/{timestamp}",
+        )
+        endpoint = model.deploy(
+            custom_image_uri=inference_custom_image_uri,
+            instance_type="ml.m5.2xlarge",
+            inference_mode="async",
+        )
+        try:
+            expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
+            future = endpoint.predict_async(
+                data=ds["train_data"],
+                target=ds["target"],
+                id_column=ds["id_column"],
+                timestamp_column=ds["timestamp_column"],
+                prediction_length=ds["prediction_length"],
+            )
+            assert future.output_path.startswith("s3://")
+            predictions = future.result(timeout=900)
+            _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+        finally:
+            endpoint.delete_endpoint()
+
+
 def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset):
     """Test FoundationModel deploy to a real-time endpoint and predict."""
     ds = retail_sales_dataset
