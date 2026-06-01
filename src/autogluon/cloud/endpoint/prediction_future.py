@@ -47,9 +47,10 @@ class AsyncPredictionFuture(PredictionFuture):
         return self._response.failure_path
 
     def status(self) -> PredictionStatus:
+        import boto3
         from botocore.exceptions import ClientError
 
-        s3 = self._response.predictor_async.s3_client
+        s3 = boto3.client("s3")
 
         def exists(url: Optional[str]) -> bool:
             if url is None:

@@ -418,7 +418,8 @@ class SagemakerBackend(Backend):
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
         if instance_type is None:
-            instance_type = "ml.m5.2xlarge"  # used for image resolution; mode_kwargs drops it for serverless
+            assert inference_mode == "serverless"
+            instance_type = "ml.m5.2xlarge"
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 

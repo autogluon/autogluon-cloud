@@ -5,8 +5,8 @@ import pandas as pd
 from autogluon.common.loaders import load_pd
 
 from ..utils.serializers import AutoGluonSerializationWrapper
-from .endpoint import Endpoint
 from .prediction_future import PredictionFuture
+from .sagemaker_endpoint import SagemakerEndpoint
 
 AsyncAccept = Literal["application/x-parquet", "text/csv"]
 
@@ -18,7 +18,7 @@ class TimeSeriesEndpoint:
     providing a clean predict() interface.
     """
 
-    def __init__(self, endpoint: Endpoint):
+    def __init__(self, endpoint: SagemakerEndpoint):
         # TODO: replace with sagemaker.Predictor directly (remove Endpoint/SagemakerEndpoint layer)
         self._endpoint = endpoint
 
