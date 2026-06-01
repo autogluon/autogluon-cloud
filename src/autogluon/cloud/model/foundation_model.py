@@ -150,7 +150,9 @@ class FoundationModel:
         **backend_kwargs,
     ) -> None:
         """Shared deploy logic. Subclasses call this then wrap the endpoint."""
-        if instance_type is None:
+        if inference_mode == "serverless" and instance_type is not None:
+            raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
+        if instance_type is None and inference_mode != "serverless":
             instance_type = self._config["deploy_instance_type"]
 
         fm_serve_config = {
@@ -265,11 +267,10 @@ class TimeSeriesFoundationModel(FoundationModel):
         Parameters
         ----------
         instance_type
-            Instance type for the endpoint. Ignored when ``inference_mode="serverless"``.
-            If None, will use the default from the model registry.
+            Instance type for the endpoint. Defaults to the model registry value. Must be ``None``
+            when ``inference_mode="serverless"``.
         endpoint_name
-            Custom endpoint name.
-            If None, will auto-generate a unique name.
+            Custom endpoint name. If None, will auto-generate a unique name.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         framework_version
@@ -279,17 +280,14 @@ class TimeSeriesFoundationModel(FoundationModel):
         wait
             Whether to block until the endpoint is ready.
         inference_mode
-            Endpoint type. ``"realtime"`` provisions an instance-backed endpoint with synchronous
-            request/response; ``"serverless"`` provisions a SageMaker Serverless Inference endpoint;
-            ``"async"`` provisions an instance-backed endpoint where requests are processed and
-            results written to S3 asynchronously (use ``endpoint.predict_async()``).
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint;
+            ``"async"`` processes requests asynchronously and writes results to S3 — use
+            ``endpoint.predict_async()`` to invoke.
         inference_config
-            Mode-specific overrides shallow-merged on top of the preset for ``inference_mode``.
-            For ``"serverless"``: keys forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
-            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
-            For ``"async"``: keys forwarded to ``sagemaker.async_inference.AsyncInferenceConfig``
-            (e.g. ``output_path``, ``failure_path``); defaults to writing under
-            ``{cloud_output_path}/async-output/{endpoint_name}/`` if not provided.
+            Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``) or
+            ``sagemaker.async_inference.AsyncInferenceConfig`` (e.g. ``output_path``, ``failure_path``).
+            For async, ``output_path`` defaults to ``{cloud_output_path}/async-output/{endpoint_name}/``.
         **backend_kwargs
             Backend-specific arguments (e.g., initial_instance_count, volume_size,
             model_kwargs, deploy_kwargs).

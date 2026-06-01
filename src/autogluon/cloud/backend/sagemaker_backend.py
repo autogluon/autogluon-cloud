@@ -346,23 +346,12 @@ class SagemakerBackend(Backend):
 
         return dict(model_kwargs=model_kwargs, deploy_kwargs=deploy_kwargs)
 
-    _INFERENCE_CONFIG_PRESETS: Dict[str, Dict[str, Any]] = {
-        "realtime": {},
-        "serverless": {"memory_size_in_mb": 4096, "max_concurrency": 5},
-        "async": {},
-    }
-
-    def _build_async_defaults(self, endpoint_name: str) -> Dict[str, Any]:
-        """S3 paths to use when the user doesn't pass `output_path` / `failure_path` for async mode."""
-        base = self.cloud_output_path.rstrip("/") + f"/async-output/{endpoint_name}"
-        return {"output_path": f"{base}/", "failure_path": f"{base}/failures/"}
-
     def deploy(
         self,
         predictor_path: Optional[str] = None,
         endpoint_name: Optional[str] = None,
         framework_version: str = "latest",
-        instance_type: str = "ml.m5.2xlarge",
+        instance_type: Optional[str] = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
@@ -417,32 +406,19 @@ class SagemakerBackend(Backend):
             var so the FM serve script knows which model to load and with what hyperparameters.
             Has no effect for non-FM deploys.
         inference_mode: {"realtime", "serverless", "async"}, default = "realtime"
-            Endpoint type.
-
-            * ``"realtime"`` — instance-backed endpoint with synchronous request/response.
-            * ``"serverless"`` — SageMaker Serverless Inference (no instance management, scales to zero).
-            * ``"async"`` — instance-backed endpoint where requests are submitted, processed,
-              and results written to S3 asynchronously.
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint;
+            ``"async"`` provisions an instance-backed endpoint that processes requests asynchronously
+            and writes results to S3.
         inference_config: Optional[Dict[str, Any]], default = None
-            Mode-specific overrides shallow-merged on top of the preset for `inference_mode`.
-
-            * ``"serverless"``: keys forwarded to `sagemaker.serverless.ServerlessInferenceConfig`
-              (e.g. `memory_size_in_mb`, `max_concurrency`).
-            * ``"async"``: keys forwarded to `sagemaker.async_inference.AsyncInferenceConfig`
-              (e.g. `output_path`, `failure_path`, `max_concurrent_invocations_per_instance`).
-              If `output_path` is not provided, defaults to
-              ``{cloud_output_path}/async-output/{endpoint_name}/`` (and `failure_path` to
-              ``.../failures/``).
-
-            Invalid keys raise `TypeError`.
+            Mode-specific overrides forwarded to `sagemaker.serverless.ServerlessInferenceConfig`
+            or `sagemaker.async_inference.AsyncInferenceConfig`. For async, ``output_path`` defaults
+            to ``{cloud_output_path}/async-output/{endpoint_name}/`` if not provided.
         """
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
-        if inference_mode not in self._INFERENCE_CONFIG_PRESETS:
-            raise ValueError(
-                f"Unsupported inference_mode={inference_mode!r}. Supported: {list(self._INFERENCE_CONFIG_PRESETS)}"
-            )
+        if instance_type is None:
+            instance_type = "ml.m5.2xlarge"  # used for image resolution; mode_kwargs drops it for serverless
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 
@@ -542,21 +518,26 @@ class SagemakerBackend(Backend):
         if deploy_kwargs is None:
             deploy_kwargs = {}
 
-        merged_inference_config = {**self._INFERENCE_CONFIG_PRESETS[inference_mode], **(inference_config or {})}
-        mode_kwargs: Dict[str, Any] = {}
+        instance_kwargs = {
+            "instance_type": instance_type,
+            "initial_instance_count": initial_instance_count,
+            "volume_size": volume_size,
+        }
+        user_config = inference_config or {}
         if inference_mode == "realtime":
-            mode_kwargs["instance_type"] = instance_type
-            mode_kwargs["initial_instance_count"] = initial_instance_count
-            mode_kwargs["volume_size"] = volume_size
+            mode_kwargs = instance_kwargs
         elif inference_mode == "serverless":
-            mode_kwargs["serverless_inference_config"] = ServerlessInferenceConfig(**merged_inference_config)
+            preset = {"memory_size_in_mb": 4096, "max_concurrency": 5}
+            mode_kwargs = {"serverless_inference_config": ServerlessInferenceConfig(**{**preset, **user_config})}
         elif inference_mode == "async":
-            async_defaults = self._build_async_defaults(endpoint_name)
-            merged_async = {**async_defaults, **merged_inference_config}
-            mode_kwargs["async_inference_config"] = AsyncInferenceConfig(**merged_async)
-            mode_kwargs["instance_type"] = instance_type
-            mode_kwargs["initial_instance_count"] = initial_instance_count
-            mode_kwargs["volume_size"] = volume_size
+            base = f"{self.cloud_output_path.rstrip('/')}/async-output/{endpoint_name}"
+            preset = {"output_path": f"{base}/", "failure_path": f"{base}/failures/"}
+            mode_kwargs = {
+                **instance_kwargs,
+                "async_inference_config": AsyncInferenceConfig(**{**preset, **user_config}),
+            }
+        else:
+            raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
 
         logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
         self.endpoint = SagemakerEndpoint(

@@ -32,9 +32,7 @@ class SagemakerEndpoint(Endpoint):
         Predict with the endpoint
         """
         if self.is_async:
-            raise RuntimeError(
-                "This endpoint was deployed in async mode; use `predict_async()` instead of `predict()`."
-            )
+            raise RuntimeError("Endpoint was deployed with `inference_mode='async'`; use `predict_async()`.")
         return self._endpoint.predict(test_data, **kwargs)
 
     def predict_async(
@@ -44,25 +42,12 @@ class SagemakerEndpoint(Endpoint):
         initial_args: Optional[dict] = None,
         **kwargs: Any,
     ) -> PredictionFuture:
-        """Submit an async inference request and return a future for the eventual result.
-
-        Parameters
-        ----------
-        test_data
-            Input payload, serialized by the underlying predictor's serializer.
-        accept
-            Response content type (e.g. ``"application/x-parquet"``, ``"text/csv"``). Drives
-            the deserialization performed by :meth:`AsyncPredictionFuture.result`.
-        initial_args
-            Extra keyword args for boto3 ``invoke_endpoint_async``. ``Accept`` is added
-            automatically.
-        """
+        """Submit an async inference request and return a future for the eventual result."""
         if not self.is_async:
-            raise RuntimeError(
-                "This endpoint was not deployed in async mode; use `predict()` instead of `predict_async()`."
-            )
-        merged_args = {"Accept": accept, **(initial_args or {})}
-        response = self._endpoint.predict_async(data=test_data, initial_args=merged_args, **kwargs)
+            raise RuntimeError("Endpoint was not deployed with `inference_mode='async'`; use `predict()`.")
+        response = self._endpoint.predict_async(
+            data=test_data, initial_args={"Accept": accept, **(initial_args or {})}, **kwargs
+        )
         return PredictionFuture._from_async_response(response, accept=accept)
 
     def delete_endpoint(self) -> None:

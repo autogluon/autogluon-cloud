@@ -388,7 +388,7 @@ class CloudPredictor(ABC):
         predictor_path: Optional[str] = None,
         endpoint_name: Optional[str] = None,
         framework_version: str = "latest",
-        instance_type: str = "ml.m5.2xlarge",
+        instance_type: Optional[str] = None,
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
@@ -414,8 +414,9 @@ class CloudPredictor(ABC):
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
             If `custom_image_uri` is set, this argument will be ignored.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance to be deployed for the endpoint. Ignored when ``inference_mode="serverless"``.
+        instance_type: Optional[str], default = None
+            Instance to be deployed for the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None``
+            when ``inference_mode="serverless"``.
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint. Ignored when
             ``inference_mode="serverless"``.
@@ -430,18 +431,14 @@ class CloudPredictor(ABC):
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
         inference_mode: {"realtime", "serverless", "async"}, default = "realtime"
-            Endpoint type. ``"realtime"`` provisions an instance-backed endpoint with synchronous
-            request/response; ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero); ``"async"`` provisions an instance-backed
-            endpoint where requests are processed asynchronously and results written to S3.
+            endpoint that processes requests asynchronously and writes results to S3.
         inference_config: Optional[Dict[str, Any]], default = None
-            Mode-specific overrides shallow-merged on top of the preset for ``inference_mode``.
-            For ``"serverless"``: keys are forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
-            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
-            For ``"async"``: keys are forwarded to ``sagemaker.async_inference.AsyncInferenceConfig``
-            (e.g. ``output_path``, ``failure_path``); defaults to writing under
-            ``{cloud_output_path}/async-output/{endpoint_name}/`` if not provided.
-            Invalid keys raise ``TypeError``.
+            Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``) or
+            ``sagemaker.async_inference.AsyncInferenceConfig`` (e.g. ``output_path``, ``failure_path``).
+            For async, ``output_path`` defaults to ``{cloud_output_path}/async-output/{endpoint_name}/``.
         backend_kwargs: dict, default = None
             Any extra arguments needed to pass to the underneath backend.
             For SageMaker backend, valid keys are:
@@ -452,6 +449,10 @@ class CloudPredictor(ABC):
                     Any extra arguments needed to pass to deploy.
                     Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
         """
+        if inference_mode == "serverless" and instance_type is not None:
+            raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
+        if instance_type is None and inference_mode != "serverless":
+            instance_type = "ml.m5.2xlarge"
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_deploy_kwargs(backend_kwargs)

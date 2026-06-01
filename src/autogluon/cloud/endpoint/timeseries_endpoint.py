@@ -26,6 +26,40 @@ class TimeSeriesEndpoint:
     def endpoint_name(self) -> str:
         return self._endpoint.endpoint_name
 
+    def _build_payload(
+        self,
+        data: Union[str, pd.DataFrame],
+        known_covariates: Optional[Union[str, pd.DataFrame]],
+        static_features: Optional[Union[str, pd.DataFrame]],
+        prediction_length: int,
+        target: str,
+        id_column: str,
+        timestamp_column: str,
+        quantile_levels: Optional[List[float]],
+    ) -> AutoGluonSerializationWrapper:
+        if isinstance(data, str):
+            data = load_pd.load(data)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+        if isinstance(static_features, str):
+            static_features = load_pd.load(static_features)
+
+        inference_kwargs: Dict[str, Any] = {
+            "prediction_length": prediction_length,
+            "target": target,
+            "id_column": id_column,
+            "timestamp_column": timestamp_column,
+        }
+        if quantile_levels is not None:
+            inference_kwargs["quantile_levels"] = quantile_levels
+
+        return AutoGluonSerializationWrapper(
+            data=data,
+            inference_kwargs=inference_kwargs,
+            static_features=static_features,
+            known_covariates=known_covariates,
+        )
+
     def predict(
         self,
         data: Union[str, pd.DataFrame],
@@ -69,27 +103,15 @@ class TimeSeriesEndpoint:
         -------
         pd.DataFrame
         """
-        if isinstance(data, str):
-            data = load_pd.load(data)
-        if isinstance(known_covariates, str):
-            known_covariates = load_pd.load(known_covariates)
-        if isinstance(static_features, str):
-            static_features = load_pd.load(static_features)
-
-        inference_kwargs: Dict[str, Any] = {
-            "prediction_length": prediction_length,
-            "target": target,
-            "id_column": id_column,
-            "timestamp_column": timestamp_column,
-        }
-        if quantile_levels is not None:
-            inference_kwargs["quantile_levels"] = quantile_levels
-
-        payload = AutoGluonSerializationWrapper(
-            data=data,
-            inference_kwargs=inference_kwargs,
-            static_features=static_features,
-            known_covariates=known_covariates,
+        payload = self._build_payload(
+            data,
+            known_covariates,
+            static_features,
+            prediction_length,
+            target,
+            id_column,
+            timestamp_column,
+            quantile_levels,
         )
         return self._endpoint.predict(payload, initial_args={"Accept": accept})
 
@@ -107,45 +129,18 @@ class TimeSeriesEndpoint:
     ) -> PredictionFuture:
         """Submit an asynchronous prediction request.
 
-        Returns immediately with a future-like handle. Use ``future.result()`` to block
-        until the result is available, or ``future.status()`` for a non-blocking check.
-
-        Parameters
-        ----------
-        data, known_covariates, static_features, prediction_length, target, id_column, timestamp_column, quantile_levels
-            Same as :meth:`predict`.
-        accept
-            Response content type written to S3. ``"application/x-parquet"`` (default) or
-            ``"text/csv"``. Note: the AG-internal ``application/x-autogluon`` pickle format
-            is not supported for async — persisting pickles to S3 is fragile and version-coupled.
-
-        Returns
-        -------
-        PredictionFuture
-            Pending result. Inspect ``future.output_path`` for the S3 URL where the
-            response will land; call ``future.result()`` to retrieve the DataFrame.
+        Returns a :class:`PredictionFuture` immediately. Forecasting parameters match
+        :meth:`predict`. ``accept`` controls the response format written to S3.
         """
-        if isinstance(data, str):
-            data = load_pd.load(data)
-        if isinstance(known_covariates, str):
-            known_covariates = load_pd.load(known_covariates)
-        if isinstance(static_features, str):
-            static_features = load_pd.load(static_features)
-
-        inference_kwargs: Dict[str, Any] = {
-            "prediction_length": prediction_length,
-            "target": target,
-            "id_column": id_column,
-            "timestamp_column": timestamp_column,
-        }
-        if quantile_levels is not None:
-            inference_kwargs["quantile_levels"] = quantile_levels
-
-        payload = AutoGluonSerializationWrapper(
-            data=data,
-            inference_kwargs=inference_kwargs,
-            static_features=static_features,
-            known_covariates=known_covariates,
+        payload = self._build_payload(
+            data,
+            known_covariates,
+            static_features,
+            prediction_length,
+            target,
+            id_column,
+            timestamp_column,
+            quantile_levels,
         )
         return self._endpoint.predict_async(payload, accept=accept)
 

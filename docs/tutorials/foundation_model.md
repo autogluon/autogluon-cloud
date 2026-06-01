@@ -154,7 +154,7 @@ endpoint = model.deploy(
 )
 ```
 
-By default async responses are parquet; pass ``accept="text/csv"`` to ``predict_async`` for CSV. The AG-internal pickle format is not supported for async to avoid persisting version-coupled binaries to S3.
+Response format defaults to parquet. Pass ``accept="text/csv"`` to ``predict_async`` for CSV.
 
 ### Using Covariates with Chronos-2
 
