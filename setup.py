@@ -133,7 +133,6 @@ all_requires = ["autogluon>=0.7,<1.6"] + ray_requires  # To allow user to pass a
 extras_require["all"] = all_requires
 
 test_requirements = [
-    "tox",
     "pytest",
     "pytest-cov",
     "moto",
