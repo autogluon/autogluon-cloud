@@ -11,7 +11,7 @@ import pandas as pd
 
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
-from ..endpoint.prediction_future import PredictionFuture
+from ..endpoint.prediction_future import JobPredictionFuture, PredictionFuture
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
@@ -439,7 +439,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         )
 
         if not wait:
-            return PredictionFuture._from_job(
+            return JobPredictionFuture(
                 job=self._backend._fit_job,
                 result_loader=self._backend.get_fit_predict_results,
             )

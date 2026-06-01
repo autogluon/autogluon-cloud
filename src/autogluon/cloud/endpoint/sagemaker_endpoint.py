@@ -6,7 +6,7 @@ from sagemaker.predictor import Predictor
 from sagemaker.predictor_async import AsyncPredictor
 
 from .endpoint import Endpoint
-from .prediction_future import PredictionFuture
+from .prediction_future import AsyncPredictionFuture, PredictionFuture
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class SagemakerEndpoint(Endpoint):
         response = self._endpoint.predict_async(
             data=test_data, initial_args={"Accept": accept, **(initial_args or {})}, **kwargs
         )
-        return PredictionFuture._from_async_response(response, accept=accept)
+        return AsyncPredictionFuture(response, accept=accept)
 
     def delete_endpoint(self) -> None:
         """

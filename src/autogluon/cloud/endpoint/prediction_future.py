@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import TYPE_CHECKING, Callable, Literal, Optional
 
@@ -16,40 +17,34 @@ if TYPE_CHECKING:
 PredictionStatus = Literal["InProgress", "Completed", "Failed"]
 
 
-class PredictionFuture:
-    """A pending prediction whose result becomes available later.
-
-    Returned by :meth:`Endpoint.predict_async` (async-endpoint inference) and by
-    ``predict(wait=False)`` (job-backed inference). Both expose the same surface.
-    """
-
-    def __init__(self, backing) -> None:
-        self._backing = backing
+class PredictionFuture(ABC):
+    """A pending prediction whose result becomes available later."""
 
     @property
-    def output_path(self) -> str:
-        return self._backing.output_path
+    @abstractmethod
+    def output_path(self) -> str: ...
 
-    def status(self) -> PredictionStatus:
-        return self._backing.status()
+    @abstractmethod
+    def status(self) -> PredictionStatus: ...
 
-    def result(self, timeout: Optional[float] = None) -> pd.DataFrame:
-        return self._backing.result(timeout)
-
-    @classmethod
-    def _from_async_response(cls, response: AsyncInferenceResponse, accept: str) -> "PredictionFuture":
-        return cls(_AsyncBacking(response, accept))
-
-    @classmethod
-    def _from_job(cls, job: "SageMakerFitJob", result_loader: Callable[[], pd.DataFrame]) -> "PredictionFuture":
-        return cls(_JobBacking(job, result_loader))
+    @abstractmethod
+    def result(self, timeout: Optional[float] = None) -> pd.DataFrame: ...
 
 
-class _AsyncBacking:
+class AsyncPredictionFuture(PredictionFuture):
+    """Pending result from a SageMaker async endpoint invocation."""
+
     def __init__(self, response: AsyncInferenceResponse, accept: str) -> None:
         self._response = response
         self._accept = accept
-        self.output_path: str = response.output_path
+
+    @property
+    def output_path(self) -> str:
+        return self._response.output_path
+
+    @property
+    def failure_path(self) -> Optional[str]:
+        return self._response.failure_path
 
     def status(self) -> PredictionStatus:
         from botocore.exceptions import ClientError
@@ -70,20 +65,29 @@ class _AsyncBacking:
 
         if exists(self.output_path):
             return "Completed"
-        if exists(self._response.failure_path):
+        if exists(self.failure_path):
             return "Failed"
         return "InProgress"
 
-    def result(self, timeout: Optional[float]) -> pd.DataFrame:
+    def result(self, timeout: Optional[float] = None) -> pd.DataFrame:
         waiter = None if timeout is None else WaiterConfig(max_attempts=max(1, int(timeout // 5)), delay=5)
         return _deserialize(self._response.get_result(waiter_config=waiter), self._accept)
 
 
-class _JobBacking:
+class JobPredictionFuture(PredictionFuture):
+    """Pending result from a SageMaker job (e.g. ``predict(wait=False)``)."""
+
     def __init__(self, job: "SageMakerFitJob", result_loader: Callable[[], pd.DataFrame]) -> None:
         self._job = job
         self._result_loader = result_loader
-        self.output_path: str = job.get_output_path() or ""
+
+    @property
+    def output_path(self) -> str:
+        return self._job.get_output_path() or ""
+
+    @property
+    def job_name(self) -> str:
+        return self._job.job_name
 
     def status(self) -> PredictionStatus:
         raw = self._job.get_job_status()
@@ -93,7 +97,7 @@ class _JobBacking:
             return "Failed"
         return "InProgress"
 
-    def result(self, timeout: Optional[float]) -> pd.DataFrame:
+    def result(self, timeout: Optional[float] = None) -> pd.DataFrame:
         from sagemaker.estimator import Estimator
 
         if not self._job.completed:
