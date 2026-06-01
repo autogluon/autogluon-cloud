@@ -7,7 +7,6 @@ These tests pin the contract between :class:`SagemakerBackend.deploy` and
 from unittest import mock
 
 import pytest
-from sagemaker.async_inference import AsyncInferenceConfig
 from sagemaker.serverless import ServerlessInferenceConfig
 
 from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend
@@ -55,7 +54,6 @@ def test_realtime_passes_instance_kwargs(deploy_kwargs):
     assert captured["instance_type"] == "ml.m5.xlarge"
     assert captured["initial_instance_count"] == 2
     assert "serverless_inference_config" not in captured
-    assert "async_inference_config" not in captured
 
 
 def test_serverless_uses_preset(deploy_kwargs):
@@ -72,20 +70,6 @@ def test_serverless_user_overrides_merge_over_preset(deploy_kwargs):
     cfg = captured["serverless_inference_config"]
     assert cfg.memory_size_in_mb == 8192
     assert cfg.max_concurrency == 5  # preset wins for keys the user didn't override
-
-
-def test_async_defaults_output_paths_from_cloud_output(deploy_kwargs):
-    captured = deploy_kwargs(inference_mode="async")
-    cfg = captured["async_inference_config"]
-    assert isinstance(cfg, AsyncInferenceConfig)
-    assert cfg.output_path == "s3://bucket/run/async-output/ep/"
-    assert cfg.failure_path == "s3://bucket/run/async-output/ep/failures/"
-    assert captured["instance_type"] == "ml.m5.2xlarge"
-
-
-def test_async_user_output_path_wins(deploy_kwargs):
-    captured = deploy_kwargs(inference_mode="async", inference_config={"output_path": "s3://other/out/"})
-    assert captured["async_inference_config"].output_path == "s3://other/out/"
 
 
 def test_unknown_inference_mode_raises(deploy_kwargs):
