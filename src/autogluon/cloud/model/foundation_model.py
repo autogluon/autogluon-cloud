@@ -5,13 +5,13 @@ from __future__ import annotations
 import tempfile
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union, overload
 
 import pandas as pd
 
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
-from ..endpoint.prediction_future import JobPredictionFuture, PredictionFuture
+from ..endpoint.prediction_future import JobPredictionFuture
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
@@ -145,7 +145,7 @@ class FoundationModel:
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        inference_mode: Literal["realtime", "serverless", "async"] = "realtime",
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         **backend_kwargs,
     ) -> None:
@@ -257,7 +257,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        inference_mode: Literal["realtime", "serverless", "async"] = "realtime",
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         **backend_kwargs,
     ) -> TimeSeriesEndpoint:
@@ -280,21 +280,14 @@ class TimeSeriesFoundationModel(FoundationModel):
         wait
             Whether to block until the endpoint is ready.
         inference_mode
-            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint;
-            ``"async"`` processes requests asynchronously and writes results to S3 — use
-            ``endpoint.predict_async()`` to invoke.
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
+            (no instance management, scales to zero).
         inference_config
             Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
-            (e.g. ``memory_size_in_mb``, ``max_concurrency``) or
-            ``sagemaker.async_inference.AsyncInferenceConfig`` (e.g. ``output_path``, ``failure_path``).
-            For async, ``output_path`` defaults to ``{cloud_output_path}/async-output/{endpoint_name}/``.
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
         **backend_kwargs
             Backend-specific arguments (e.g., initial_instance_count, volume_size,
             model_kwargs, deploy_kwargs).
-
-        Returns
-        -------
-        TimeSeriesEndpoint
         """
         self._deploy_backend(
             instance_type=instance_type,
@@ -333,6 +326,47 @@ class TimeSeriesFoundationModel(FoundationModel):
             args["quantile_levels"] = quantile_levels
         return args
 
+    @overload
+    def predict(
+        self,
+        data: Union[str, Path, pd.DataFrame],
+        target: str = ...,
+        id_column: str = ...,
+        timestamp_column: str = ...,
+        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = ...,
+        static_features: Optional[Union[str, Path, pd.DataFrame]] = ...,
+        prediction_length: int = ...,
+        quantile_levels: Optional[List[float]] = ...,
+        hyperparameters: Optional[Dict[str, Any]] = ...,
+        instance_type: Optional[str] = ...,
+        framework_version: str = ...,
+        custom_image_uri: Optional[str] = ...,
+        wait: Literal[True] = True,
+        predictions_path: Optional[str] = ...,
+        **backend_kwargs: Any,
+    ) -> pd.DataFrame: ...
+
+    @overload
+    def predict(
+        self,
+        data: Union[str, Path, pd.DataFrame],
+        target: str = ...,
+        id_column: str = ...,
+        timestamp_column: str = ...,
+        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = ...,
+        static_features: Optional[Union[str, Path, pd.DataFrame]] = ...,
+        prediction_length: int = ...,
+        quantile_levels: Optional[List[float]] = ...,
+        hyperparameters: Optional[Dict[str, Any]] = ...,
+        instance_type: Optional[str] = ...,
+        framework_version: str = ...,
+        custom_image_uri: Optional[str] = ...,
+        *,
+        wait: Literal[False],
+        predictions_path: Optional[str] = ...,
+        **backend_kwargs: Any,
+    ) -> JobPredictionFuture: ...
+
     def predict(
         self,
         data: Union[str, Path, pd.DataFrame],
@@ -350,7 +384,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         wait: bool = True,
         predictions_path: Optional[str] = None,
         **backend_kwargs,
-    ) -> Union[pd.DataFrame, PredictionFuture]:
+    ) -> Union[pd.DataFrame, JobPredictionFuture]:
         """
         Run batch prediction for time series.
 
@@ -386,7 +420,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             Custom Docker image URI for the container.
         wait
             If True, block and return a DataFrame. If False, return a
-            :class:`PredictionFuture` immediately — call ``.result()`` on it later to
+            :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
             retrieve the DataFrame, or ``.status()`` to check progress.
         predictions_path
             S3 URL where predictions will be written by the prediction job (e.g.
@@ -401,8 +435,8 @@ class TimeSeriesFoundationModel(FoundationModel):
 
         Returns
         -------
-        pd.DataFrame or PredictionFuture
-            DataFrame if ``wait=True``; a :class:`PredictionFuture` otherwise.
+        pd.DataFrame or JobPredictionFuture
+            DataFrame if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
         """
         if instance_type is None:
             instance_type = self._config["predict_instance_type"]

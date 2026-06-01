@@ -1,14 +1,11 @@
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
 from autogluon.common.loaders import load_pd
 
 from ..utils.serializers import AutoGluonSerializationWrapper
-from .prediction_future import PredictionFuture
 from .sagemaker_endpoint import SagemakerEndpoint
-
-AsyncAccept = Literal["application/x-parquet", "text/csv"]
 
 
 class TimeSeriesEndpoint:
@@ -25,40 +22,6 @@ class TimeSeriesEndpoint:
     @property
     def endpoint_name(self) -> str:
         return self._endpoint.endpoint_name
-
-    def _build_payload(
-        self,
-        data: Union[str, pd.DataFrame],
-        known_covariates: Optional[Union[str, pd.DataFrame]],
-        static_features: Optional[Union[str, pd.DataFrame]],
-        prediction_length: int,
-        target: str,
-        id_column: str,
-        timestamp_column: str,
-        quantile_levels: Optional[List[float]],
-    ) -> AutoGluonSerializationWrapper:
-        if isinstance(data, str):
-            data = load_pd.load(data)
-        if isinstance(known_covariates, str):
-            known_covariates = load_pd.load(known_covariates)
-        if isinstance(static_features, str):
-            static_features = load_pd.load(static_features)
-
-        inference_kwargs: Dict[str, Any] = {
-            "prediction_length": prediction_length,
-            "target": target,
-            "id_column": id_column,
-            "timestamp_column": timestamp_column,
-        }
-        if quantile_levels is not None:
-            inference_kwargs["quantile_levels"] = quantile_levels
-
-        return AutoGluonSerializationWrapper(
-            data=data,
-            inference_kwargs=inference_kwargs,
-            static_features=static_features,
-            known_covariates=known_covariates,
-        )
 
     def predict(
         self,
@@ -103,46 +66,29 @@ class TimeSeriesEndpoint:
         -------
         pd.DataFrame
         """
-        payload = self._build_payload(
-            data,
-            known_covariates,
-            static_features,
-            prediction_length,
-            target,
-            id_column,
-            timestamp_column,
-            quantile_levels,
+        if isinstance(data, str):
+            data = load_pd.load(data)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+        if isinstance(static_features, str):
+            static_features = load_pd.load(static_features)
+
+        inference_kwargs: Dict[str, Any] = {
+            "prediction_length": prediction_length,
+            "target": target,
+            "id_column": id_column,
+            "timestamp_column": timestamp_column,
+        }
+        if quantile_levels is not None:
+            inference_kwargs["quantile_levels"] = quantile_levels
+
+        payload = AutoGluonSerializationWrapper(
+            data=data,
+            inference_kwargs=inference_kwargs,
+            static_features=static_features,
+            known_covariates=known_covariates,
         )
         return self._endpoint.predict(payload, initial_args={"Accept": accept})
-
-    def predict_async(
-        self,
-        data: Union[str, pd.DataFrame],
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
-        prediction_length: int = 1,
-        target: str = "target",
-        id_column: str = "item_id",
-        timestamp_column: str = "timestamp",
-        quantile_levels: Optional[List[float]] = None,
-        accept: AsyncAccept = "application/x-parquet",
-    ) -> PredictionFuture:
-        """Submit an asynchronous prediction request.
-
-        Returns a :class:`PredictionFuture` immediately. Forecasting parameters match
-        :meth:`predict`. ``accept`` controls the response format written to S3.
-        """
-        payload = self._build_payload(
-            data,
-            known_covariates,
-            static_features,
-            prediction_length,
-            target,
-            id_column,
-            timestamp_column,
-            quantile_levels,
-        )
-        return self._endpoint.predict_async(payload, accept=accept)
 
     def delete_endpoint(self) -> None:
         """Delete the endpoint and cleanup artifacts."""

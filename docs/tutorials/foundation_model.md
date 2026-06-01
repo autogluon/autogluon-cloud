@@ -10,8 +10,8 @@ With the standard CloudPredictor workflow, you follow a **fit → deploy / predi
 
 To support this workflow, AutoGluon-Cloud provides {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`: a new class that lets you go directly from model selection to inference. With it, you can:
 
-- **Deploy a real-time endpoint** in minutes and start getting predictions immediately
-- **Run batch predictions** on large datasets without waiting for a training job
+- **Deploy a real-time or serverless endpoint** in minutes and start getting predictions immediately
+- **Run batch predictions** on large datasets without provisioning a persistent endpoint
 - **Reduce costs** by eliminating the training step when zero-shot accuracy is sufficient
 
 AutoGluon-Cloud currently supports foundation models for time series forecasting via {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`.
@@ -49,9 +49,30 @@ The following table shows the time series foundation models currently supported 
 
 For background on Chronos models and their capabilities, see the [Forecasting with Chronos-2](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-chronos.html) tutorial.
 
-### Batch Prediction
+### Choosing an Inference Option
 
-The simplest way to get forecasts is with `predict()`. This launches a SageMaker job and returns predictions as a DataFrame.
+AutoGluon-Cloud supports three ways to run predictions, each with different cost and performance trade-offs:
+
+1. **[Real-time endpoint](https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints.html)** — `model.deploy(inference_mode="realtime")`
+    - ✅ Highest throughput, consistently low latency, supports both GPU and CPU instances
+    - ✅ Simple setup
+    - ❌ You pay for the time the endpoint is running (can be configured to [scale to zero](https://docs.aws.amazon.com/sagemaker/latest/dg/endpoint-auto-scaling-zero-instances.html))
+
+2. **[Serverless endpoint (CPU only)](https://docs.aws.amazon.com/sagemaker/latest/dg/serverless-endpoints.html)** — `model.deploy(inference_mode="serverless")`
+    - ✅ Pay only for active inference time, no infrastructure management, scales to zero
+    - ✅ Cost-efficient for intermittent or unpredictable traffic
+    - ❌ Cold-start latency on first request after idle, lower throughput than realtime
+    - ❌ CPU-only — not suitable for models that require a GPU
+
+3. **Batch prediction** — `model.predict(...)`
+    - ✅ Pay only for active compute time, no persistent infrastructure
+    - ✅ Cost-efficient for large-scale prediction jobs
+    - ❌ Job initialization takes a few minutes (not suitable for interactive use)
+    - ❌ Requires data to be uploaded to S3 (autogluon-cloud handles this for you)
+
+The examples below assume your data uses the default column names (`item_id`, `timestamp`, `target`). If your columns differ, pass `id_column=`, `timestamp_column=`, and `target=` to the relevant call.
+
+### Batch Prediction
 
 ```python
 import pandas as pd
@@ -63,10 +84,9 @@ model = TimeSeriesFoundationModel("chronos-2", cloud_output_path="s3://YOUR-BUCK
 
 predictions = model.predict(
     data=data,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
     prediction_length=24,
+    # If your data uses different column names, pass them here:
+    # id_column="my_id", timestamp_column="my_timestamp", target="my_target",
 )
 
 print(predictions.head())
@@ -74,11 +94,10 @@ print(predictions.head())
 
 The `predict()` method accepts the following key parameters:
 
-- `data` — historical time series as a DataFrame or S3 path (long format with item_id, timestamp, target columns)
-- `target` — name of the column to forecast
+- `data` — historical time series as a DataFrame or S3 path (long format)
 - `prediction_length` — number of future time steps to predict
 - `quantile_levels` — (optional) list of quantiles to predict (e.g., `[0.1, 0.5, 0.9]`)
-- `instance_type` — (optional) SageMaker instance type; defaults to `ml.m5.2xlarge`
+- `instance_type` — (optional) SageMaker instance type; defaults to the model registry value
 - `wait` — (optional) if `False`, returns immediately with a future; call `.result()` to retrieve predictions later
 
 ### Real-Time Endpoint
@@ -86,22 +105,12 @@ The `predict()` method accepts the following key parameters:
 For low-latency predictions, deploy the model as a SageMaker endpoint:
 
 ```python
-from autogluon.cloud import TimeSeriesFoundationModel
-
 model = TimeSeriesFoundationModel("chronos-2", cloud_output_path="s3://YOUR-BUCKET/ag-foundation-model")
 
 # Deploy — this takes a few minutes
 endpoint = model.deploy()
 
-# Make predictions
-predictions = endpoint.predict(
-    data=data,
-    prediction_length=24,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
-)
-
+predictions = endpoint.predict(data=data, prediction_length=24)
 print(predictions.head())
 ```
 
@@ -112,49 +121,26 @@ The endpoint stays active until you explicitly delete it:
 endpoint.delete_endpoint()
 ```
 
-The `deploy()` method accepts:
+### Serverless Endpoint
 
-- `instance_type` — (optional) defaults to `ml.g5.xlarge` (GPU instance for faster inference)
-- `endpoint_name` — (optional) custom name for the endpoint
-- `hyperparameters` — (optional) model hyperparameters to override defaults
-
-### Async Endpoint
-
-For long-running or large requests where blocking on the response is impractical, deploy an async endpoint. SageMaker queues the request, runs it on the endpoint instance, and writes the result to S3:
+For sporadic or low-volume traffic, deploy a serverless endpoint instead. SageMaker provisions capacity on demand and scales to zero between requests:
 
 ```python
-endpoint = model.deploy(inference_mode="async")
-
-future = endpoint.predict_async(
-    data=data,
-    prediction_length=24,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
-)
-
-# Returns immediately. Inspect status without blocking:
-print(future.status())          # "InProgress" | "Completed" | "Failed"
-print(future.output_path)        # s3://.../async-output/<endpoint>/<uuid>.out
-
-# Block until ready:
-predictions = future.result()
+endpoint = model.deploy(inference_mode="serverless")
+predictions = endpoint.predict(data=data, prediction_length=24)
+endpoint.delete_endpoint()
 ```
 
-By default, results are written under ``{cloud_output_path}/async-output/{endpoint_name}/`` and failures under ``.../failures/``. Override via `inference_config`:
+The default configuration uses 4 GB of memory and a max concurrency of 5. Override via `inference_config`:
 
 ```python
 endpoint = model.deploy(
-    inference_mode="async",
-    inference_config={
-        "output_path": "s3://my-bucket/my-async-results/",
-        "failure_path": "s3://my-bucket/my-async-failures/",
-        "max_concurrent_invocations_per_instance": 4,
-    },
+    inference_mode="serverless",
+    inference_config={"memory_size_in_mb": 6144, "max_concurrency": 10},
 )
 ```
 
-Response format defaults to parquet. Pass ``accept="text/csv"`` to ``predict_async`` for CSV.
+`inference_config` keys are forwarded to [`sagemaker.serverless.ServerlessInferenceConfig`](https://sagemaker.readthedocs.io/en/stable/api/inference/serverless.html); invalid keys raise `TypeError`.
 
 ### Using Covariates with Chronos-2
 
@@ -163,28 +149,22 @@ Chronos-2 natively supports covariates — external variables that provide addit
 - **Known future covariates** — variables whose future values are known at prediction time (e.g., holidays, promotions, weather forecasts)
 - **Past covariates** — variables that are only observed historically (e.g., past sales of related products)
 
-Pass known covariates via the `known_covariates` parameter in batch mode or through the endpoint:
+Pass known covariates via the `known_covariates` parameter:
 
 ```python
-# Batch prediction with covariates
 predictions = model.predict(
     data=data,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
     prediction_length=24,
     known_covariates=future_covariates_df,  # DataFrame with id_column, timestamp_column, and covariate columns
 )
 ```
 
+The same parameter works on a deployed endpoint:
+
 ```python
-# Real-time endpoint with covariates
 predictions = endpoint.predict(
     data=data,
     prediction_length=24,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
     known_covariates=future_covariates_df,
 )
 ```

@@ -393,7 +393,7 @@ class CloudPredictor(ABC):
         custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
         wait: bool = True,
-        inference_mode: Literal["realtime", "serverless", "async"] = "realtime",
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         backend_kwargs: Optional[Dict] = None,
     ) -> None:
@@ -430,15 +430,12 @@ class CloudPredictor(ABC):
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
-        inference_mode: {"realtime", "serverless", "async"}, default = "realtime"
+        inference_mode: {"realtime", "serverless"}, default = "realtime"
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
-            (no instance management, scales to zero); ``"async"`` provisions an instance-backed
-            endpoint that processes requests asynchronously and writes results to S3.
+            (no instance management, scales to zero).
         inference_config: Optional[Dict[str, Any]], default = None
             Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
-            (e.g. ``memory_size_in_mb``, ``max_concurrency``) or
-            ``sagemaker.async_inference.AsyncInferenceConfig`` (e.g. ``output_path``, ``failure_path``).
-            For async, ``output_path`` defaults to ``{cloud_output_path}/async-output/{endpoint_name}/``.
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
         backend_kwargs: dict, default = None
             Any extra arguments needed to pass to the underneath backend.
             For SageMaker backend, valid keys are:

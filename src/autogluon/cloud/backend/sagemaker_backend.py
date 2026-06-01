@@ -12,7 +12,6 @@ import pandas as pd
 import sagemaker
 from botocore.exceptions import ClientError
 from sagemaker import Predictor
-from sagemaker.async_inference import AsyncInferenceConfig
 from sagemaker.serverless import ServerlessInferenceConfig
 
 from autogluon.common.loaders import load_pd
@@ -359,7 +358,7 @@ class SagemakerBackend(Backend):
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
         fm_serve_config: Optional[Dict[str, Any]] = None,
-        inference_mode: Literal["realtime", "serverless", "async"] = "realtime",
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
@@ -405,14 +404,12 @@ class SagemakerBackend(Backend):
             Internal: foundation-model-only. Dict serialized into the ``AG_SERVE_CONFIG`` env
             var so the FM serve script knows which model to load and with what hyperparameters.
             Has no effect for non-FM deploys.
-        inference_mode: {"realtime", "serverless", "async"}, default = "realtime"
-            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint;
-            ``"async"`` provisions an instance-backed endpoint that processes requests asynchronously
-            and writes results to S3.
+        inference_mode: {"realtime", "serverless"}, default = "realtime"
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
+            (no instance management, scales to zero).
         inference_config: Optional[Dict[str, Any]], default = None
             Mode-specific overrides forwarded to `sagemaker.serverless.ServerlessInferenceConfig`
-            or `sagemaker.async_inference.AsyncInferenceConfig`. For async, ``output_path`` defaults
-            to ``{cloud_output_path}/async-output/{endpoint_name}/`` if not provided.
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
         """
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
@@ -532,25 +529,12 @@ class SagemakerBackend(Backend):
         elif inference_mode == "serverless":
             preset = {"memory_size_in_mb": 4096, "max_concurrency": 5}
             mode_kwargs = {"serverless_inference_config": ServerlessInferenceConfig(**{**preset, **user_config})}
-        elif inference_mode == "async":
-            base = f"{self.cloud_output_path.rstrip('/')}/async-output/{endpoint_name}"
-            preset = {"output_path": f"{base}/", "failure_path": f"{base}/failures/"}
-            mode_kwargs = {
-                **instance_kwargs,
-                "async_inference_config": AsyncInferenceConfig(**{**preset, **user_config}),
-            }
         else:
             raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
 
         logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
-        self.endpoint = SagemakerEndpoint(
-            model.deploy(
-                endpoint_name=endpoint_name,
-                wait=wait,
-                **mode_kwargs,
-                **deploy_kwargs,
-            )
-        )
+        predictor = model.deploy(endpoint_name=endpoint_name, wait=wait, **mode_kwargs, **deploy_kwargs)
+        self.endpoint = SagemakerEndpoint(predictor)
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
         """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/."""
