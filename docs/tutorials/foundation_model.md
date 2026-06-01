@@ -79,6 +79,7 @@ The `predict()` method accepts the following key parameters:
 - `prediction_length` — number of future time steps to predict
 - `quantile_levels` — (optional) list of quantiles to predict (e.g., `[0.1, 0.5, 0.9]`)
 - `instance_type` — (optional) SageMaker instance type; defaults to `ml.m5.2xlarge`
+- `wait` — (optional) if `False`, returns immediately with a future; call `.result()` to retrieve predictions later
 
 ### Real-Time Endpoint
 
@@ -116,6 +117,44 @@ The `deploy()` method accepts:
 - `instance_type` — (optional) defaults to `ml.g5.xlarge` (GPU instance for faster inference)
 - `endpoint_name` — (optional) custom name for the endpoint
 - `hyperparameters` — (optional) model hyperparameters to override defaults
+
+### Async Endpoint
+
+For long-running or large requests where blocking on the response is impractical, deploy an async endpoint. SageMaker queues the request, runs it on the endpoint instance, and writes the result to S3:
+
+```python
+endpoint = model.deploy(inference_mode="async")
+
+future = endpoint.predict_async(
+    data=data,
+    prediction_length=24,
+    target="target",
+    id_column="item_id",
+    timestamp_column="timestamp",
+)
+
+# Returns immediately. Inspect status without blocking:
+print(future.status())          # "InProgress" | "Completed" | "Failed"
+print(future.output_path)        # s3://.../async-output/<endpoint>/<uuid>.out
+
+# Block until ready:
+predictions = future.result(timeout=600)
+```
+
+By default, results are written under ``{cloud_output_path}/async-output/{endpoint_name}/`` and failures under ``.../failures/``. Override via `inference_config`:
+
+```python
+endpoint = model.deploy(
+    inference_mode="async",
+    inference_config={
+        "output_path": "s3://my-bucket/my-async-results/",
+        "failure_path": "s3://my-bucket/my-async-failures/",
+        "max_concurrent_invocations_per_instance": 4,
+    },
+)
+```
+
+By default async responses are parquet; pass ``accept="text/csv"`` to ``predict_async`` for CSV. The AG-internal pickle format is not supported for async to avoid persisting version-coupled binaries to S3.
 
 ### Using Covariates with Chronos-2
 

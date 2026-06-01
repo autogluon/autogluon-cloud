@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import pandas as pd
 
@@ -6,6 +6,9 @@ from autogluon.common.loaders import load_pd
 
 from ..utils.serializers import AutoGluonSerializationWrapper
 from .endpoint import Endpoint
+from .prediction_future import PredictionFuture
+
+AsyncAccept = Literal["application/x-parquet", "text/csv"]
 
 
 class TimeSeriesEndpoint:
@@ -89,6 +92,62 @@ class TimeSeriesEndpoint:
             known_covariates=known_covariates,
         )
         return self._endpoint.predict(payload, initial_args={"Accept": accept})
+
+    def predict_async(
+        self,
+        data: Union[str, pd.DataFrame],
+        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
+        static_features: Optional[Union[str, pd.DataFrame]] = None,
+        prediction_length: int = 1,
+        target: str = "target",
+        id_column: str = "item_id",
+        timestamp_column: str = "timestamp",
+        quantile_levels: Optional[List[float]] = None,
+        accept: AsyncAccept = "application/x-parquet",
+    ) -> PredictionFuture:
+        """Submit an asynchronous prediction request.
+
+        Returns immediately with a future-like handle. Use ``future.result()`` to block
+        until the result is available, or ``future.status()`` for a non-blocking check.
+
+        Parameters
+        ----------
+        data, known_covariates, static_features, prediction_length, target, id_column, timestamp_column, quantile_levels
+            Same as :meth:`predict`.
+        accept
+            Response content type written to S3. ``"application/x-parquet"`` (default) or
+            ``"text/csv"``. Note: the AG-internal ``application/x-autogluon`` pickle format
+            is not supported for async — persisting pickles to S3 is fragile and version-coupled.
+
+        Returns
+        -------
+        PredictionFuture
+            Pending result. Inspect ``future.output_path`` for the S3 URL where the
+            response will land; call ``future.result()`` to retrieve the DataFrame.
+        """
+        if isinstance(data, str):
+            data = load_pd.load(data)
+        if isinstance(known_covariates, str):
+            known_covariates = load_pd.load(known_covariates)
+        if isinstance(static_features, str):
+            static_features = load_pd.load(static_features)
+
+        inference_kwargs: Dict[str, Any] = {
+            "prediction_length": prediction_length,
+            "target": target,
+            "id_column": id_column,
+            "timestamp_column": timestamp_column,
+        }
+        if quantile_levels is not None:
+            inference_kwargs["quantile_levels"] = quantile_levels
+
+        payload = AutoGluonSerializationWrapper(
+            data=data,
+            inference_kwargs=inference_kwargs,
+            static_features=static_features,
+            known_covariates=known_covariates,
+        )
+        return self._endpoint.predict_async(payload, accept=accept)
 
     def delete_endpoint(self) -> None:
         """Delete the endpoint and cleanup artifacts."""

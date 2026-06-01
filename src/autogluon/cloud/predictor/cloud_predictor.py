@@ -8,7 +8,7 @@ import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import boto3
 import pandas as pd
@@ -393,10 +393,12 @@ class CloudPredictor(ABC):
         custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
         wait: bool = True,
+        inference_mode: Literal["realtime", "serverless", "async"] = "realtime",
+        inference_config: Optional[Dict[str, Any]] = None,
         backend_kwargs: Optional[Dict] = None,
     ) -> None:
         """
-        Deploy a predictor to an endpoint, which can be used to do real-time inference later.
+        Deploy a predictor to an inference endpoint.
 
         Parameters
         ----------
@@ -413,9 +415,10 @@ class CloudPredictor(ABC):
             If provided a specific version, will use this version.
             If `custom_image_uri` is set, this argument will be ignored.
         instance_type: str, default = 'ml.m5.2xlarge'
-            Instance to be deployed for the endpoint
+            Instance to be deployed for the endpoint. Ignored when ``inference_mode="serverless"``.
         initial_instance_count: int, default = 1,
-            Initial number of instances to be deployed for the endpoint
+            Initial number of instances to be deployed for the endpoint. Ignored when
+            ``inference_mode="serverless"``.
         custom_image_uri: Optional[str], default = None,
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
@@ -426,6 +429,19 @@ class CloudPredictor(ABC):
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
+        inference_mode: {"realtime", "serverless", "async"}, default = "realtime"
+            Endpoint type. ``"realtime"`` provisions an instance-backed endpoint with synchronous
+            request/response; ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
+            (no instance management, scales to zero); ``"async"`` provisions an instance-backed
+            endpoint where requests are processed asynchronously and results written to S3.
+        inference_config: Optional[Dict[str, Any]], default = None
+            Mode-specific overrides shallow-merged on top of the preset for ``inference_mode``.
+            For ``"serverless"``: keys are forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
+            For ``"async"``: keys are forwarded to ``sagemaker.async_inference.AsyncInferenceConfig``
+            (e.g. ``output_path``, ``failure_path``); defaults to writing under
+            ``{cloud_output_path}/async-output/{endpoint_name}/`` if not provided.
+            Invalid keys raise ``TypeError``.
         backend_kwargs: dict, default = None
             Any extra arguments needed to pass to the underneath backend.
             For SageMaker backend, valid keys are:
@@ -448,6 +464,8 @@ class CloudPredictor(ABC):
             custom_image_uri=custom_image_uri,
             volume_size=volume_size,
             wait=wait,
+            inference_mode=inference_mode,
+            inference_config=inference_config,
             **backend_kwargs,
         )
 

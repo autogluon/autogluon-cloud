@@ -1,17 +1,19 @@
 import logging
-from typing import Union
+from typing import Any, Optional, Union
 
 import pandas as pd
 from sagemaker.predictor import Predictor
+from sagemaker.predictor_async import AsyncPredictor
 
 from .endpoint import Endpoint
+from .prediction_future import PredictionFuture
 
 logger = logging.getLogger(__name__)
 
 
 class SagemakerEndpoint(Endpoint):
-    def __init__(self, endpoint: Predictor) -> None:
-        self._endpoint: Predictor = endpoint
+    def __init__(self, endpoint: Union[Predictor, AsyncPredictor]) -> None:
+        self._endpoint: Union[Predictor, AsyncPredictor] = endpoint
 
     @property
     def endpoint_name(self) -> str:
@@ -20,11 +22,48 @@ class SagemakerEndpoint(Endpoint):
             return self._endpoint.endpoint_name
         return None
 
+    @property
+    def is_async(self) -> bool:
+        """Whether this endpoint was deployed in async mode."""
+        return isinstance(self._endpoint, AsyncPredictor)
+
     def predict(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """
         Predict with the endpoint
         """
+        if self.is_async:
+            raise RuntimeError(
+                "This endpoint was deployed in async mode; use `predict_async()` instead of `predict()`."
+            )
         return self._endpoint.predict(test_data, **kwargs)
+
+    def predict_async(
+        self,
+        test_data: Union[str, pd.DataFrame],
+        accept: str,
+        initial_args: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> PredictionFuture:
+        """Submit an async inference request and return a future for the eventual result.
+
+        Parameters
+        ----------
+        test_data
+            Input payload, serialized by the underlying predictor's serializer.
+        accept
+            Response content type (e.g. ``"application/x-parquet"``, ``"text/csv"``). Drives
+            the deserialization performed by :meth:`AsyncPredictionFuture.result`.
+        initial_args
+            Extra keyword args for boto3 ``invoke_endpoint_async``. ``Accept`` is added
+            automatically.
+        """
+        if not self.is_async:
+            raise RuntimeError(
+                "This endpoint was not deployed in async mode; use `predict()` instead of `predict_async()`."
+            )
+        merged_args = {"Accept": accept, **(initial_args or {})}
+        response = self._endpoint.predict_async(data=test_data, initial_args=merged_args, **kwargs)
+        return PredictionFuture._from_async_response(response, accept=accept)
 
     def delete_endpoint(self) -> None:
         """

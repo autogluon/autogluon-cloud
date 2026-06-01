@@ -6,12 +6,14 @@ import pickle
 import shutil
 import tarfile
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import pandas as pd
 import sagemaker
 from botocore.exceptions import ClientError
 from sagemaker import Predictor
+from sagemaker.async_inference import AsyncInferenceConfig
+from sagemaker.serverless import ServerlessInferenceConfig
 
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
@@ -344,6 +346,17 @@ class SagemakerBackend(Backend):
 
         return dict(model_kwargs=model_kwargs, deploy_kwargs=deploy_kwargs)
 
+    _INFERENCE_CONFIG_PRESETS: Dict[str, Dict[str, Any]] = {
+        "realtime": {},
+        "serverless": {"memory_size_in_mb": 4096, "max_concurrency": 5},
+        "async": {},
+    }
+
+    def _build_async_defaults(self, endpoint_name: str) -> Dict[str, Any]:
+        """S3 paths to use when the user doesn't pass `output_path` / `failure_path` for async mode."""
+        base = self.cloud_output_path.rstrip("/") + f"/async-output/{endpoint_name}"
+        return {"output_path": f"{base}/", "failure_path": f"{base}/failures/"}
+
     def deploy(
         self,
         predictor_path: Optional[str] = None,
@@ -356,7 +369,9 @@ class SagemakerBackend(Backend):
         wait: bool = True,
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
-        serve_config: Optional[Dict[str, Any]] = None,
+        fm_serve_config: Optional[Dict[str, Any]] = None,
+        inference_mode: Literal["realtime", "serverless", "async"] = "realtime",
+        inference_config: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -397,12 +412,37 @@ class SagemakerBackend(Backend):
         deploy_kwargs:
             Any extra arguments needed to pass to deploy.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
-        serve_config: Optional[Dict[str, Any]], default = None
-            Configuration dict passed to the serve script via the AG_SERVE_CONFIG env var.
+        fm_serve_config: Optional[Dict[str, Any]], default = None
+            Internal: foundation-model-only. Dict serialized into the ``AG_SERVE_CONFIG`` env
+            var so the FM serve script knows which model to load and with what hyperparameters.
+            Has no effect for non-FM deploys.
+        inference_mode: {"realtime", "serverless", "async"}, default = "realtime"
+            Endpoint type.
+
+            * ``"realtime"`` — instance-backed endpoint with synchronous request/response.
+            * ``"serverless"`` — SageMaker Serverless Inference (no instance management, scales to zero).
+            * ``"async"`` — instance-backed endpoint where requests are submitted, processed,
+              and results written to S3 asynchronously.
+        inference_config: Optional[Dict[str, Any]], default = None
+            Mode-specific overrides shallow-merged on top of the preset for `inference_mode`.
+
+            * ``"serverless"``: keys forwarded to `sagemaker.serverless.ServerlessInferenceConfig`
+              (e.g. `memory_size_in_mb`, `max_concurrency`).
+            * ``"async"``: keys forwarded to `sagemaker.async_inference.AsyncInferenceConfig`
+              (e.g. `output_path`, `failure_path`, `max_concurrent_invocations_per_instance`).
+              If `output_path` is not provided, defaults to
+              ``{cloud_output_path}/async-output/{endpoint_name}/`` (and `failure_path` to
+              ``.../failures/``).
+
+            Invalid keys raise `TypeError`.
         """
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
+        if inference_mode not in self._INFERENCE_CONFIG_PRESETS:
+            raise ValueError(
+                f"Unsupported inference_mode={inference_mode!r}. Supported: {list(self._INFERENCE_CONFIG_PRESETS)}"
+            )
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 
@@ -483,8 +523,8 @@ class SagemakerBackend(Backend):
         else:
             model_kwargs_env = {SAGEMAKER_MODEL_SERVER_WORKERS: "1"}
 
-        if serve_config is not None:
-            model_kwargs_env["AG_SERVE_CONFIG"] = json.dumps(serve_config)
+        if fm_serve_config is not None:
+            model_kwargs_env["AG_SERVE_CONFIG"] = json.dumps(fm_serve_config)
 
         model = model_cls(
             model_data=predictor_path,
@@ -502,14 +542,28 @@ class SagemakerBackend(Backend):
         if deploy_kwargs is None:
             deploy_kwargs = {}
 
-        logger.log(20, "Deploying model to the endpoint")
+        merged_inference_config = {**self._INFERENCE_CONFIG_PRESETS[inference_mode], **(inference_config or {})}
+        mode_kwargs: Dict[str, Any] = {}
+        if inference_mode == "realtime":
+            mode_kwargs["instance_type"] = instance_type
+            mode_kwargs["initial_instance_count"] = initial_instance_count
+            mode_kwargs["volume_size"] = volume_size
+        elif inference_mode == "serverless":
+            mode_kwargs["serverless_inference_config"] = ServerlessInferenceConfig(**merged_inference_config)
+        elif inference_mode == "async":
+            async_defaults = self._build_async_defaults(endpoint_name)
+            merged_async = {**async_defaults, **merged_inference_config}
+            mode_kwargs["async_inference_config"] = AsyncInferenceConfig(**merged_async)
+            mode_kwargs["instance_type"] = instance_type
+            mode_kwargs["initial_instance_count"] = initial_instance_count
+            mode_kwargs["volume_size"] = volume_size
+
+        logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
         self.endpoint = SagemakerEndpoint(
             model.deploy(
                 endpoint_name=endpoint_name,
-                instance_type=instance_type,
-                initial_instance_count=initial_instance_count,
-                volume_size=volume_size,
                 wait=wait,
+                **mode_kwargs,
                 **deploy_kwargs,
             )
         )
