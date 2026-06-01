@@ -9,6 +9,7 @@ import shutil
 from pprint import pprint
 
 import boto3
+import pandas as pd
 import pickle
 
 from autogluon.common.loaders import load_pd
@@ -74,6 +75,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--static_features", type=str, required=False, default=get_env_if_present("SM_CHANNEL_STATIC_FEATURES")
     )
+    parser.add_argument("--test_data", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TEST_DATA"))
 
     args, _ = parser.parse_known_args()
 
@@ -176,16 +178,34 @@ if __name__ == "__main__":
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
 
     if ag_args.get("predict_after_fit", False):
-        if predictor_type != "timeseries":
-            raise NotImplementedError(
-                f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
-            )
-        print("Running in-job prediction for fit_predict")
-        predictions = predictor.predict(training_data, known_covariates=known_covariates)
+        if predictor_type == "timeseries":
+            print("Running in-job prediction for fit_predict")
+            predictions = predictor.predict(training_data, known_covariates=known_covariates)
+            predictions_df = predictions.to_data_frame().reset_index()
+        elif predictor_type == "tabular":
+            assert args.test_data, "`test_data` channel required for tabular fit_predict"
+            test_data = TabularDataset(get_input_path(args.test_data))
+            print("Running in-job prediction for fit_predict")
+            # Match tabular_serve.py output shape: for classification, write
+            # `[<label>, <class>_proba, ...]` so predict() and predict_proba() share one job.
+            from autogluon.core.constants import QUANTILE, REGRESSION
+            from autogluon.core.utils import get_pred_from_proba_df
+
+            if predictor.problem_type not in [REGRESSION, QUANTILE]:
+                pred_proba = predictor.predict_proba(test_data, as_pandas=True)
+                pred = get_pred_from_proba_df(pred_proba, problem_type=predictor.problem_type)
+                pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
+                pred.name = predictor.label
+                predictions_df = pd.concat([pred, pred_proba], axis=1)
+            else:
+                predictions = predictor.predict(test_data, as_pandas=True)
+                predictions_df = predictions.to_frame() if isinstance(predictions, pd.Series) else predictions
+        else:
+            raise NotImplementedError(f"`fit_predict` is not supported for predictor_type='{predictor_type}'.")
         predictions_path = ag_args["predictions_path"]
         # Save locally then upload via boto3: s3fs/fsspec are not available in the training container.
         local_path = os.path.join(args.output_data_dir, os.path.basename(predictions_path))
-        save_pd.save(path=local_path, df=predictions.to_data_frame().reset_index())
+        save_pd.save(path=local_path, df=predictions_df)
         bucket, key = s3_path_to_bucket_prefix(predictions_path)
         boto3.client("s3").upload_file(local_path, bucket, key)
         print(f"Uploaded predictions to {predictions_path}")

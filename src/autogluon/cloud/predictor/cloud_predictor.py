@@ -765,6 +765,10 @@ class CloudPredictor(ABC):
         """
         self.backend.cleanup_deployment()
 
+    def get_fit_predict_results(self) -> pd.DataFrame:
+        """Retrieve predictions produced by a completed ``fit_predict`` job."""
+        return self.backend.get_fit_predict_results()
+
     def _download_predictor(self, path, save_path):
         logger.log(20, "Downloading trained models to local directory")
         predictor_bucket, predictor_key_prefix = s3_path_to_bucket_prefix(path)
