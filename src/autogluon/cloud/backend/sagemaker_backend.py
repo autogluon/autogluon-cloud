@@ -295,7 +295,14 @@ class SagemakerBackend(Backend):
         if extra_ag_args:
             ag_args.update(extra_ag_args)
         if ag_args.get("predict_after_fit"):
-            ag_args.setdefault("predictions_path", f"{self.cloud_output_path}/{job_name}/predictions.csv")
+            predictions_path = ag_args.get("predictions_path")
+            if predictions_path is None:
+                ag_args["predictions_path"] = f"{self.cloud_output_path}/{job_name}/predictions.csv"
+            elif not is_s3_url(predictions_path) or not predictions_path.endswith((".csv", ".parquet")):
+                raise ValueError(
+                    f"`predictions_path` must be a full S3 URL ending in '.csv' or '.parquet' "
+                    f"(e.g. 's3://bucket/key/predictions.parquet'), got {predictions_path!r}."
+                )
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
@@ -639,7 +646,7 @@ class SagemakerBackend(Backend):
         """Parse backend specific kwargs and get them ready to be sent to predict call"""
         download = kwargs.get("download", True)
         persist = kwargs.get("persist", True)
-        save_path = kwargs.get("persist", None)
+        save_path = kwargs.get("save_path", None)
         model_kwargs = kwargs.get("model_kwargs", None)
         transformer_kwargs = kwargs.get("transformer_kwargs", None)
         transform_kwargs = kwargs.get("transform_kwargs", None)
@@ -954,15 +961,36 @@ class SagemakerBackend(Backend):
 
     def get_fit_predict_results(self) -> pd.DataFrame:
         """Read predictions produced by a completed ``fit_predict`` job from S3."""
-        ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
-        with open(ag_args_path, "rb") as f:
-            ag_args = pickle.load(f)
+        ag_args = self._download_ag_args_from_job()
         predictions_path = ag_args.get("predictions_path")
         assert predictions_path is not None, "No fit_predict job found. Call `fit_predict()` first."
         bucket, key = s3_path_to_bucket_prefix(predictions_path)
         with tempfile.TemporaryDirectory(prefix="ag_fit_predict_") as tmpdir:
-            self.sagemaker_session.download_data(path=tmpdir, bucket=bucket, key_prefix=key)
-            return load_pd.load(os.path.join(tmpdir, os.path.basename(key)))
+            local_path = os.path.join(tmpdir, os.path.basename(key))
+            self.sagemaker_session.boto_session.client("s3").download_file(bucket, key, local_path)
+            return load_pd.load(local_path)
+
+    def _download_ag_args_from_job(self) -> Dict[str, Any]:
+        """Fetch and unpickle the ``ag_args.pkl`` that was uploaded as the ``ag_args`` channel.
+
+        Each training job carries the exact pickle it was launched with as an input channel,
+        making this the authoritative source — independent of local-disk lifetime.
+        """
+        job_name = self._fit_job.job_name
+        assert job_name is not None, "No fit job found. Call `fit()` / `fit_predict()` first."
+        desc = self.sagemaker_session.describe_training_job(job_name)
+        channels = {c["ChannelName"]: c["DataSource"]["S3DataSource"]["S3Uri"] for c in desc["InputDataConfig"]}
+        ag_args_uri = channels.get("ag_args")
+        assert ag_args_uri is not None, (
+            f"Training job {job_name!r} has no `ag_args` input channel — cannot recover predictions_path."
+        )
+        bucket, key = s3_path_to_bucket_prefix(ag_args_uri)
+        assert key.endswith(".pkl"), f"Expected ag_args channel to point to a .pkl file, got {ag_args_uri!r}"
+        with tempfile.TemporaryDirectory(prefix="ag_args_") as tmpdir:
+            local_path = os.path.join(tmpdir, os.path.basename(key))
+            self.sagemaker_session.boto_session.client("s3").download_file(bucket, key, local_path)
+            with open(local_path, "rb") as f:
+                return pickle.load(f)
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(

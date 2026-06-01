@@ -23,7 +23,7 @@ def test_full_functionality(test_helper, framework_version):
         predictor_init_args = dict(label="class", eval_metric="roc_auc")
         predictor_fit_args = dict(time_limit=time_limit)
         dummy_cloud_predictor = TabularCloudPredictor()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="No `cloud_output_path` was provided"):
             dummy_cloud_predictor.fit(
                 train_data=train_data,
                 predictor_init_args=predictor_init_args,

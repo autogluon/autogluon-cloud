@@ -12,7 +12,6 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import boto3
 import pandas as pd
-import sagemaker
 
 from autogluon.common.loaders import load_pkl
 from autogluon.common.savers import save_pkl
@@ -24,6 +23,7 @@ from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
+from ..utils.aws_utils import resolve_cloud_output_path
 from ..utils.utils import unzip_file
 
 logger = logging.getLogger(__name__)
@@ -52,13 +52,15 @@ class CloudPredictor(ABC):
             you must specify different `local_output_path` locations or don't specify `local_output_path` at all.
             Otherwise files from first `fit()` will be overwritten by second `fit()`.
         cloud_output_path: Optional[str], default = None
-            Path to s3 location where intermediate artifacts will be uploaded and trained models should be saved.
-            This has to be provided because s3 buckets are unique globally, so it is hard to create one for you.
-            If you only provided the bucket but not the subfolder, a time-stamped folder called "YOUR_BUCKET/ag-[TIMESTAMP]" will be created.
-            If you provided both the bucket and the subfolder, then we will use that instead.
-            Note: To call `fit()` twice and save all results of each fit,
-            you must either specify different `cloud_output_path` locations or only provide the bucket but not the subfolder.
-            Otherwise files from first `fit()` will be overwritten by second `fit()`.
+            S3 location where intermediate artifacts and trained models are stored. Accepts:
+
+            * ``s3://bucket`` — a unique timestamped subfolder ``ag-<timestamp>`` is appended,
+              so each call gets its own folder and repeated runs don't overwrite each other.
+            * ``s3://bucket/prefix`` — used verbatim. Re-running with the same prefix will
+              overwrite previously written artifacts.
+            * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set
+              by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
+              append a timestamped subfolder. Raises if no bucket is configured.
         backend: str, default = "sagemaker"
             The backend to use. Valid options are: "sagemaker" and "ray_aws".
             SageMaker backend supports training, deploying and batch inference on AWS SageMaker. Only single instance training is supported.
@@ -77,7 +79,7 @@ class CloudPredictor(ABC):
         cloud_logger = logging.getLogger("autogluon.cloud")
         set_logger_verbosity(self.verbosity, logger=cloud_logger)
         self.local_output_path = self._setup_local_output_path(local_output_path)
-        self.cloud_output_path = self._setup_cloud_output_path(cloud_output_path)
+        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
         self.backend: Backend = BackendFactory.get_backend(
             backend=self.backend_map[backend],
             local_output_path=self.local_output_path,
@@ -156,24 +158,6 @@ class CloudPredictor(ABC):
                 f"Warning: path already exists! This predictor may overwrite an existing predictor! path='{path!r}'"
             )
         return os.path.abspath(path)
-
-    def _setup_cloud_output_path(self, path):
-        if not path:
-            return path
-        if path.endswith("/"):
-            path = path[:-1]
-        path_cleaned = path
-        try:
-            path_cleaned = path.split("://", 1)[1]
-        except Exception:
-            pass
-        path_split = path_cleaned.split("/", 1)
-        # If user only provided the bucket, we create a subfolder with timestamp for them
-        if len(path_split) == 1:
-            path = os.path.join(path, f"ag-{sagemaker.utils.sagemaker_timestamp()}")
-        if is_s3_url(path):
-            return path
-        return "s3://" + path
 
     def fit(
         self,

@@ -13,6 +13,7 @@ from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
+from ..utils.aws_utils import resolve_cloud_output_path
 from .registry import get_model_config
 
 
@@ -59,7 +60,14 @@ class FoundationModel:
         backend
             Cloud backend to use.
         cloud_output_path
-            S3 path to store intermediate artifacts.
+            S3 location where intermediate artifacts are stored. Accepts:
+
+            * ``s3://bucket`` — a unique timestamped subfolder ``ag-<timestamp>`` is appended.
+            * ``s3://bucket/prefix`` — used verbatim. Re-running with the same prefix
+              will overwrite previously written artifacts.
+            * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set
+              by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
+              append a timestamped subfolder. Raises if no bucket is configured.
         hyperparameters
             Default hyperparameters applied to inference and (when supported) training.
         role
@@ -68,7 +76,7 @@ class FoundationModel:
             :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
         """
         self.model_id = model_id
-        self.cloud_output_path = cloud_output_path
+        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
         self._config = get_model_config(model_id)
         self._hyperparameter_overrides = hyperparameters or {}
         self._tmpdir = tempfile.TemporaryDirectory(prefix="ag_fm_")
@@ -82,7 +90,7 @@ class FoundationModel:
         self._backend = BackendFactory.get_backend(
             backend=backend_name,
             local_output_path=self._tmpdir.name,
-            cloud_output_path=cloud_output_path,
+            cloud_output_path=self.cloud_output_path,
             predictor_type=self._predictor_type,
             role=role,
         )
@@ -321,6 +329,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        predictions_path: Optional[str] = None,
         **backend_kwargs,
     ) -> Optional[pd.DataFrame]:
         """
@@ -358,6 +367,13 @@ class TimeSeriesFoundationModel(FoundationModel):
             Custom Docker image URI for the container.
         wait
             If True, block and return DataFrame. If False, return the job handle.
+        predictions_path
+            S3 URL where predictions will be written by the prediction job (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
+            role must have ``s3:PutObject`` permission for this location. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical
+            column names ``item_id`` and ``timestamp``, regardless of the ``id_column`` /
+            ``timestamp_column`` passed in.
         **backend_kwargs
             Additional backend-specific arguments (e.g., job_name, volume_size,
             autogluon_sagemaker_estimator_kwargs).
@@ -382,6 +398,10 @@ class TimeSeriesFoundationModel(FoundationModel):
             "static_features": static_features,
         }
 
+        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True}
+        if predictions_path is not None:
+            extra_ag_args["predictions_path"] = predictions_path
+
         self._backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -392,7 +412,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            extra_ag_args={"predict_after_fit": True},
+            extra_ag_args=extra_ag_args,
             **backend_kwargs,
         )
 

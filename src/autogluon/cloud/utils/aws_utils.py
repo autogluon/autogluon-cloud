@@ -5,6 +5,8 @@ import boto3
 import sagemaker
 from botocore.config import Config
 
+from autogluon.common.utils.s3_utils import is_s3_url
+
 from ..config import load_config
 
 logger = logging.getLogger(__name__)
@@ -25,9 +27,69 @@ def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
     if config is not None:
         entry = config.backends.get(backend_name)
         if entry is not None and entry.role_arn:
-            logger.log(20, f"Using execution role from ~/.autogluon/cloud.yaml: {entry.role_arn}")
+            logger.info(f"Using execution role from ~/.autogluon/cloud.yaml: {entry.role_arn}")
             return entry.role_arn
     return sagemaker.get_execution_role()
+
+
+def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optional[str]:
+    """Resolve the S3 location where AutoGluon-Cloud will read/write artifacts.
+
+    Resolution order for the bucket:
+
+    1. ``path`` argument if provided (``s3://bucket`` or ``s3://bucket/prefix``).
+    2. ``bucket`` from ``~/.autogluon/cloud.yaml`` under the matching backend slot.
+
+    Prefix behavior:
+
+    * Bucket only (no prefix) — a unique timestamped subfolder ``ag-<timestamp>`` is appended.
+      Each call gets its own folder, so repeated runs don't overwrite each other.
+    * Bucket and prefix — the path is used verbatim. Re-running with the same prefix
+      will overwrite previously written artifacts; pick a fresh prefix per run if you
+      want them kept side by side.
+
+    Returns ``None`` if no path is given and no bucket is configured. Callers that
+    require a path (e.g. ``fit()``) should check and raise at the point of use.
+    """
+    if path is None:
+        config = load_config()
+        entry = config.backends.get(backend_name) if config is not None else None
+        if entry is None or not entry.bucket:
+            return None
+        path = f"s3://{entry.bucket}"
+        logger.info(f"Using bucket from ~/.autogluon/cloud.yaml: {entry.bucket}")
+
+    path = path.rstrip("/")
+    if not is_s3_url(path):
+        path = "s3://" + path
+    body = path[len("s3://") :]
+    bucket, _, prefix = body.partition("/")
+    if not prefix:
+        path = f"s3://{bucket}/ag-{sagemaker.utils.sagemaker_timestamp()}"
+        logger.info(f"cloud_output_path set to {path} (timestamped subfolder under bucket).")
+    else:
+        logger.info(f"cloud_output_path set to {path}.")
+        if _s3_prefix_has_objects(bucket, prefix):
+            logger.warning(
+                f"cloud_output_path {path} already contains objects. Running fit()/deploy() "
+                "will overwrite the existing artifacts. Pass a fresh prefix, or pass just "
+                "`s3://<bucket>` to get a unique timestamped subfolder."
+            )
+    return path
+
+
+def _s3_prefix_has_objects(bucket: str, prefix: str) -> bool:
+    """Return True if any object exists under ``s3://bucket/prefix``.
+
+    Swallows errors (missing credentials, AccessDenied, NoSuchBucket) and returns False —
+    we use this only for an advisory warning, so it must never break construction.
+    """
+    try:
+        response = boto3.client("s3").list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=1)
+        return response.get("KeyCount", 0) > 0
+    except Exception as e:
+        logger.debug(f"Skipping cloud_output_path emptiness check ({type(e).__name__}: {e})")
+        return False
 
 
 def get_latest_amazon_linux_ami(region="us-east-1", version="al2023"):
