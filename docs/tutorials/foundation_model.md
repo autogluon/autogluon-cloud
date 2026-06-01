@@ -138,7 +138,7 @@ print(future.status())          # "InProgress" | "Completed" | "Failed"
 print(future.output_path)        # s3://.../async-output/<endpoint>/<uuid>.out
 
 # Block until ready:
-predictions = future.result(timeout=600)
+predictions = future.result()
 ```
 
 By default, results are written under ``{cloud_output_path}/async-output/{endpoint_name}/`` and failures under ``.../failures/``. Override via `inference_config`:

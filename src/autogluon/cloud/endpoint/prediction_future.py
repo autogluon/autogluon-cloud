@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-import io
 from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import TYPE_CHECKING, Callable, Literal, Optional
 
+import boto3
 import pandas as pd
+from botocore.exceptions import ClientError
 from sagemaker.async_inference.async_inference_response import AsyncInferenceResponse
 from sagemaker.async_inference.waiter_config import WaiterConfig
+from sagemaker.estimator import Estimator
+
+from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
+
+from ..utils.deserializers import PandasDeserializer
 
 if TYPE_CHECKING:
     from ..job.sagemaker_job import SageMakerFitJob
@@ -28,7 +34,7 @@ class PredictionFuture(ABC):
     def status(self) -> PredictionStatus: ...
 
     @abstractmethod
-    def result(self, timeout: Optional[float] = None) -> pd.DataFrame: ...
+    def result(self) -> pd.DataFrame: ...
 
 
 class AsyncPredictionFuture(PredictionFuture):
@@ -47,15 +53,12 @@ class AsyncPredictionFuture(PredictionFuture):
         return self._response.failure_path
 
     def status(self) -> PredictionStatus:
-        import boto3
-        from botocore.exceptions import ClientError
-
         s3 = boto3.client("s3")
 
         def exists(url: Optional[str]) -> bool:
             if url is None:
                 return False
-            bucket, key = _parse_s3(url)
+            bucket, key = s3_path_to_bucket_prefix(url)
             try:
                 s3.head_object(Bucket=bucket, Key=key)
                 return True
@@ -70,9 +73,10 @@ class AsyncPredictionFuture(PredictionFuture):
             return "Failed"
         return "InProgress"
 
-    def result(self, timeout: Optional[float] = None) -> pd.DataFrame:
-        waiter = None if timeout is None else WaiterConfig(max_attempts=max(1, int(timeout // 5)), delay=5)
-        return _deserialize(self._response.get_result(waiter_config=waiter), self._accept)
+    def result(self) -> pd.DataFrame:
+        raw = self._response.get_result(waiter_config=WaiterConfig())
+        stream = raw if hasattr(raw, "read") else BytesIO(raw)
+        return PandasDeserializer().deserialize(stream, self._accept)
 
 
 class JobPredictionFuture(PredictionFuture):
@@ -98,9 +102,7 @@ class JobPredictionFuture(PredictionFuture):
             return "Failed"
         return "InProgress"
 
-    def result(self, timeout: Optional[float] = None) -> pd.DataFrame:
-        from sagemaker.estimator import Estimator
-
+    def result(self) -> pd.DataFrame:
         if not self._job.completed:
             Estimator.attach(self._job.job_name, sagemaker_session=self._job.session).logs()
         if self.status() == "Failed":
@@ -109,27 +111,3 @@ class JobPredictionFuture(PredictionFuture):
                 f"(status={self._job.get_job_status()!r}). Check the SageMaker console for details."
             )
         return self._result_loader()
-
-
-def _parse_s3(url: str) -> tuple[str, str]:
-    assert url.startswith("s3://"), f"Not an S3 URL: {url}"
-    bucket, _, key = url[len("s3://") :].partition("/")
-    return bucket, key
-
-
-def _deserialize(raw: object, accept: str) -> pd.DataFrame:
-    if isinstance(raw, pd.DataFrame):
-        return raw
-    if isinstance(raw, (bytes, bytearray)):
-        buf: object = BytesIO(raw)
-    elif hasattr(raw, "read"):
-        buf = raw
-    else:
-        raise TypeError(f"Cannot deserialize async response of type {type(raw).__name__}")
-    if accept == "application/x-parquet":
-        return pd.read_parquet(buf)
-    if accept == "text/csv":
-        if isinstance(buf, BytesIO):
-            buf = io.StringIO(buf.read().decode("utf-8"))
-        return pd.read_csv(buf)
-    raise ValueError(f"Unsupported accept={accept!r}; use 'application/x-parquet' or 'text/csv'.")

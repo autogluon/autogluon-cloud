@@ -270,7 +270,7 @@ def test_foundation_model_deploy_async(test_helper, framework_version, retail_sa
                 prediction_length=ds["prediction_length"],
             )
             assert future.output_path.startswith("s3://")
-            predictions = future.result(timeout=900)
+            predictions = future.result()
             _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
         finally:
             endpoint.delete_endpoint()
