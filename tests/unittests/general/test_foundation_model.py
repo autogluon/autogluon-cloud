@@ -1,5 +1,5 @@
-"""Unit tests for FoundationModel: serialization, hyperparameter resolution, and
-deploy-time wiring of model_artifact_uri / model_path."""
+"""Unit tests for FoundationModel: serialization, hyperparameter resolution, and deploy-time wiring of
+model_artifact_uri / model_path."""
 
 from unittest import mock
 
@@ -120,8 +120,8 @@ def test_cache_model_artifact_rejects_non_s3_path():
 
 
 def test_cache_model_artifact_raises_on_stale_version_without_overwrite():
-    """Returning a model pointing at a tarball bundled by a different autogluon-cloud
-    version surfaces as a confusing endpoint failure later. Force the user to opt in."""
+    """Returning a model pointing at a tarball bundled by a different autogluon-cloud version surfaces as a confusing
+    endpoint failure later. Force the user to opt in."""
     fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
     s3 = mock.MagicMock()
     s3.head_object.return_value = {"Metadata": {"autogluon-cloud-version": "0.0.0-stale"}}

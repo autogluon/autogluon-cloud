@@ -401,11 +401,10 @@ class SagemakerBackend(Backend):
         fm_serve_config: Optional[Dict[str, Any]], default = None
             Configuration dict passed to the FM serve script via the AG_FM_SERVE_CONFIG env var.
         repack: bool, default = True
-            Whether the SageMaker SDK should download ``predictor_path``, inject the
-            entry-point script, and re-upload it. Set to False when ``predictor_path``
-            already contains the serve script (e.g. an artifact bundled by
-            :meth:`FoundationModel.cache_model_artifact`) to skip the round-trip.
-            Ignored when ``predictor_path`` is None.
+            Whether the SageMaker SDK should download ``predictor_path``, inject the entry-point script, and re-upload
+            it. Set to False when ``predictor_path`` already contains the serve script (e.g. an artifact bundled by
+            :meth:`FoundationModel.cache_model_artifact`) to skip the round-trip. Ignored when ``predictor_path`` is
+            None.
         """
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"

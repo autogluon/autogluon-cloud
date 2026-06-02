@@ -88,11 +88,11 @@ class FoundationModel:
             S3 location where intermediate artifacts are stored. Accepts:
 
             * ``s3://bucket`` — a unique timestamped subfolder ``ag-<timestamp>`` is appended.
-            * ``s3://bucket/prefix`` — used verbatim. Re-running with the same prefix
-              will overwrite previously written artifacts.
-            * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set
-              by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
-              append a timestamped subfolder. Raises if no bucket is configured.
+            * ``s3://bucket/prefix`` — used verbatim. Re-running with the same prefix will overwrite previously written
+              artifacts.
+            * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set by
+              :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and append a timestamped subfolder.
+              Raises if no bucket is configured.
         role
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
@@ -100,9 +100,8 @@ class FoundationModel:
         hyperparameters
             Default hyperparameters applied to inference and (when supported) training.
         model_artifact_uri
-            S3 URI of a pre-bundled ``model.tar.gz`` produced by
-            :meth:`cache_model_artifact`. When set, deploys skip the runtime
-            HuggingFace download and load weights from the bundled artifact.
+            S3 URI of a pre-bundled ``model.tar.gz`` produced by :meth:`cache_model_artifact`. When set, deploys skip
+            the runtime HuggingFace download and load weights from the bundled artifact.
         backend
             Cloud backend to use.
         """
@@ -130,11 +129,12 @@ class FoundationModel:
     def _get_hyperparameters(
         self, context: Literal["inference", "training"], overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Merge registry defaults → constructor overrides → call-site overrides,
-        defaulting ``model_path`` to ``model_source_uri`` if not set."""
-        registry_defaults = (
-            self._config.inference_hyperparameters if context == "inference" else self._config.training_hyperparameters
-        )
+        """Merge registry defaults → constructor overrides → call-site overrides, defaulting ``model_path`` to
+        ``model_source_uri`` if not set."""
+        if context == "inference":
+            registry_defaults = self._config.inference_hyperparameters
+        else:
+            registry_defaults = self._config.training_hyperparameters
         merged = registry_defaults | self._hyperparameter_overrides | (overrides or {})
         merged.setdefault("model_path", self._config.model_source_uri)
         return merged
@@ -253,24 +253,21 @@ class FoundationModel:
 
     def cache_model_artifact(self, cache_path: str, *, overwrite: bool = False) -> "FoundationModel":
         """
-        Download model weights from HuggingFace, bundle them with the FM serve script
-        into a SageMaker-compatible ``model.tar.gz``, and upload to S3.
+        Download model weights from HuggingFace, bundle them with the FM serve script into a SageMaker-compatible
+        ``model.tar.gz``, and upload to S3.
 
-        Lets :meth:`deploy` skip the runtime HuggingFace download — required for
-        network-isolated endpoints (e.g. SageMaker Serverless Inference). Returns a
-        new :class:`FoundationModel` with ``model_artifact_uri`` set to the uploaded
-        tarball.
+        Lets :meth:`deploy` skip the runtime HuggingFace download — required for network-isolated endpoints (e.g.
+        SageMaker Serverless Inference). Returns a new :class:`FoundationModel` with ``model_artifact_uri`` set to the
+        uploaded tarball.
 
-        Destination key: ``{cache_path}/{model_id}/model.tar.gz``. If it already
-        exists, upload is skipped unless ``overwrite=True``; a stale-cache mismatch
-        between the bundled artifact's autogluon-cloud version and the current
-        version raises ``RuntimeError`` and prompts the caller to re-bundle.
+        Destination key: ``{cache_path}/{model_id}/model.tar.gz``. If it already exists, upload is skipped unless
+        ``overwrite=True``; a stale-cache mismatch between the bundled artifact's autogluon-cloud version and the
+        current version raises ``RuntimeError`` and prompts the caller to re-bundle.
 
         Parameters
         ----------
         cache_path
-            S3 prefix under which the artifact will be uploaded. Multiple foundation
-            models can share one prefix.
+            S3 prefix under which the artifact will be uploaded. Multiple foundation models can share one prefix.
         overwrite
             If True, re-upload even when the destination key exists.
 
@@ -333,8 +330,8 @@ class FoundationModel:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize the model identity. Runtime context (``role``, ``cloud_output_path``)
-        is excluded so configs can be shared across users."""
+        """Serialize the model identity. Runtime context (``role``, ``cloud_output_path``) is excluded so configs can
+        be shared across users."""
         out: Dict[str, Any] = {"model_id": self.model_id}
         if self._hyperparameter_overrides:
             out["hyperparameters"] = self._hyperparameter_overrides
@@ -348,8 +345,7 @@ class FoundationModel:
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any], **runtime_context: Any) -> "FoundationModel":
-        """Restore from :meth:`to_dict` output. Pass ``role`` / ``cloud_output_path``
-        as ``runtime_context``."""
+        """Restore from :meth:`to_dict` output. Pass ``role`` / ``cloud_output_path`` as ``runtime_context``."""
         return cls(**config, **runtime_context)
 
     @classmethod
