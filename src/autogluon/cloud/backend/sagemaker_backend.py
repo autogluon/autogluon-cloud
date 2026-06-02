@@ -6,12 +6,13 @@ import pickle
 import shutil
 import tarfile
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import pandas as pd
 import sagemaker
 from botocore.exceptions import ClientError
 from sagemaker import Predictor
+from sagemaker.serverless import ServerlessInferenceConfig
 
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
@@ -349,7 +350,7 @@ class SagemakerBackend(Backend):
         predictor_path: Optional[str] = None,
         endpoint_name: Optional[str] = None,
         framework_version: str = "latest",
-        instance_type: str = "ml.m5.2xlarge",
+        instance_type: Optional[str] = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
@@ -357,6 +358,8 @@ class SagemakerBackend(Backend):
         model_kwargs: Optional[Dict] = None,
         deploy_kwargs: Optional[Dict] = None,
         fm_serve_config: Optional[Dict[str, Any]] = None,
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
+        inference_config: Optional[Dict[str, Any]] = None,
         repack: bool = True,
     ) -> None:
         """
@@ -400,6 +403,12 @@ class SagemakerBackend(Backend):
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
         fm_serve_config: Optional[Dict[str, Any]], default = None
             Configuration dict passed to the FM serve script via the AG_FM_SERVE_CONFIG env var.
+        inference_mode: {"realtime", "serverless"}, default = "realtime"
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
+            (no instance management, scales to zero).
+        inference_config: Optional[Dict[str, Any]], default = None
+            Mode-specific overrides forwarded to `sagemaker.serverless.ServerlessInferenceConfig`
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
         repack: bool, default = True
             Whether the SageMaker SDK should download ``predictor_path``, inject the entry-point script, and re-upload
             it. Set to False when ``predictor_path`` already contains the serve script (e.g. an artifact bundled by
@@ -409,6 +418,11 @@ class SagemakerBackend(Backend):
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
+        if instance_type is None:
+            # Serverless endpoints have no instance, but we still need an instance string
+            # to resolve a CPU/GPU container image below. Serverless is CPU-only.
+            assert inference_mode == "serverless"
+            instance_type = "ml.m5.2xlarge"
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 
@@ -494,6 +508,12 @@ class SagemakerBackend(Backend):
         if fm_serve_config is not None:
             model_kwargs_env["AG_FM_SERVE_CONFIG"] = json.dumps(fm_serve_config)
 
+        if inference_mode == "serverless":
+            # Serverless containers run with `/` as cwd and a read-only root, so TorchServe's
+            # default `logs/` path resolves to `/logs` and startup fails. Redirect to /tmp.
+            model_kwargs_env.setdefault("LOG_LOCATION", "/tmp")
+            model_kwargs_env.setdefault("METRICS_LOCATION", "/tmp")
+
         model = model_cls(
             model_data=predictor_path,
             role=self.role_arn,
@@ -510,17 +530,23 @@ class SagemakerBackend(Backend):
         if deploy_kwargs is None:
             deploy_kwargs = {}
 
-        logger.log(20, "Deploying model to the endpoint")
-        self.endpoint = SagemakerEndpoint(
-            model.deploy(
-                endpoint_name=endpoint_name,
-                instance_type=instance_type,
-                initial_instance_count=initial_instance_count,
-                volume_size=volume_size,
-                wait=wait,
-                **deploy_kwargs,
-            )
-        )
+        instance_kwargs = {
+            "instance_type": instance_type,
+            "initial_instance_count": initial_instance_count,
+            "volume_size": volume_size,
+        }
+        user_config = inference_config or {}
+        if inference_mode == "realtime":
+            mode_kwargs = instance_kwargs
+        elif inference_mode == "serverless":
+            preset = {"memory_size_in_mb": 4096, "max_concurrency": 5}
+            mode_kwargs = {"serverless_inference_config": ServerlessInferenceConfig(**{**preset, **user_config})}
+        else:
+            raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
+
+        logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
+        predictor = model.deploy(endpoint_name=endpoint_name, wait=wait, **mode_kwargs, **deploy_kwargs)
+        self.endpoint = SagemakerEndpoint(predictor)
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
         """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/."""

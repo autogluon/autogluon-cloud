@@ -8,7 +8,7 @@ import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import boto3
 import pandas as pd
@@ -388,15 +388,17 @@ class CloudPredictor(ABC):
         predictor_path: Optional[str] = None,
         endpoint_name: Optional[str] = None,
         framework_version: str = "latest",
-        instance_type: str = "ml.m5.2xlarge",
+        instance_type: Optional[str] = None,
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
         wait: bool = True,
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
+        inference_config: Optional[Dict[str, Any]] = None,
         backend_kwargs: Optional[Dict] = None,
     ) -> None:
         """
-        Deploy a predictor to an endpoint, which can be used to do real-time inference later.
+        Deploy a predictor to an inference endpoint.
 
         Parameters
         ----------
@@ -412,10 +414,12 @@ class CloudPredictor(ABC):
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
             If `custom_image_uri` is set, this argument will be ignored.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance to be deployed for the endpoint
+        instance_type: Optional[str], default = None
+            Instance to be deployed for the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None``
+            when ``inference_mode="serverless"``.
         initial_instance_count: int, default = 1,
-            Initial number of instances to be deployed for the endpoint
+            Initial number of instances to be deployed for the endpoint. Ignored when
+            ``inference_mode="serverless"``.
         custom_image_uri: Optional[str], default = None,
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
@@ -426,6 +430,12 @@ class CloudPredictor(ABC):
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
+        inference_mode: {"realtime", "serverless"}, default = "realtime"
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
+            (no instance management, scales to zero).
+        inference_config: Optional[Dict[str, Any]], default = None
+            Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
         backend_kwargs: dict, default = None
             Any extra arguments needed to pass to the underneath backend.
             For SageMaker backend, valid keys are:
@@ -436,6 +446,10 @@ class CloudPredictor(ABC):
                     Any extra arguments needed to pass to deploy.
                     Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
         """
+        if inference_mode == "serverless" and instance_type is not None:
+            raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
+        if instance_type is None and inference_mode != "serverless":
+            instance_type = "ml.m5.2xlarge"
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_deploy_kwargs(backend_kwargs)
@@ -448,6 +462,8 @@ class CloudPredictor(ABC):
             custom_image_uri=custom_image_uri,
             volume_size=volume_size,
             wait=wait,
+            inference_mode=inference_mode,
+            inference_config=inference_config,
             **backend_kwargs,
         )
 

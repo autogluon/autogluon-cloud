@@ -210,6 +210,40 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
         assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
 
 
+def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, framework_version, retail_sales_dataset):
+    """Cache model artifact to S3, deploy to a serverless endpoint, and verify predictions."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
+
+        cloud_output_path = f"s3://autogluon-cloud-ci/test-fm-cache-serverless/{framework_version}/{timestamp}"
+        model = FoundationModel("chronos-bolt-tiny", cloud_output_path=cloud_output_path)
+        cached_model = model.cache_model_artifact(f"{cloud_output_path}/cache")
+        assert cached_model.model_artifact_uri is not None
+        assert cached_model.model_artifact_uri.startswith("s3://")
+
+        endpoint = cached_model.deploy(
+            custom_image_uri=inference_custom_image_uri,
+            inference_mode="serverless",
+            inference_config={"memory_size_in_mb": 6144},
+        )
+        try:
+            expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
+            predictions = endpoint.predict(
+                data=ds["train_data"],
+                target=ds["target"],
+                id_column=ds["id_column"],
+                timestamp_column=ds["timestamp_column"],
+                prediction_length=ds["prediction_length"],
+            )
+            _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+        finally:
+            endpoint.delete_endpoint()
+
+
 def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset):
     """Test FoundationModel deploy to a real-time endpoint and predict."""
     ds = retail_sales_dataset

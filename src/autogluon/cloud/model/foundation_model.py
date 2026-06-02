@@ -16,6 +16,7 @@ from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
+from ..endpoint.prediction_future import JobPredictionFuture
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
@@ -181,10 +182,14 @@ class FoundationModel:
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
+        inference_config: Optional[Dict[str, Any]] = None,
         **backend_kwargs,
     ) -> None:
         """Shared deploy logic. Subclasses call this then wrap the endpoint."""
-        if instance_type is None:
+        if inference_mode == "serverless" and instance_type is not None:
+            raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
+        if instance_type is None and inference_mode != "serverless":
             instance_type = self._config.deploy_instance_type
 
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
@@ -218,6 +223,8 @@ class FoundationModel:
             wait=wait,
             model_kwargs=model_kwargs,
             fm_serve_config=fm_serve_config,
+            inference_mode=inference_mode,
+            inference_config=inference_config,
             repack=False,
             **backend_kwargs,
         )
@@ -383,19 +390,20 @@ class TimeSeriesFoundationModel(FoundationModel):
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
+        inference_mode: Literal["realtime", "serverless"] = "realtime",
+        inference_config: Optional[Dict[str, Any]] = None,
         **backend_kwargs,
     ) -> TimeSeriesEndpoint:
         """
-        Deploy model to a real-time endpoint.
+        Deploy model to an inference endpoint.
 
         Parameters
         ----------
         instance_type
-            Instance type for the endpoint.
-            If None, will use the default from the model registry.
+            Instance type for the endpoint. Defaults to the model registry value. Must be ``None``
+            when ``inference_mode="serverless"``.
         endpoint_name
-            Custom endpoint name.
-            If None, will auto-generate a unique name.
+            Custom endpoint name. If None, will auto-generate a unique name.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         framework_version
@@ -404,13 +412,15 @@ class TimeSeriesFoundationModel(FoundationModel):
             Custom Docker image URI for the inference container.
         wait
             Whether to block until the endpoint is ready.
+        inference_mode
+            Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
+            (no instance management, scales to zero).
+        inference_config
+            Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
+            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
         **backend_kwargs
             Backend-specific arguments (e.g., initial_instance_count, volume_size,
             model_kwargs, deploy_kwargs).
-
-        Returns
-        -------
-        TimeSeriesEndpoint
         """
         self._deploy_backend(
             instance_type=instance_type,
@@ -419,6 +429,8 @@ class TimeSeriesFoundationModel(FoundationModel):
             framework_version=framework_version,
             custom_image_uri=custom_image_uri,
             wait=wait,
+            inference_mode=inference_mode,
+            inference_config=inference_config,
             **backend_kwargs,
         )
         return TimeSeriesEndpoint(self._backend.endpoint)
@@ -463,7 +475,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         wait: bool = True,
         predictions_path: Optional[str] = None,
         **backend_kwargs,
-    ) -> Optional[pd.DataFrame]:
+    ) -> Union[pd.DataFrame, JobPredictionFuture]:
         """
         Run batch prediction for time series.
 
@@ -498,7 +510,9 @@ class TimeSeriesFoundationModel(FoundationModel):
         custom_image_uri
             Custom Docker image URI for the container.
         wait
-            If True, block and return DataFrame. If False, return the job handle.
+            If True, block and return a DataFrame. If False, return a
+            :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
+            retrieve the DataFrame, or ``.status()`` to check progress.
         predictions_path
             S3 URL where predictions will be written by the prediction job (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
@@ -512,7 +526,8 @@ class TimeSeriesFoundationModel(FoundationModel):
 
         Returns
         -------
-        Optional[pd.DataFrame]
+        pd.DataFrame or JobPredictionFuture
+            DataFrame if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
         """
         if instance_type is None:
             instance_type = self._config.predict_instance_type
@@ -549,8 +564,10 @@ class TimeSeriesFoundationModel(FoundationModel):
         )
 
         if not wait:
-            # TODO: return a handle that supports polling status and fetching results
-            return None
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=self._backend.get_fit_predict_results,
+            )
 
         return self._backend.get_fit_predict_results()
 
