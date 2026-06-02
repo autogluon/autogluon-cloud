@@ -159,33 +159,14 @@ Before running the examples above, set up your AWS resources (IAM role + S3 buck
 
 ```{toctree}
 ---
-caption: Setup
-maxdepth: 1
+caption: Tutorials
+maxdepth: 2
 hidden:
 ---
 
 Setup <tutorials/setup>
-```
-
-```{toctree}
----
-caption: Train Your Own Predictor
-maxdepth: 1
-hidden:
----
-
-Tabular <tutorials/predictor-tabular>
-Time Series <tutorials/predictor-timeseries>
-```
-
-```{toctree}
----
-caption: Pretrained Foundation Models
-maxdepth: 1
-hidden:
----
-
-Time Series <tutorials/foundation-model-timeseries>
+Train Your Own Predictor <tutorials/predictor>
+Foundation Models <tutorials/foundation-model>
 ```
 
 ```{toctree}
