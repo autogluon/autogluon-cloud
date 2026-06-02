@@ -38,12 +38,12 @@ Train and Deploy AutoGluon in the Cloud
 
 It supports two workflows:
 
-- **[Train AutoGluon predictors in the cloud](tutorials/cloud-predictor.md)** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
-- **[Run pretrained foundation models](tutorials/foundation-model.md)** — deploy state-of-the-art pretrained models like [Chronos-2](https://huggingface.co/amazon/chronos-2) for zero-shot inference, with no training required.
+- **[Train your own predictor](tutorials/predictor-tabular.md)** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
+- **[Run pretrained foundation models](tutorials/foundation-model-timeseries.md)** — deploy state-of-the-art pretrained models like [Chronos-2](https://huggingface.co/amazon/chronos-2) for zero-shot inference, with no training required.
 
 ## {octicon}`gear` Train AutoGluon predictors in the cloud
 
-Full walkthrough: [Train Your Own Models](tutorials/cloud-predictor.md).
+Full walkthrough: [Tabular](tutorials/predictor-tabular.md), [Time Series](tutorials/predictor-timeseries.md).
 
 :::{dropdown} Tabular
 :animate: fade-in-slide-down
@@ -111,7 +111,7 @@ result = cloud_predictor.predict(data)
 
 ## {octicon}`rocket` Run pretrained foundation models
 
-Full walkthrough: [Use Foundation Models](tutorials/foundation-model.md).
+Full walkthrough: [Time Series](tutorials/foundation-model-timeseries.md).
 
 :::{dropdown} Time Series (Chronos-2)
 :animate: fade-in-slide-down
@@ -159,14 +159,33 @@ Before running the examples above, set up your AWS resources (IAM role + S3 buck
 
 ```{toctree}
 ---
-caption: Tutorials
+caption: Setup
 maxdepth: 1
 hidden:
 ---
 
 Setup <tutorials/setup>
-Train Your Own Models <tutorials/cloud-predictor>
-Use Foundation Models <tutorials/foundation-model>
+```
+
+```{toctree}
+---
+caption: Train Your Own Predictor
+maxdepth: 1
+hidden:
+---
+
+Tabular <tutorials/predictor-tabular>
+Time Series <tutorials/predictor-timeseries>
+```
+
+```{toctree}
+---
+caption: Pretrained Foundation Models
+maxdepth: 1
+hidden:
+---
+
+Time Series <tutorials/foundation-model-timeseries>
 ```
 
 ```{toctree}

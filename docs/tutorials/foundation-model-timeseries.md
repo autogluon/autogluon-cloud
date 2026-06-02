@@ -13,7 +13,7 @@ kernelspec:
 
 Foundation models are large pretrained models that generate predictions **zero-shot** on new data. Because they're trained on massive, diverse datasets, they generalize to unseen data out of the box — no dataset-specific fitting required.
 
-That makes the workflow much simpler than the [standard CloudPredictor workflow](./cloud-predictor.md), which requires you to first fit a predictor on your data and then manage the trained artifact. With foundation models you skip the fit step entirely and go straight to deploying an endpoint or running batch predictions.
+That makes the workflow much simpler than [training your own time series predictor](./predictor-timeseries.md), which requires you to first fit a predictor on your data and then manage the trained artifact. With foundation models you skip the fit step entirely and go straight to deploying an endpoint or running batch predictions.
 
 AutoGluon-Cloud exposes this workflow through {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`. For now it covers time series forecasting only, with models like Chronos-2 available out of the box.
 

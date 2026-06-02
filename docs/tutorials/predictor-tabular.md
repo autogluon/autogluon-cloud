@@ -1,12 +1,10 @@
-# Train and Deploy AutoGluon Models on Amazon SageMaker
+# Train and Deploy a Tabular Predictor on Amazon SageMaker
 
-AutoGluon-Cloud lets you train, deploy, and run inference with AutoGluon models on AWS using the same APIs you'd use locally. Under the hood, it runs your jobs on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) using AWS's official [AutoGluon deep learning containers](https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon-training) — so you don't manage any infrastructure yourself.
-
-It supports the `tabular`, `timeseries`, and `multimodal` predictors. The examples below use {py:class}`~autogluon.cloud.TabularCloudPredictor`; the others share the same API.
-
-```{note}
-This tutorial assumes you've already set up AutoGluon-Cloud on AWS. If you haven't, see [Setup](setup.md) first.
+```{tip}
+This tutorial covers tabular classification and regression. For time series forecasting, see [Train a Time Series Predictor](./predictor-timeseries.md).
 ```
+
+AutoGluon-Cloud lets you train, deploy, and run inference with AutoGluon tabular predictors on AWS using the same APIs you'd use locally. Under the hood, it runs your jobs on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) using AWS's official [AutoGluon deep learning containers](https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon-training) — so you don't manage any infrastructure yourself.
 
 ```{attention}
 SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud is a free wrapper, but it's your responsibility to monitor usage to avoid unexpected charges.
