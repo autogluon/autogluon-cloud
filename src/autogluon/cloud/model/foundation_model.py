@@ -279,12 +279,7 @@ class FoundationModel:
         FoundationModel
             A new instance with ``model_artifact_uri`` populated. The original is unchanged.
         """
-        try:
-            from huggingface_hub import snapshot_download
-        except ImportError as e:
-            raise ImportError(
-                "cache_model_artifact requires `huggingface_hub`. Install with: pip install huggingface_hub"
-            ) from e
+        from huggingface_hub import snapshot_download
 
         if not cache_path.startswith("s3://"):
             raise ValueError(f"cache_path must be an s3:// URI, got: {cache_path!r}")
