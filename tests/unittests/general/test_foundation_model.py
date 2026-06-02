@@ -119,6 +119,18 @@ def test_cache_model_artifact_rejects_non_s3_path():
         fm.cache_model_artifact("/local/path")
 
 
+def test_cache_model_artifact_raises_on_stale_version_without_overwrite():
+    """Returning a model pointing at a tarball bundled by a different autogluon-cloud
+    version surfaces as a confusing endpoint failure later. Force the user to opt in."""
+    fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
+    s3 = mock.MagicMock()
+    s3.head_object.return_value = {"Metadata": {"autogluon-cloud-version": "0.0.0-stale"}}
+    fm._backend.sagemaker_session.boto_session.client.return_value = s3
+
+    with pytest.raises(RuntimeError, match="overwrite=True"):
+        fm.cache_model_artifact("s3://b/cache")
+
+
 def test_sagemaker_backend_uses_nonrepack_when_repack_is_false():
     """A pre-bundled cached artifact should bypass the SDK's download/repack/re-upload path."""
     from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend

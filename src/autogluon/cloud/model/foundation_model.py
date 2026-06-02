@@ -293,13 +293,12 @@ class FoundationModel:
         if head is not None:
             cached_version = head["Metadata"].get(_AG_CLOUD_VERSION_METADATA_KEY)
             if cached_version != __version__:
-                logger.warning(
+                raise RuntimeError(
                     f"Cached artifact at {cache_key} was bundled with autogluon-cloud "
                     f"{cached_version!r}, current is {__version__!r}. "
-                    f"Pass overwrite=True to refresh."
+                    f"Pass overwrite=True to re-bundle and re-upload."
                 )
-            else:
-                logger.info(f"Cached artifact already exists at {cache_key}; skipping upload")
+            logger.info(f"Cached artifact already exists at {cache_key}; skipping upload")
         else:
             with tempfile.TemporaryDirectory(prefix="ag_fm_cache_") as tmp:
                 tmp_path = Path(tmp)

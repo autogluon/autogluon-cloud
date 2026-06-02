@@ -1,6 +1,6 @@
 """Serve script for time series foundation models (Chronos, etc.) on SageMaker endpoints.
 
-Config comes from the AG_FM_FM_SERVE_CONFIG env var (set by the backend at deploy time):
+Config comes from the AG_FM_SERVE_CONFIG env var (set by the backend at deploy time):
     {"ag_model_key": "Chronos", "hyperparameters": {"model_path": "amazon/chronos-bolt-base", ...}}
 """
 
@@ -14,7 +14,7 @@ from serving_utils.timeseries import parse_payload, render_response
 from autogluon.timeseries import TimeSeriesDataFrame
 from autogluon.timeseries.models import ModelRegistry
 
-_FM_SERVE_CONFIG = json.loads(os.environ.get("AG_FM_FM_SERVE_CONFIG", "{}"))
+_FM_SERVE_CONFIG = json.loads(os.environ.get("AG_FM_SERVE_CONFIG", "{}"))
 _SUPPORTED_INPUT_CONTENT_TYPES = {"application/x-autogluon", "application/json"}
 
 
