@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import tarfile
 import tempfile
 from abc import abstractmethod
 from pathlib import Path
@@ -9,13 +12,36 @@ from typing import Any, Dict, List, Literal, Optional, Union, overload
 
 import pandas as pd
 
+from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
+
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
 from ..endpoint.prediction_future import JobPredictionFuture
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
+from ..version import __version__
 from .registry import get_model_config
+
+logger = logging.getLogger(__name__)
+
+# SageMaker extracts model.tar.gz to /opt/ml/model in the container.
+_BUNDLED_WEIGHTS_SUBDIR = "weights"
+_CONTAINER_WEIGHTS_DIR = f"/opt/ml/model/{_BUNDLED_WEIGHTS_SUBDIR}"
+
+_AG_CLOUD_VERSION_METADATA_KEY = "autogluon-cloud-version"
+
+
+def _s3_head_or_none(s3_client: Any, bucket: str, key: str) -> Optional[Dict[str, Any]]:
+    """Return ``head_object`` response if the key exists, ``None`` for 404. Other errors propagate."""
+    from botocore.exceptions import ClientError
+
+    try:
+        return s3_client.head_object(Bucket=bucket, Key=key)
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
+            return None
+        raise
 
 
 class FoundationModel:
@@ -48,9 +74,11 @@ class FoundationModel:
     def __init__(
         self,
         model_id: str,
+        *,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        model_artifact_uri: Optional[str] = None,
         backend: Literal["sagemaker"] = "sagemaker",
         cloud_output_path: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
         role: Optional[str] = None,
     ):
         """
@@ -58,6 +86,12 @@ class FoundationModel:
         ----------
         model_id
             ID of the foundation model from the model registry.
+        hyperparameters
+            Default hyperparameters applied to inference and (when supported) training.
+        model_artifact_uri
+            S3 URI of a pre-bundled ``model.tar.gz`` produced by
+            :meth:`cache_model_artifact`. When set, deploys skip the runtime
+            HuggingFace download and load weights from the bundled artifact.
         backend
             Cloud backend to use.
         cloud_output_path
@@ -69,14 +103,13 @@ class FoundationModel:
             * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set
               by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
               append a timestamped subfolder. Raises if no bucket is configured.
-        hyperparameters
-            Default hyperparameters applied to inference and (when supported) training.
         role
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
             :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
         """
         self.model_id = model_id
+        self.model_artifact_uri = model_artifact_uri
         self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
         self._config = get_model_config(model_id)
         self._hyperparameter_overrides = hyperparameters or {}
@@ -99,9 +132,12 @@ class FoundationModel:
     def _get_hyperparameters(
         self, context: Literal["inference", "training"], overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Merge registry defaults → constructor overrides → call-site overrides."""
+        """Merge registry defaults → constructor overrides → call-site overrides,
+        defaulting ``model_path`` to ``model_source_uri`` if not set."""
         config_key = "inference_hyperparameters" if context == "inference" else "training_hyperparameters"
-        return self._config.get(config_key, {}) | self._hyperparameter_overrides | (overrides or {})
+        merged = self._config.get(config_key, {}) | self._hyperparameter_overrides | (overrides or {})
+        merged.setdefault("model_path", self._config["model_source_uri"])
+        return merged
 
     @abstractmethod
     def _build_predictor_init_args(self, **user_kwargs) -> Dict[str, Any]:
@@ -155,16 +191,19 @@ class FoundationModel:
         if instance_type is None and inference_mode != "serverless":
             instance_type = self._config["deploy_instance_type"]
 
+        merged_hp = self._get_hyperparameters("inference", hyperparameters)
+        if self.model_artifact_uri is not None:
+            merged_hp["model_path"] = _CONTAINER_WEIGHTS_DIR
         fm_serve_config = {
             "model_name": self._config["model_name"],
-            "hyperparameters": self._get_hyperparameters("inference", hyperparameters),
+            "hyperparameters": merged_hp,
         }
 
         model_kwargs = backend_kwargs.pop("model_kwargs", {})
         model_kwargs["entry_point"] = self._serve_script_path
 
         self._backend.deploy(
-            predictor_path=None,
+            predictor_path=self.model_artifact_uri,
             endpoint_name=endpoint_name,
             framework_version=framework_version,
             instance_type=instance_type,
@@ -174,6 +213,7 @@ class FoundationModel:
             fm_serve_config=fm_serve_config,
             inference_mode=inference_mode,
             inference_config=inference_config,
+            repack=self.model_artifact_uri is None,
             **backend_kwargs,
         )
         assert self._backend.endpoint is not None
@@ -217,26 +257,117 @@ class FoundationModel:
             raise ValueError(f"Model '{self.model_id}' does not support fine-tuning.")
         raise NotImplementedError
 
-    def cache_model_artifact(self, s3_path: str) -> str:
+    def cache_model_artifact(self, cache_path: str, *, overwrite: bool = False) -> "FoundationModel":
         """
-        Pre-cache model weights to S3 (for VPC-deployed endpoints).
+        Download model weights from HuggingFace, bundle them with the FM serve script
+        into a SageMaker-compatible ``model.tar.gz``, and upload to S3.
 
-        Launches a small job that downloads weights from HuggingFace
-        and uploads them to S3.
+        Lets :meth:`deploy` skip the runtime HuggingFace download — required for
+        network-isolated endpoints (e.g. SageMaker Serverless Inference). Returns a
+        new :class:`FoundationModel` with ``model_artifact_uri`` set to the uploaded
+        tarball.
+
+        Destination key: ``{cache_path}/{model_id}/model.tar.gz``. If it already
+        exists, upload is skipped unless ``overwrite=True``; a warning is logged
+        when the cached artifact's autogluon-cloud version differs from the
+        current version.
 
         Parameters
         ----------
-        s3_path
-            S3 path where the model weights should be cached.
+        cache_path
+            S3 prefix under which the artifact will be uploaded. Multiple foundation
+            models can share one prefix.
+        overwrite
+            If True, re-upload even when the destination key exists.
 
         Returns
         -------
-        str
-            S3 path to the cached artifact.
-
-        :meta private:
+        FoundationModel
+            A new instance with ``model_artifact_uri`` populated. The original is unchanged.
         """
-        raise NotImplementedError
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError as e:
+            raise ImportError(
+                "cache_model_artifact requires `huggingface_hub`. Install with: pip install huggingface_hub"
+            ) from e
+
+        if not cache_path.startswith("s3://"):
+            raise ValueError(f"cache_path must be an s3:// URI, got: {cache_path!r}")
+
+        source_uri = self._config["model_source_uri"]
+        cache_key = f"{cache_path.rstrip('/')}/{self.model_id}/model.tar.gz"
+        bucket, key = s3_path_to_bucket_prefix(cache_key)
+        s3 = self._backend.sagemaker_session.boto_session.client("s3")
+
+        head = None if overwrite else _s3_head_or_none(s3, bucket, key)
+        if head is not None:
+            cached_version = head["Metadata"].get(_AG_CLOUD_VERSION_METADATA_KEY)
+            if cached_version != __version__:
+                logger.warning(
+                    f"Cached artifact at {cache_key} was bundled with autogluon-cloud "
+                    f"{cached_version!r}, current is {__version__!r}. "
+                    f"Pass overwrite=True to refresh."
+                )
+            else:
+                logger.log(20, f"Cached artifact already exists at {cache_key}; skipping upload")
+        else:
+            with tempfile.TemporaryDirectory(prefix="ag_fm_cache_") as tmp:
+                tmp_path = Path(tmp)
+                weights_dir = tmp_path / _BUNDLED_WEIGHTS_SUBDIR
+                logger.log(20, f"Downloading {source_uri} from HuggingFace to {weights_dir}")
+                snapshot_download(repo_id=source_uri, local_dir=str(weights_dir))
+
+                code_dir = tmp_path / "code"
+                code_dir.mkdir()
+                serve_script = Path(self._serve_script_path)
+                (code_dir / serve_script.name).write_bytes(serve_script.read_bytes())
+
+                tarball = tmp_path / "model.tar.gz"
+                logger.log(20, f"Bundling weights + serve script into {tarball}")
+                with tarfile.open(tarball, "w:gz") as tar:
+                    tar.add(weights_dir, arcname=_BUNDLED_WEIGHTS_SUBDIR)
+                    tar.add(code_dir, arcname="code")
+                logger.log(20, f"Uploading to {cache_key}")
+                s3.upload_file(
+                    str(tarball),
+                    bucket,
+                    key,
+                    ExtraArgs={"Metadata": {_AG_CLOUD_VERSION_METADATA_KEY: __version__}},
+                )
+
+        return self.__class__(
+            model_id=self.model_id,
+            hyperparameters=self._hyperparameter_overrides or None,
+            model_artifact_uri=cache_key,
+            cloud_output_path=self.cloud_output_path,
+            role=self._backend.role_arn,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize the model identity. Runtime context (``role``, ``cloud_output_path``)
+        is excluded so configs can be shared across users."""
+        out: Dict[str, Any] = {"model_id": self.model_id}
+        if self._hyperparameter_overrides:
+            out["hyperparameters"] = self._hyperparameter_overrides
+        if self.model_artifact_uri:
+            out["model_artifact_uri"] = self.model_artifact_uri
+        return out
+
+    def to_json(self) -> str:
+        """Serialize :meth:`to_dict` output as a JSON string."""
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, config: Dict[str, Any], **runtime_context: Any) -> "FoundationModel":
+        """Restore from :meth:`to_dict` output. Pass ``role`` / ``cloud_output_path``
+        as ``runtime_context``."""
+        return cls(**config, **runtime_context)
+
+    @classmethod
+    def from_json(cls, s: str, **runtime_context: Any) -> "FoundationModel":
+        """Restore from a :meth:`to_json` string."""
+        return cls.from_dict(json.loads(s), **runtime_context)
 
 
 class TimeSeriesFoundationModel(FoundationModel):

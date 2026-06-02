@@ -9,6 +9,7 @@ from typing import Any, Dict, Literal, TypedDict
 class FoundationModelConfig(TypedDict):
     task: Literal["forecasting", "classification", "regression"]
     model_name: str  # AG model class name (e.g. "Chronos", "Chronos2", "Mitra")
+    model_source_uri: str  # where weights are downloaded from (e.g. "amazon/chronos-2")
     inference_hyperparameters: Dict[str, Any]  # defaults for deploy() and predict()
     training_hyperparameters: Dict[str, Any]  # defaults for fit()
     predict_instance_type: str  # batch predict
@@ -21,8 +22,9 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     "chronos-bolt-tiny": {
         "task": "forecasting",
         "model_name": "Chronos",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-tiny"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-bolt-tiny"},
+        "model_source_uri": "amazon/chronos-bolt-tiny",
+        "inference_hyperparameters": {},
+        "training_hyperparameters": {},
         "predict_instance_type": "ml.m5.2xlarge",
         "deploy_instance_type": "ml.g5.xlarge",
         "fit_instance_type": "ml.g5.xlarge",
@@ -31,8 +33,9 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     "chronos-bolt-small": {
         "task": "forecasting",
         "model_name": "Chronos",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-small"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-bolt-small"},
+        "model_source_uri": "amazon/chronos-bolt-small",
+        "inference_hyperparameters": {},
+        "training_hyperparameters": {},
         "predict_instance_type": "ml.m5.2xlarge",
         "deploy_instance_type": "ml.g5.xlarge",
         "fit_instance_type": "ml.g5.xlarge",
@@ -41,8 +44,9 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     "chronos-bolt-base": {
         "task": "forecasting",
         "model_name": "Chronos",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-base"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-bolt-base"},
+        "model_source_uri": "amazon/chronos-bolt-base",
+        "inference_hyperparameters": {},
+        "training_hyperparameters": {},
         "predict_instance_type": "ml.m5.2xlarge",
         "deploy_instance_type": "ml.g5.xlarge",
         "fit_instance_type": "ml.g5.xlarge",
@@ -51,8 +55,9 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     "chronos-2": {
         "task": "forecasting",
         "model_name": "Chronos2",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-2"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-2", "fine_tune": True},
+        "model_source_uri": "amazon/chronos-2",
+        "inference_hyperparameters": {},
+        "training_hyperparameters": {"fine_tune": True},
         "predict_instance_type": "ml.m5.2xlarge",
         "deploy_instance_type": "ml.g5.xlarge",
         "fit_instance_type": "ml.g5.xlarge",
@@ -62,8 +67,9 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     "mitra-classification": {
         "task": "classification",
         "model_name": "Mitra",
-        "inference_hyperparameters": {"model_path": "TODO"},
-        "training_hyperparameters": {"model_path": "TODO"},
+        "model_source_uri": "TODO",
+        "inference_hyperparameters": {},
+        "training_hyperparameters": {},
         "predict_instance_type": "ml.m5.2xlarge",
         "deploy_instance_type": "ml.g5.xlarge",
         "fit_instance_type": "ml.g5.xlarge",
@@ -72,8 +78,9 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     "mitra-regression": {
         "task": "regression",
         "model_name": "Mitra",
-        "inference_hyperparameters": {"model_path": "TODO"},
-        "training_hyperparameters": {"model_path": "TODO"},
+        "model_source_uri": "TODO",
+        "inference_hyperparameters": {},
+        "training_hyperparameters": {},
         "predict_instance_type": "ml.m5.2xlarge",
         "deploy_instance_type": "ml.g5.xlarge",
         "fit_instance_type": "ml.g5.xlarge",
