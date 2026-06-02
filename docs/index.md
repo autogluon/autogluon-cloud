@@ -34,16 +34,16 @@ Train and Deploy AutoGluon in the Cloud
 
 ::::::
 
-AutoGluon-Cloud makes it easy to run [AutoGluon](<https://auto.gluon.ai/stable/index.html>) in the cloud. With a few lines of code, you can train models and run inference on [Amazon SageMaker](<https://aws.amazon.com/sagemaker/>) — without managing infrastructure or installing AutoGluon's heavy dependencies on your local machine.
+[AutoGluon](https://auto.gluon.ai/stable/index.html) is an open-source AutoML library that trains state-of-the-art ML models on tabular, time-series, and multimodal data with just a few lines of code. AutoGluon-Cloud takes that same API and runs it on AWS — train models and serve predictions on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) without managing infrastructure or setting up a heavyweight ML environment on your local machine.
 
 It supports two workflows:
 
-- **Train AutoGluon predictors in the cloud** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
-- **Run pretrained foundation models** — deploy state-of-the-art pretrained models like Chronos-2 for zero-shot inference, with no training required.
+- **[Train your own predictor](tutorials/predictor-tabular.md)** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
+- **[Run pretrained foundation models](tutorials/foundation-model-timeseries.md)** — deploy state-of-the-art pretrained models like [Chronos-2](https://huggingface.co/amazon/chronos-2) for zero-shot inference, with no training required.
 
 ## {octicon}`gear` Train AutoGluon predictors in the cloud
 
-*Full walkthrough: [Train Your Own Models](tutorials/autogluon-cloud.md)*
+Full walkthrough: [Tabular](tutorials/predictor-tabular.md), [Time Series](tutorials/predictor-timeseries.md).
 
 :::{dropdown} Tabular
 :animate: fade-in-slide-down
@@ -111,7 +111,7 @@ result = cloud_predictor.predict(data)
 
 ## {octicon}`rocket` Run pretrained foundation models
 
-*Full walkthrough: [Use Foundation Models](tutorials/foundation_model.md)*
+Full walkthrough: [Time Series](tutorials/foundation-model-timeseries.md).
 
 :::{dropdown} Time Series (Chronos-2)
 :animate: fade-in-slide-down
@@ -148,9 +148,8 @@ endpoint.delete_endpoint()
 
 ## {octicon}`package` Installation
 
-![](https://img.shields.io/pypi/pyversions/autogluon.cloud)
-![](https://img.shields.io/pypi/v/autogluon.cloud.svg)
-![](https://img.shields.io/pypi/dm/autogluon.cloud)
+[![PyPI](https://img.shields.io/pypi/v/autogluon.cloud.svg)](https://pypi.org/project/autogluon.cloud/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/autogluon.cloud)](https://pypi.org/project/autogluon.cloud/)
 
 ```bash
 pip install autogluon.cloud
@@ -161,13 +160,13 @@ Before running the examples above, set up your AWS resources (IAM role + S3 buck
 ```{toctree}
 ---
 caption: Tutorials
-maxdepth: 1
+maxdepth: 2
 hidden:
 ---
 
 Setup <tutorials/setup>
-Train Your Own Models <tutorials/autogluon-cloud>
-Use Foundation Models <tutorials/foundation_model>
+Train Your Own Predictor <tutorials/predictor>
+Foundation Models <tutorials/foundation-model>
 ```
 
 ```{toctree}

@@ -31,6 +31,14 @@ extlinks = {
 # See https://myst-parser.readthedocs.io/en/latest/syntax/optional.html
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "html_image", "substitution"]
 
+# Route .md through myst-nb so files with a jupytext frontmatter actually execute their {code-cell} blocks.
+# Without this, .md is parsed as plain MyST and code cells render but never run.
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "myst-nb",
+    ".ipynb": "myst-nb",
+}
+
 autosummary_generate = True
 numpydoc_show_class_members = False
 # Merge __init__ docstring (with Parameters) into the class docstring,
