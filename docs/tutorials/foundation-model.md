@@ -30,7 +30,7 @@ Install autogluon.cloud:
 pip install autogluon.cloud
 ```
 
-You also need an IAM role with SageMaker permissions. See the [AutoGluon-Cloud tutorial](./autogluon-cloud.md) for setup instructions.
+You also need an IAM role with SageMaker permissions. See the [AutoGluon-Cloud tutorial](./cloud-predictor.md) for setup instructions.
 
 ## Time Series Forecasting
 

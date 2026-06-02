@@ -43,7 +43,7 @@ It supports two workflows:
 
 ## {octicon}`gear` Train AutoGluon predictors in the cloud
 
-*Full walkthrough: [Train Your Own Models](tutorials/autogluon-cloud.md)*
+*Full walkthrough: [Train Your Own Models](tutorials/cloud-predictor.md)*
 
 :::{dropdown} Tabular
 :animate: fade-in-slide-down
@@ -111,7 +111,7 @@ result = cloud_predictor.predict(data)
 
 ## {octicon}`rocket` Run pretrained foundation models
 
-*Full walkthrough: [Use Foundation Models](tutorials/foundation_model.md)*
+*Full walkthrough: [Use Foundation Models](tutorials/foundation-model.md)*
 
 :::{dropdown} Time Series (Chronos-2)
 :animate: fade-in-slide-down
@@ -166,8 +166,8 @@ hidden:
 ---
 
 Setup <tutorials/setup>
-Train Your Own Models <tutorials/autogluon-cloud>
-Use Foundation Models <tutorials/foundation_model>
+Train Your Own Models <tutorials/cloud-predictor>
+Use Foundation Models <tutorials/foundation-model>
 ```
 
 ```{toctree}

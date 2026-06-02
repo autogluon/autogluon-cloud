@@ -2,7 +2,7 @@
 
 AutoGluon-Cloud lets you train, deploy, and run inference with AutoGluon models on AWS using the same APIs you'd use locally. Under the hood, it runs your jobs on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) using AWS's official [AutoGluon deep learning containers](https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-training-containers) — so you don't manage any infrastructure yourself.
 
-It supports the `tabular`, `timeseries`, and `multimodal` predictors. The examples below use `TabularCloudPredictor`; the others share the same API.
+It supports the `tabular`, `timeseries`, and `multimodal` predictors. The examples below use {py:class}`~autogluon.cloud.TabularCloudPredictor`; the others share the same API.
 
 ```{note}
 This tutorial assumes you've already set up AutoGluon-Cloud on AWS. If you haven't, see [Setup](setup.md) first.
@@ -13,14 +13,33 @@ SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud
 ```
 
 ## Training
-Using `autogluon.cloud` to train AutoGluon backed models is simple and not too much different from training an AutoGluon predictor directly.
+
+**Create the predictor.** A {py:class}`~autogluon.cloud.TabularCloudPredictor` needs an IAM execution role (so SageMaker can run jobs on your behalf) and an S3 bucket (to stage data and store trained artifacts). There are two ways to supply them:
+
+- Use a saved config (recommended). Save the role and bucket once to `~/.autogluon/cloud.yaml` — see [Setup](setup.md) — and subsequent constructor calls will pick them up automatically:
+
+  ```python
+  from autogluon.cloud import TabularCloudPredictor
+
+  cloud_predictor = TabularCloudPredictor()
+  ```
+
+- Pass them at construction. Useful when you need different roles or buckets per call:
+
+  ```python
+  cloud_predictor = TabularCloudPredictor(
+      role="arn:aws:iam::222222222222:role/MyAutoGluonRole",
+      cloud_output_path="s3://my-autogluon-bucket/tabular-demo",
+  )
+  ```
+
+**Train.** {py:meth}`~autogluon.cloud.TabularCloudPredictor.fit` runs [`TabularPredictor.fit()`](https://auto.gluon.ai/stable/api/autogluon.tabular.TabularPredictor.fit.html) inside a remote SageMaker job — along with `train_data`, the `predictor_init_args` and `predictor_fit_args` are forwarded straight through. Training, model artifacts, and AutoGluon itself all live on the remote instance, so you don't need AutoGluon installed locally.
+
+`train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). In every case AutoGluon-Cloud loads the data locally and uploads it to your `cloud_output_path` bucket before kicking off the SageMaker job.
 
 ```python
-from autogluon.cloud import TabularCloudPredictor
-cloud_predictor = TabularCloudPredictor(
-    cloud_output_path="YOUR_S3_BUCKET_PATH"
-).fit(
-    train_data="train.csv",  # path or DataFrame
+cloud_predictor.fit(
+    train_data="train.csv",  # DataFrame, local path, or S3 URL (CSV/Parquet)
     predictor_init_args={"label": "label"},  # passed to TabularPredictor()
     predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
     instance_type="ml.m5.2xlarge",  # https://aws.amazon.com/sagemaker/pricing/
@@ -29,7 +48,7 @@ cloud_predictor = TabularCloudPredictor(
 ```
 
 ### Reattach to a Previous Training Job
-If your local connection to the training job died for some reason, i.e. lost internet connection, your training job will still be running on SageMaker, and you can reattach to the job with another `CloudPredictor` as long as you have the job name.
+If your local connection to the training job died for some reason, i.e. lost internet connection, your training job will still be running on SageMaker, and you can reattach to the job with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name.
 
 The job name will be logged out when the training job started.
 It should look similar to this: `INFO:sagemaker:Creating training-job with name: ag-cloudpredictor-1673296750-47d7`.
@@ -42,8 +61,18 @@ another_cloud_predictor.attach_job(job_name="JOB_NAME")
 
 The reattached job will no longer give live stream of the training job's log. Instead, the log will be available once the training job is finished.
 
-## Endpoint Deployment and Real-time Prediction
-If you want to deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later, it is just one line of code:
+## Inference
+
+Once a predictor is trained, you can get predictions in two ways:
+
+- **Real-time inference**: deploy the predictor as a long-running SageMaker endpoint and send requests to it. Best when you need low-latency predictions on demand — e.g. behind a user-facing service.
+- **Batch inference**: launch a one-off SageMaker job that scores a dataset and writes the results to S3. Best for offline scoring of larger datasets — compute spins up, runs, and shuts down automatically, so you only pay for what you use.
+
+A rough guideline: if you need predictions less often than once an hour and can tolerate ~10 minutes of compute spin-up, batch inference is usually cheaper and easier to operate.
+
+### Real-time inference
+
+Deploy the predictor as a SageMaker endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.deploy`:
 
 ```python
 cloud_predictor.deploy(
@@ -52,13 +81,13 @@ cloud_predictor.deploy(
 )
 ```
 
-Optionally, you can also attach to a deployed endpoint:
+Optionally, you can also attach to a deployed endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_endpoint`:
 
 ```python
 cloud_predictor.attach_endpoint(endpoint="ENDPOINT_NAME")
 ```
 
-To perform real-time prediction:
+Send requests to the endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.predict_real_time`:
 
 ```python
 result = cloud_predictor.predict_real_time("test.csv") # can be a DataFrame as well
@@ -73,7 +102,7 @@ Result would be a pandas Series similar to this:
 Name: label, dtype: object
 ```
 
-To perform real-time predict probability:
+For class probabilities, use {py:meth}`~autogluon.cloud.TabularCloudPredictor.predict_proba_real_time`:
 
 ```python
 result = cloud_predictor.predict_proba_real_time("test.csv")  # can be a DataFrame as well
@@ -88,13 +117,13 @@ Result would be a pandas DataFrame similar to this:
 2   0.372283  0.627717
 ```
 
-Make sure you clean up the endpoint deployed by:
+Make sure you clean up the endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.cleanup_deployment`:
 
 ```python
 cloud_predictor.cleanup_deployment()
 ```
 
-To identify if you have an active endpoint attached:
+To check whether an endpoint is attached, call {py:meth}`~autogluon.cloud.TabularCloudPredictor.info`:
 
 ```python
 cloud_predictor.info()
@@ -128,23 +157,14 @@ response = client.invoke_endpoint(
 print(response['Body'].read().decode())
 ```
 
-## Batch Inference
-When minimizing latency isn't a concern, then the batch inference functionality may be easier, more scalable, and cheaper as compute is automatically terminated after the batch inference job is complete.
+### Batch inference
 
-A general guideline is to use batch inference if you need to get predictions less than once an hour and are ok with the inference time taking 10 minutes longer than real-time inference (due to compute spin-up overhead).
-
-To perform batch inference:
+To score a dataset as a one-off job, use {py:meth}`~autogluon.cloud.TabularCloudPredictor.predict`:
 
 ```python
 result = cloud_predictor.predict(
-    'test.csv',  # can be a DataFrame as well and the results will be stored in s3 bucket
-    instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True,  # Set this to False to make it an unblocking call and immediately return
-    # If True, returns a Pandas Series object of predictions.
-    # If False, returns nothing. You will have to download results separately via cloud_predictor.download_predict_results
-    download=True,
-    persist=True,  # If True and download=True, the results file will also be saved to local disk.
-    save_path=None,  # Path to save the downloaded results. If None, CloudPredictor will create one with the batch inference job name.
+    "test.csv",  # DataFrame, local path, or S3 URL (CSV/Parquet)
+    instance_type="ml.m5.2xlarge",
 )
 ```
 
@@ -157,19 +177,12 @@ Result would be a pandas DataFrame similar to this:
 Name: label, dtype: object
 ```
 
-To perform batch inference and getting prediction probability:
+For class probabilities, use {py:meth}`~autogluon.cloud.TabularCloudPredictor.predict_proba`:
 
 ```python
 result = cloud_predictor.predict_proba(
-    'test.csv',  # can be a DataFrame as well and the results will be stored in s3 bucket
-    include_predict=True,  # Will return a tuple (prediction, prediction probability). Set this to False to get prediction probability only.
-    instance_type="ml.m5.2xlarge",  # Checkout supported instance and pricing here: https://aws.amazon.com/sagemaker/pricing/
-    wait=True,  # Set this to False to make it an unblocking call and immediately return
-    # If True, returns a Pandas Series object of predictions.
-    # If False, returns nothing. You will have to download results separately via cloud_predictor.download_predict_results
-    download=True,
-    persist=True,  # If True and download=True, the results file will also be saved to local disk.
-    save_path=None,  # Path to save the downloaded results. If None, CloudPredictor will create one with the batch inference job name.
+    "test.csv",
+    instance_type="ml.m5.2xlarge",
 )
 ```
 
@@ -198,7 +211,7 @@ Otherwise, prediction probability only, i.e.
 
 ## Retrieve CloudPredictor Info
 
-To retrieve general info about a `CloudPredictor`
+To retrieve general info about a `CloudPredictor`, call {py:meth}`~autogluon.cloud.TabularCloudPredictor.info`:
 
 ```python
 cloud_predictor.info()
@@ -227,7 +240,7 @@ It will output a dict similar to this:
 ```
 
 ## Convert the CloudPredictor to a Local AutoGluon Predictor
-You can easily convert the `CloudPredictor` you trained on SageMaker to your local machine as long as you have the same version of AutoGluon installed locally.
+You can convert the `CloudPredictor` trained on SageMaker into a local AutoGluon predictor with {py:meth}`~autogluon.cloud.TabularCloudPredictor.to_local_predictor`, as long as you have the same version of AutoGluon installed locally.
 
 ```python
 local_predictor = cloud_predictor.to_local_predictor(
@@ -235,4 +248,4 @@ local_predictor = cloud_predictor.to_local_predictor(
 )  # local_predictor would be a TabularPredictor
 ```
 
-`to_local_predictor()` would underneath downlod the tarball, expand it to your local disk and load it as a corresponding AutoGluon predictor.
+`to_local_predictor()` downloads the trained model tarball, expands it to your local disk, and loads it as the corresponding AutoGluon predictor.
