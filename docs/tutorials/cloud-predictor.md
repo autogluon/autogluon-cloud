@@ -1,4 +1,4 @@
-# Train and Deploy AutoGluon Models in the Cloud
+# Train and Deploy AutoGluon Models on Amazon SageMaker
 
 AutoGluon-Cloud lets you train, deploy, and run inference with AutoGluon models on AWS using the same APIs you'd use locally. Under the hood, it runs your jobs on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) using AWS's official [AutoGluon deep learning containers](https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon-training) — so you don't manage any infrastructure yourself.
 

@@ -1,66 +1,72 @@
-# Time Series Foundation Models on Amazon SageMaker with AutoGluon-Cloud
+# Run Pretrained Foundation Models on Amazon SageMaker
 
-AutoGluon-Cloud lets you run pretrained foundation models on Amazon SageMaker — deploy real-time endpoints or run batch predictions without any dataset-specific training.
+Foundation models are large pretrained models that generate predictions **zero-shot** on new data. Because they're trained on massive, diverse datasets, they generalize to unseen data out of the box — no dataset-specific fitting required.
 
-## What are Foundation Models?
+That makes the workflow much simpler than the [standard CloudPredictor workflow](./cloud-predictor.md), which requires you to first fit a predictor on your data and then manage the trained artifact. With foundation models you skip the fit step entirely and go straight to deploying an endpoint or running batch predictions.
 
-Foundation models are large pretrained models that can perform inference **zero-shot** on new data, without requiring a separate fit step. They have been trained on massive and diverse datasets, allowing them to generalize to unseen data out of the box.
-
-With the standard CloudPredictor workflow, you follow a **fit → deploy → predict** pattern: first fit a predictor on your data, then deploy an endpoint or run batch inference. Foundation models skip the fit step entirely — you can run predictions right away.
-
-To support this workflow, AutoGluon-Cloud provides {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`: a new class that lets you go directly from model selection to inference. With it, you can:
-
-- **Deploy a real-time endpoint** in minutes and start getting predictions immediately
-- **Run batch predictions** on large datasets without waiting for a training job
-- **Reduce costs** by eliminating the training step when zero-shot accuracy is sufficient
-
-AutoGluon-Cloud currently supports foundation models for time series forecasting via {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`.
+AutoGluon-Cloud exposes this workflow through {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`. For now it covers time series forecasting only, with models like Chronos-2 available out of the box.
 
 ```{attention}
-Costs for running cloud compute are managed by Amazon SageMaker, and storage costs are managed by AWS S3. AutoGluon-Cloud is a wrapper to these services at no additional charge. It is the user's responsibility to monitor compute usage and delete endpoints when no longer needed.
+SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud is a free wrapper, but it's your responsibility to monitor usage and delete endpoints when no longer needed.
 ```
 
-In the following, we will guide you step-by-step through using time series foundation models in AutoGluon-Cloud with the {py:class}`~autogluon.cloud.TimeSeriesFoundationModel` class.
+## Create the model
 
-## Prerequisites
+A {py:class}`~autogluon.cloud.TimeSeriesFoundationModel` needs an IAM execution role (so SageMaker can run jobs on your behalf) and an S3 bucket (to stage data and store outputs). There are two ways to supply them:
 
-Install autogluon.cloud:
+- Use a saved config (recommended). Save the role and bucket once to `~/.autogluon/cloud.yaml` — see [Setup](./setup.md) — and subsequent constructor calls will pick them up automatically:
 
-```bash
-pip install autogluon.cloud
-```
+  ```python
+  from autogluon.cloud import TimeSeriesFoundationModel
 
-You also need an IAM role with SageMaker permissions. See the [AutoGluon-Cloud tutorial](./cloud-predictor.md) for setup instructions.
+  model = TimeSeriesFoundationModel(model_id="chronos-2")
+  ```
 
-## Time Series Forecasting
+- Pass them at construction. Useful when you need different roles or buckets per call:
 
-### Available Models
+  ```python
+  model = TimeSeriesFoundationModel(
+      model_id="chronos-2",
+      role="arn:aws:iam::222222222222:role/MyAutoGluonRole",
+      cloud_output_path="s3://my-autogluon-bucket/ag-foundation-model",
+  )
+  ```
 
-The following table shows the time series foundation models currently supported by {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`. Some models, like Chronos-2, natively support covariates and cross-learning across items, while others are univariate-only.
+The examples in the rest of this tutorial reuse a single `model` object created this way.
 
-| Model ID | Model Family | Covariates |
-|----------|-------------|------------|
-| `chronos-2` | Chronos-2 | ✅ |
-| `chronos-bolt-tiny` | Chronos-Bolt | ❌ |
-| `chronos-bolt-small` | Chronos-Bolt | ❌ |
-| `chronos-bolt-base` | Chronos-Bolt | ❌ |
+### Available models
 
-[Chronos-2](https://huggingface.co/autogluon/chronos-2) is the recommended model — it supports covariates, cross-learning across items, and context lengths up to 8192 time steps.
+The following `model_id` values are currently supported. Chronos-2 models natively support covariates and cross-learning across items, while Chronos-Bolt is univariate-only.
 
-For background on Chronos models and their capabilities, see the [Forecasting with Chronos-2](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-chronos.html) tutorial.
+| Model ID | Documentation | Weights |
+|----------|---------------|---------|
+| `chronos-2` | [Chronos2Model](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.Chronos2Model) | [autogluon/chronos-2](https://huggingface.co/autogluon/chronos-2) |
+| `chronos-2-small` | [Chronos2Model](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.Chronos2Model) | [autogluon/chronos-2-small](https://huggingface.co/autogluon/chronos-2-small) |
+| `chronos-bolt-tiny` | [ChronosModel](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.ChronosModel) | [autogluon/chronos-bolt-tiny](https://huggingface.co/autogluon/chronos-bolt-tiny) |
+| `chronos-bolt-small` | [ChronosModel](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.ChronosModel) | [autogluon/chronos-bolt-small](https://huggingface.co/autogluon/chronos-bolt-small) |
+| `chronos-bolt-base` | [ChronosModel](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.ChronosModel) | [autogluon/chronos-bolt-base](https://huggingface.co/autogluon/chronos-bolt-base) |
 
-### Batch Prediction
+`chronos-2` is the recommended model — it supports covariates, cross-learning across items, and context lengths up to 8192 time steps. For background on Chronos models, see the [Forecasting with Chronos-2](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-chronos.html) tutorial.
 
-The simplest way to get forecasts is with `predict()`. This launches a SageMaker job and returns predictions as a DataFrame.
+## Inference modes
+
+{py:class}`~autogluon.cloud.TimeSeriesFoundationModel` supports three inference modes on SageMaker. The right choice depends on how often you need predictions and how much latency you can tolerate:
+
+- **Batch prediction** — launch a one-off SageMaker job that scores a dataset and writes the results to S3. Compute spins up, runs, and shuts down automatically. Best for offline forecasting on larger datasets where minutes of startup latency are fine.
+- **Real-time inference** — deploy the model to a long-running SageMaker endpoint and send requests over HTTPS. Lowest per-request latency, supports GPU instances. You pay for the endpoint as long as it's up, so best when you need predictions on demand and have steady traffic.
+- **Serverless inference** — deploy to a SageMaker Serverless Inference endpoint that scales to zero between requests. You only pay for active inference time. Best for intermittent or unpredictable traffic. Trade-offs: CPU only, cold-start latency on the first request after idle, and an extra setup step to bundle weights into a single artifact.
+
+Throughout the examples below, `data` is a pandas DataFrame in long format (one row per `(item_id, timestamp)` pair, plus a `target` column). See the [Time Series Quick Start](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-quick-start.html) for the expected format.
+
+## Batch prediction
+
+Use {py:meth}`~autogluon.cloud.TimeSeriesFoundationModel.predict` to score a dataset as a one-off job. It returns a DataFrame of forecasts:
 
 ```python
 import pandas as pd
-from autogluon.cloud import TimeSeriesFoundationModel
 
 data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv")
 
-model = TimeSeriesFoundationModel("chronos-2", cloud_output_path="s3://YOUR-BUCKET/ag-foundation-model")
-
 predictions = model.predict(
     data=data,
     target="target",
@@ -68,86 +74,61 @@ predictions = model.predict(
     timestamp_column="timestamp",
     prediction_length=24,
 )
-
-print(predictions.head())
 ```
 
-The `predict()` method accepts the following key parameters:
-
-- `data` — historical time series as a DataFrame or S3 path (long format with item_id, timestamp, target columns)
-- `target` — name of the column to forecast
-- `prediction_length` — number of future time steps to predict
-- `quantile_levels` — (optional) list of quantiles to predict (e.g., `[0.1, 0.5, 0.9]`)
-- `instance_type` — (optional) SageMaker instance type; defaults to `ml.m5.2xlarge`
-
-### Real-Time Endpoint
-
-For low-latency predictions, deploy the model as a SageMaker endpoint:
+To use covariates with Chronos-2, pass an optional `known_covariates` DataFrame containing future values of the covariate columns over the forecast horizon. See the [Forecasting In-Depth](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-indepth.html) tutorial for the expected covariates format.
 
 ```python
-from autogluon.cloud import TimeSeriesFoundationModel
-
-model = TimeSeriesFoundationModel("chronos-2", cloud_output_path="s3://YOUR-BUCKET/ag-foundation-model")
-
-# Deploy — this takes a few minutes
-endpoint = model.deploy()
-
-# Make predictions
-predictions = endpoint.predict(
-    data=data,
-    prediction_length=24,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
-)
-
-print(predictions.head())
-```
-
-The endpoint stays active until you explicitly delete it:
-
-```python
-# Always clean up to avoid ongoing charges
-endpoint.delete_endpoint()
-```
-
-The `deploy()` method accepts:
-
-- `instance_type` — (optional) defaults to `ml.g5.xlarge` (GPU instance for faster inference)
-- `endpoint_name` — (optional) custom name for the endpoint
-- `hyperparameters` — (optional) model hyperparameters to override defaults
-
-### Using Covariates with Chronos-2
-
-Chronos-2 natively supports covariates — external variables that provide additional context for forecasting. Specifically, it supports:
-
-- **Known future covariates** — variables whose future values are known at prediction time (e.g., holidays, promotions, weather forecasts)
-- **Past covariates** — variables that are only observed historically (e.g., past sales of related products)
-
-Pass known covariates via the `known_covariates` parameter in batch mode or through the endpoint:
-
-```python
-# Batch prediction with covariates
 predictions = model.predict(
     data=data,
     target="target",
     id_column="item_id",
     timestamp_column="timestamp",
     prediction_length=24,
-    known_covariates=future_covariates_df,  # DataFrame with id_column, timestamp_column, and covariate columns
-)
-```
-
-```python
-# Real-time endpoint with covariates
-predictions = endpoint.predict(
-    data=data,
-    prediction_length=24,
-    target="target",
-    id_column="item_id",
-    timestamp_column="timestamp",
     known_covariates=future_covariates_df,
 )
 ```
 
-The covariate column names are automatically inferred from the DataFrame columns (excluding `id_column` and `timestamp_column`). Both `data` and `known_covariates` can be passed as DataFrames or S3 paths.
+## Real-time inference
+
+Deploy the model to a SageMaker endpoint with {py:meth}`~autogluon.cloud.TimeSeriesFoundationModel.deploy`, then send requests through the returned endpoint:
+
+```python
+endpoint = model.deploy()  # takes a few minutes
+
+predictions = endpoint.predict(
+    data=data,
+    target="target",
+    id_column="item_id",
+    timestamp_column="timestamp",
+    prediction_length=24,
+    known_covariates=future_covariates_df,  # optional
+)
+```
+
+The endpoint stays active — and billed — until you delete it:
+
+```python
+endpoint.delete_endpoint()
+```
+
+## Serverless inference
+
+Serverless endpoints scale to zero between requests, so you only pay for active inference time. They run network-isolated, which means the model weights have to be bundled into a single `model.tar.gz` ahead of time rather than downloaded from HuggingFace at deploy time. Use {py:meth}`~autogluon.cloud.TimeSeriesFoundationModel.cache_model_artifact` to do this once, then deploy with `inference_mode="serverless"`:
+
+```python
+# Bundle weights to S3 once; reusable across deploys
+cached_model = model.cache_model_artifact("s3://YOUR-BUCKET/fm-cache")
+
+endpoint = cached_model.deploy(inference_mode="serverless")
+
+predictions = endpoint.predict(
+    data=data,
+    target="target",
+    id_column="item_id",
+    timestamp_column="timestamp",
+    prediction_length=24,
+)
+
+endpoint.delete_endpoint()
+```
