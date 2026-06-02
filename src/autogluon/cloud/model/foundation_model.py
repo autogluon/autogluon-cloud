@@ -189,7 +189,7 @@ class FoundationModel:
         """Shared deploy logic. Subclasses call this then wrap the endpoint."""
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
-        if instance_type is None and inference_mode != "serverless":
+        if instance_type is None and inference_mode == "realtime":
             instance_type = self._config.deploy_instance_type
 
         merged_hp = self._get_hyperparameters("inference", hyperparameters)

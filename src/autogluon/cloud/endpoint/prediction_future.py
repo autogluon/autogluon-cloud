@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Literal
 
 import pandas as pd
-from sagemaker.estimator import Estimator
+
+from ..utils.ag_sagemaker import AutoGluonSagemakerEstimator
 
 if TYPE_CHECKING:
     from ..job.sagemaker_job import SageMakerFitJob
@@ -42,7 +43,7 @@ class JobPredictionFuture:
 
     def result(self) -> pd.DataFrame:
         if not self._job.completed:
-            Estimator.attach(self._job.job_name, sagemaker_session=self._job.session).logs()
+            AutoGluonSagemakerEstimator.attach(self._job.job_name, sagemaker_session=self._job.session).logs()
         if self.status() == "Failed":
             raise RuntimeError(
                 f"Prediction job {self._job.job_name!r} did not complete successfully "

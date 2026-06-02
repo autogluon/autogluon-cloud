@@ -448,8 +448,6 @@ class CloudPredictor(ABC):
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
-        if instance_type is None and inference_mode != "serverless":
-            instance_type = "ml.m5.2xlarge"
         if backend_kwargs is None:
             backend_kwargs = {}
         backend_kwargs = self.backend.parse_backend_deploy_kwargs(backend_kwargs)
