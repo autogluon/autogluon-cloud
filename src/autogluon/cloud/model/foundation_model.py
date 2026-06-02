@@ -73,25 +73,17 @@ class FoundationModel:
         self,
         model_id: str,
         *,
+        cloud_output_path: Optional[str] = None,
+        role: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         model_artifact_uri: Optional[str] = None,
         backend: Literal["sagemaker"] = "sagemaker",
-        cloud_output_path: Optional[str] = None,
-        role: Optional[str] = None,
     ):
         """
         Parameters
         ----------
         model_id
             ID of the foundation model from the model registry.
-        hyperparameters
-            Default hyperparameters applied to inference and (when supported) training.
-        model_artifact_uri
-            S3 URI of a pre-bundled ``model.tar.gz`` produced by
-            :meth:`cache_model_artifact`. When set, deploys skip the runtime
-            HuggingFace download and load weights from the bundled artifact.
-        backend
-            Cloud backend to use.
         cloud_output_path
             S3 location where intermediate artifacts are stored. Accepts:
 
@@ -105,6 +97,14 @@ class FoundationModel:
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
             :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
+        hyperparameters
+            Default hyperparameters applied to inference and (when supported) training.
+        model_artifact_uri
+            S3 URI of a pre-bundled ``model.tar.gz`` produced by
+            :meth:`cache_model_artifact`. When set, deploys skip the runtime
+            HuggingFace download and load weights from the bundled artifact.
+        backend
+            Cloud backend to use.
         """
         self.model_id = model_id
         self.model_artifact_uri = model_artifact_uri
@@ -262,9 +262,9 @@ class FoundationModel:
         tarball.
 
         Destination key: ``{cache_path}/{model_id}/model.tar.gz``. If it already
-        exists, upload is skipped unless ``overwrite=True``; a warning is logged
-        when the cached artifact's autogluon-cloud version differs from the
-        current version.
+        exists, upload is skipped unless ``overwrite=True``; a stale-cache mismatch
+        between the bundled artifact's autogluon-cloud version and the current
+        version raises ``RuntimeError`` and prompts the caller to re-bundle.
 
         Parameters
         ----------

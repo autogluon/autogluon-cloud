@@ -72,7 +72,7 @@ def test_from_json_round_trip():
 def test_inference_hyperparameters_default_model_path_to_source_uri():
     fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
     hp = fm._get_hyperparameters("inference")
-    assert hp["model_path"] == "amazon/chronos-2"
+    assert hp["model_path"] == "autogluon/chronos-2"
 
 
 def test_user_hyperparameter_override_wins_over_default_model_path():
@@ -110,7 +110,7 @@ def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
     assert call.kwargs["predictor_path"] is None
     assert call.kwargs["repack"] is True
     serve_cfg = call.kwargs["fm_serve_config"]
-    assert serve_cfg["hyperparameters"]["model_path"] == "amazon/chronos-2"
+    assert serve_cfg["hyperparameters"]["model_path"] == "autogluon/chronos-2"
 
 
 def test_cache_model_artifact_rejects_non_s3_path():
