@@ -418,6 +418,9 @@ class SagemakerBackend(Backend):
         assert self.endpoint is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
+        if inference_mode == "serverless" and instance_type is None:
+            # Needed to infer the container image (CPU vs GPU) downstream — serverless is CPU-only.
+            instance_type = "ml.m5.2xlarge"
         if not endpoint_name:
             endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
 
