@@ -108,10 +108,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             For SageMaker backend, valid keys are:
                 1. autogluon_sagemaker_estimator_kwargs
                     Any extra arguments needed to initialize AutoGluonSagemakerEstimator
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Estimator for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator for all options
                 2. fit_kwargs
                     Any extra arguments needed to pass to fit.
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
 
         Returns
         -------
@@ -286,14 +286,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
                     If `persist` is `False`, file would first be downloaded to this path and then removed.
                 4. model_kwargs: dict, default = dict()
                     Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
                 5. transformer_kwargs: dict
                     Any extra arguments needed to pass to transformer.
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
                 6. transform_kwargs:
                     Any extra arguments needed to pass to transform.
                     Please refer to
-                    https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+                    https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
         """
         if backend_kwargs is None:
             backend_kwargs = {}
@@ -374,9 +374,23 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Name of the column with the unique identifier of each time series (item).
         timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
-        framework_version, job_name, instance_type, instance_count, volume_size, custom_image_uri, wait,
-        backend_kwargs:
-            Same semantics as ``fit()``.
+        framework_version: str, default = `latest`
+            Training container version of autogluon. If `latest`, will use the latest available container version.
+            If `custom_image_uri` is set, this argument will be ignored.
+        job_name: str, default = None
+            Name of the launched training job. If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+        instance_type: str, default = 'ml.m5.2xlarge'
+            Instance type the predictor will be trained on with SageMaker.
+        instance_count: int, default = 1
+            Number of instances used to fit the predictor.
+        volume_size: int, default = 100
+            Size in GB of the EBS volume to use for storing input data during training.
+        custom_image_uri: Optional[str], default = None
+            Custom container image URI. If set, ``framework_version`` is ignored.
+        wait: bool, default = True
+            Whether the call should wait until the job completes.
+        backend_kwargs: Optional[dict], default = None
+            Backend-specific arguments. Same keys as ``fit()``.
         predictions_path: Optional[str]
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must

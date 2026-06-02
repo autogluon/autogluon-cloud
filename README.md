@@ -5,7 +5,7 @@
 
 ## Train and Deploy AutoGluon in the Cloud
 
-[![Latest Release](https://img.shields.io/github/v/release/autogluon/autogluon-cloud)](https://github.com/autogluon/autogluon-cloud/releases)
+[![PyPI](https://img.shields.io/pypi/v/autogluon.cloud.svg)](https://pypi.org/project/autogluon.cloud/)
 [![Python Versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/autogluon.cloud/)
 [![GitHub license](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Continuous Integration](https://github.com/autogluon/autogluon-cloud/actions/workflows/continuous_integration.yml/badge.svg)](https://github.com/autogluon/autogluon-cloud/actions/workflows/continuous_integration.yml)
@@ -14,12 +14,12 @@
 
 </div>
 
-AutoGluon-Cloud makes it easy to run [AutoGluon](https://auto.gluon.ai/stable/index.html) in the cloud. With a few lines of code, you can train models and run inference on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) — without managing infrastructure or installing AutoGluon's heavy dependencies on your local machine.
+[AutoGluon](https://auto.gluon.ai/stable/index.html) is an open-source AutoML library that trains state-of-the-art ML models on tabular, time-series, and multimodal data with just a few lines of code. AutoGluon-Cloud takes that same API and runs it on AWS — train models and serve predictions on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) without managing infrastructure or setting up a heavyweight ML environment on your local machine.
 
 It supports two workflows:
 
-- **Train AutoGluon predictors in the cloud** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
-- **Run pretrained foundation models** — deploy state-of-the-art pretrained models like Chronos-2 for zero-shot inference, with no training required.
+- **[Train your own predictor](https://auto.gluon.ai/cloud/stable/tutorials/predictor-tabular.html)** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
+- **[Run pretrained foundation models](https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html)** — deploy state-of-the-art pretrained models like [Chronos-2](https://huggingface.co/amazon/chronos-2) for zero-shot inference, with no training required.
 
 ## 💾 Installation & setup
 

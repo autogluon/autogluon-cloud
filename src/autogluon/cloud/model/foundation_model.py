@@ -47,13 +47,14 @@ class FoundationModel:
     """
     Pretrained foundation model inference on AWS.
 
-    Factory: FoundationModel("chronos-bolt-base", ...) returns the appropriate
-    task-specific subclass (TimeSeriesFoundationModel, TabularFoundationModel).
+    Factory: ``FoundationModel(model_id, ...)`` dispatches on the model's task and returns the
+    appropriate task-specific subclass (:class:`TimeSeriesFoundationModel`, ``TabularFoundationModel``).
+    Most users instantiate the subclass directly instead.
 
     Examples
     --------
-    >>> model = FoundationModel("chronos-bolt-base")
-    >>> predictions = model.predict(data, prediction_length=12)
+    >>> model = FoundationModel("chronos-2")  # returns a TimeSeriesFoundationModel
+    >>> predictions = model.predict(data, prediction_length=24)
     """
 
     _backend_map: Dict[str, str] = {}
@@ -84,7 +85,9 @@ class FoundationModel:
         Parameters
         ----------
         model_id
-            ID of the foundation model from the model registry.
+            ID of the foundation model from the model registry. See
+            `Available models <https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html#available-models>`_
+            in the foundation model tutorial for the list of supported values.
         cloud_output_path
             S3 location where intermediate artifacts are stored. Accepts:
 
@@ -373,7 +376,24 @@ class FoundationModel:
 
 
 class TimeSeriesFoundationModel(FoundationModel):
-    """Foundation model for time series forecasting (Chronos, etc.)."""
+    """Pretrained time series foundation model for zero-shot forecasting on AWS SageMaker.
+
+    Wraps pretrained models like `Chronos-2 <https://huggingface.co/autogluon/chronos-2>`_ and
+    Chronos-Bolt and runs prediction as a managed SageMaker job, with no training required. See
+    `the foundation model tutorial <https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html>`_
+    for the supported ``model_id`` values and a full walkthrough.
+
+    Predictions can be produced in three modes:
+
+    * **Batch** — :meth:`predict` runs a one-off SageMaker training job and writes forecasts to S3.
+      Best for one-shot inference.
+    * **Real-time** — :meth:`deploy` provisions a real-time endpoint; call
+      :meth:`TimeSeriesEndpoint.predict` for low-latency inference, then
+      :meth:`TimeSeriesEndpoint.delete_endpoint` to tear it down.
+    * **Serverless** — :meth:`deploy` with ``inference_mode="serverless"`` provisions a SageMaker
+      Serverless Inference endpoint that scales to zero. Requires a cached model artifact (see
+      :meth:`cache_model_artifact`).
+    """
 
     _backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
     _predictor_type = "timeseries"

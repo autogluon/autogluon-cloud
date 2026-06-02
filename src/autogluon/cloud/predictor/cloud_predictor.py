@@ -224,10 +224,10 @@ class CloudPredictor(ABC):
             For SageMaker backend, valid keys are:
                 1. autogluon_sagemaker_estimator_kwargs
                     Any extra arguments needed to initialize AutoGluonSagemakerEstimator
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Estimator for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator for all options
                 2. fit_kwargs
                     Any extra arguments needed to pass to fit.
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
             For RayAWS backend, valid keys are:
                 1. custom_config: Optional[Union[str, Dict[str, Any]]] = None,
                     The custom cluster configuration.
@@ -441,10 +441,10 @@ class CloudPredictor(ABC):
             For SageMaker backend, valid keys are:
                 1. model_kwargs: dict, default = dict()
                     Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
                 2. deploy_kwargs
                     Any extra arguments needed to pass to deploy.
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#sagemaker.model.Model.deploy for all options
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
@@ -621,14 +621,14 @@ class CloudPredictor(ABC):
                     If `persist` is `False`, file would first be downloaded to this path and then removed.
                 4. model_kwargs: dict, default = dict()
                     Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
                 5. transformer_kwargs: dict
                     Any extra arguments needed to pass to transformer.
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
                 6. transform_kwargs:
                     Any extra arguments needed to pass to transform.
                     Please refer to
-                    https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+                    https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
 
         Returns
         -------
@@ -716,14 +716,14 @@ class CloudPredictor(ABC):
                     If `persist` is `False`, file would first be downloaded to this path and then removed.
                 4. model_kwargs: dict, default = dict()
                     Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
                 5. transformer_kwargs: dict
                     Any extra arguments needed to pass to transformer.
-                    Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
                 6. transform_kwargs:
                     Any extra arguments needed to pass to transform.
                     Please refer to
-                    https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+                    https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
 
         Returns
         -------
