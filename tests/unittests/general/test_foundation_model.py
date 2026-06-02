@@ -1,6 +1,7 @@
 """Unit tests for FoundationModel: serialization, hyperparameter resolution, and deploy-time wiring of
 model_artifact_uri / model_path."""
 
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -108,15 +109,50 @@ def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
 
     call = fm._backend.deploy.call_args
     assert call.kwargs["predictor_path"] is None
-    assert call.kwargs["repack"] is True
+    assert call.kwargs["repack"] is False
     serve_cfg = call.kwargs["fm_serve_config"]
     assert serve_cfg["hyperparameters"]["model_path"] == "autogluon/chronos-2"
+
+
+def test_deploy_rejects_user_model_path_when_artifact_uri_set():
+    """User-supplied model_path is incoherent with model_artifact_uri (the bundled tarball dictates the in-container
+    path). Raise rather than silently overwrite."""
+    fm = FoundationModel(
+        "chronos-2",
+        cloud_output_path="s3://b",
+        model_artifact_uri="s3://b/cache/chronos-2/model.tar.gz",
+    )
+    fm._backend.endpoint = mock.MagicMock()
+    with pytest.raises(ValueError, match="model_artifact_uri"):
+        fm._deploy_backend(hyperparameters={"model_path": "my-org/something-else"})
 
 
 def test_cache_model_artifact_rejects_non_s3_path():
     fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
     with pytest.raises(ValueError, match="s3://"):
         fm.cache_model_artifact("/local/path")
+
+
+def test_cache_model_artifact_uploads_with_version_metadata(monkeypatch):
+    """On cache miss, upload_file runs with the version metadata key — that's the cache-invalidation contract."""
+    from autogluon.cloud.version import __version__
+
+    fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
+    s3 = mock.MagicMock()
+    fm._backend.sagemaker_session.boto_session.client.return_value = s3
+    monkeypatch.setattr("autogluon.cloud.model.foundation_model._s3_head_or_none", lambda *_: None)
+    monkeypatch.setattr("autogluon.cloud.model.foundation_model.tarfile", mock.MagicMock())
+    monkeypatch.setattr("huggingface_hub.snapshot_download", mock.MagicMock())
+    monkeypatch.setattr(FoundationModel, "_serve_script_path", "/tmp/nonexistent-stub.py")
+    monkeypatch.setattr(Path, "read_bytes", lambda self: b"")
+    monkeypatch.setattr(Path, "write_bytes", lambda self, data: None)
+
+    new_fm = fm.cache_model_artifact("s3://b/cache")
+
+    assert new_fm.model_artifact_uri == "s3://b/cache/chronos-2/model.tar.gz"
+    s3.upload_file.assert_called_once()
+    metadata = s3.upload_file.call_args.kwargs["ExtraArgs"]["Metadata"]
+    assert metadata == {"autogluon-cloud-version": __version__}
 
 
 def test_cache_model_artifact_raises_on_stale_version_without_overwrite():

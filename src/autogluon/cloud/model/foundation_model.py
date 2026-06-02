@@ -189,6 +189,15 @@ class FoundationModel:
 
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
         if self.model_artifact_uri is not None:
+            user_model_path = (hyperparameters or {}).get("model_path") or self._hyperparameter_overrides.get(
+                "model_path"
+            )
+            if user_model_path is not None:
+                raise ValueError(
+                    "Cannot set hyperparameters['model_path'] when model_artifact_uri is in use — the bundled artifact "
+                    f"determines the in-container weights path ({_CONTAINER_WEIGHTS_DIR}). Drop model_path, or call "
+                    "deploy() on a FoundationModel without model_artifact_uri."
+                )
             merged_hp["model_path"] = _CONTAINER_WEIGHTS_DIR
         fm_serve_config = {
             "ag_model_key": self._config.ag_model_key,
@@ -198,6 +207,8 @@ class FoundationModel:
         model_kwargs = backend_kwargs.pop("model_kwargs", {})
         model_kwargs["entry_point"] = self._serve_script_path
 
+        # FM deploys never want SDK repack: predictor_path is either None (script-only tarball is built locally) or a
+        # pre-bundled cache artifact that already contains the serve script.
         self._backend.deploy(
             predictor_path=self.model_artifact_uri,
             endpoint_name=endpoint_name,
@@ -207,7 +218,7 @@ class FoundationModel:
             wait=wait,
             model_kwargs=model_kwargs,
             fm_serve_config=fm_serve_config,
-            repack=self.model_artifact_uri is None,
+            repack=False,
             **backend_kwargs,
         )
         assert self._backend.endpoint is not None
