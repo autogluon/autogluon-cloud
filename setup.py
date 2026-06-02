@@ -122,6 +122,7 @@ install_requires = [
     # CLI dependencies (autogluon-cloud command)
     "click>=8.0,<9",
     "rich>=13.0,<15",
+    "huggingface_hub>=0.20,<2",
 ]
 
 extras_require = dict()

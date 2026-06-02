@@ -3,82 +3,49 @@
 Maps model_id to AG-compatible configuration for deploy / predict.
 """
 
-from typing import Any, Dict, Literal, TypedDict
+from dataclasses import dataclass, field
+from typing import Any, Dict, Literal
 
 
-class FoundationModelConfig(TypedDict):
+@dataclass(frozen=True)
+class FoundationModelConfig:
     task: Literal["forecasting", "classification", "regression"]
-    model_name: str  # AG model class name (e.g. "Chronos", "Chronos2", "Mitra")
-    inference_hyperparameters: Dict[str, Any]  # defaults for deploy() and predict()
-    training_hyperparameters: Dict[str, Any]  # defaults for fit()
-    predict_instance_type: str  # batch predict
-    deploy_instance_type: str  # real-time endpoint
-    fit_instance_type: str  # fine-tuning
-    fine_tunable: bool  # whether .fit() is supported
+    ag_model_key: str  # key in the AG hyperparameters dict (e.g. "Chronos", "Chronos2", "Mitra")
+    model_source_uri: str  # where weights are downloaded from (e.g. "autogluon/chronos-2")
+    predict_instance_type: str = "ml.m5.2xlarge"  # batch predict
+    deploy_instance_type: str = "ml.g5.xlarge"  # real-time endpoint
+    fit_instance_type: str = "ml.g5.xlarge"  # fine-tuning
+    inference_hyperparameters: Dict[str, Any] = field(default_factory=dict)  # defaults for deploy() and predict()
+    training_hyperparameters: Dict[str, Any] = field(default_factory=dict)  # defaults for fit()
+    fine_tunable: bool = False  # whether .fit() is supported
 
 
-FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
-    "chronos-bolt-tiny": {
-        "task": "forecasting",
-        "model_name": "Chronos",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-tiny"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-bolt-tiny"},
-        "predict_instance_type": "ml.m5.2xlarge",
-        "deploy_instance_type": "ml.g5.xlarge",
-        "fit_instance_type": "ml.g5.xlarge",
-        "fine_tunable": False,
-    },
-    "chronos-bolt-small": {
-        "task": "forecasting",
-        "model_name": "Chronos",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-small"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-bolt-small"},
-        "predict_instance_type": "ml.m5.2xlarge",
-        "deploy_instance_type": "ml.g5.xlarge",
-        "fit_instance_type": "ml.g5.xlarge",
-        "fine_tunable": False,
-    },
-    "chronos-bolt-base": {
-        "task": "forecasting",
-        "model_name": "Chronos",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-bolt-base"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-bolt-base"},
-        "predict_instance_type": "ml.m5.2xlarge",
-        "deploy_instance_type": "ml.g5.xlarge",
-        "fit_instance_type": "ml.g5.xlarge",
-        "fine_tunable": False,
-    },
-    "chronos-2": {
-        "task": "forecasting",
-        "model_name": "Chronos2",
-        "inference_hyperparameters": {"model_path": "amazon/chronos-2"},
-        "training_hyperparameters": {"model_path": "amazon/chronos-2", "fine_tune": True},
-        "predict_instance_type": "ml.m5.2xlarge",
-        "deploy_instance_type": "ml.g5.xlarge",
-        "fit_instance_type": "ml.g5.xlarge",
-        "fine_tunable": True,
-    },
-    # TODO: Replace dummy configs with real values
-    "mitra-classification": {
-        "task": "classification",
-        "model_name": "Mitra",
-        "inference_hyperparameters": {"model_path": "TODO"},
-        "training_hyperparameters": {"model_path": "TODO"},
-        "predict_instance_type": "ml.m5.2xlarge",
-        "deploy_instance_type": "ml.g5.xlarge",
-        "fit_instance_type": "ml.g5.xlarge",
-        "fine_tunable": False,
-    },
-    "mitra-regression": {
-        "task": "regression",
-        "model_name": "Mitra",
-        "inference_hyperparameters": {"model_path": "TODO"},
-        "training_hyperparameters": {"model_path": "TODO"},
-        "predict_instance_type": "ml.m5.2xlarge",
-        "deploy_instance_type": "ml.g5.xlarge",
-        "fit_instance_type": "ml.g5.xlarge",
-        "fine_tunable": False,
-    },
+FOUNDATION_MODEL_REGISTRY: Dict[str, FoundationModelConfig] = {
+    "chronos-bolt-tiny": FoundationModelConfig(
+        task="forecasting",
+        ag_model_key="Chronos",
+        model_source_uri="autogluon/chronos-bolt-tiny",
+    ),
+    "chronos-bolt-small": FoundationModelConfig(
+        task="forecasting",
+        ag_model_key="Chronos",
+        model_source_uri="autogluon/chronos-bolt-small",
+    ),
+    "chronos-bolt-base": FoundationModelConfig(
+        task="forecasting",
+        ag_model_key="Chronos",
+        model_source_uri="autogluon/chronos-bolt-base",
+    ),
+    "chronos-2-small": FoundationModelConfig(
+        task="forecasting",
+        ag_model_key="Chronos2",
+        model_source_uri="autogluon/chronos-2-small",
+    ),
+    "chronos-2": FoundationModelConfig(
+        task="forecasting",
+        ag_model_key="Chronos2",
+        model_source_uri="autogluon/chronos-2",
+    ),
 }
 
 
