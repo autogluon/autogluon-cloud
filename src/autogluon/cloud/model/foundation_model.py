@@ -314,16 +314,16 @@ class FoundationModel:
                 logger.info(f"Downloading {source_uri} from HuggingFace to {weights_dir}")
                 snapshot_download(repo_id=source_uri, local_dir=str(weights_dir))
 
-                code_dir = tmp_path / "code"
-                code_dir.mkdir()
+                # Mirror the layout produced by SagemakerBackend._create_serve_script_tarball:
+                # entry-point script + serving_utils/ under code/, so the cached endpoint can
+                # `from serving_utils.timeseries import ...` exactly like a fresh deploy.
                 serve_script = Path(self._serve_script_path)
-                (code_dir / serve_script.name).write_bytes(serve_script.read_bytes())
-
                 tarball = tmp_path / "model.tar.gz"
                 logger.info(f"Bundling weights + serve script into {tarball}")
                 with tarfile.open(tarball, "w:gz") as tar:
                     tar.add(weights_dir, arcname="weights")
-                    tar.add(code_dir, arcname="code")
+                    tar.add(serve_script, arcname=f"code/{serve_script.name}")
+                    tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
                 logger.info(f"Uploading to {cache_key}")
                 s3.upload_file(
                     str(tarball),
