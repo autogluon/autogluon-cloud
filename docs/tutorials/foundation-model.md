@@ -6,7 +6,7 @@ AutoGluon-Cloud lets you run pretrained foundation models on Amazon SageMaker �
 
 Foundation models are large pretrained models that can perform inference **zero-shot** on new data, without requiring a separate fit step. They have been trained on massive and diverse datasets, allowing them to generalize to unseen data out of the box.
 
-With the standard CloudPredictor workflow, you follow a **fit → deploy / predict** pattern: first fit a predictor on your data, then deploy or run batch inference. Foundation models skip the fit step entirely — you can run predictions right away.
+With the standard CloudPredictor workflow, you follow a **fit → deploy → predict** pattern: first fit a predictor on your data, then deploy an endpoint or run batch inference. Foundation models skip the fit step entirely — you can run predictions right away.
 
 To support this workflow, AutoGluon-Cloud provides {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`: a new class that lets you go directly from model selection to inference. With it, you can:
 
