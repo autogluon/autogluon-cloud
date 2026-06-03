@@ -160,6 +160,21 @@ The endpoint stays active — and billed — until you delete it:
 endpoint.delete_endpoint()
 ```
 
+### Reattaching to an existing endpoint
+
+To send requests to an endpoint that's already running (e.g. from a previous session, or one a
+teammate deployed), build a {py:class}`~autogluon.cloud.TimeSeriesEndpoint` directly from the
+endpoint name:
+
+```python
+from autogluon.cloud import TimeSeriesEndpoint
+
+endpoint = TimeSeriesEndpoint(endpoint_name="my-existing-endpoint")
+```
+
+Pass a configured `boto3.Session` to use a non-default AWS profile or region. The endpoint must
+have been deployed via AutoGluon-Cloud, since the request payload format is AutoGluon-specific.
+
 ## Serverless inference
 
 Serverless endpoints scale to zero between requests, so you only pay for active inference time. They run network-isolated, which means the model weights have to be bundled into a single `model.tar.gz` ahead of time rather than downloaded from HuggingFace at deploy time. Use {py:meth}`~autogluon.cloud.TimeSeriesFoundationModel.cache_model_artifact` to do this once, then deploy with `inference_mode="serverless"`:

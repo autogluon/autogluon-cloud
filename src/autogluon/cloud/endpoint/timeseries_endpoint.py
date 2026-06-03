@@ -1,27 +1,48 @@
 from typing import Any, Dict, List, Optional, Union
 
+import boto3
 import pandas as pd
+import sagemaker
+from sagemaker.predictor import Predictor
 
 from autogluon.common.loaders import load_pd
 
-from ..utils.serializers import AutoGluonSerializationWrapper
-from .endpoint import Endpoint
+from ..utils.deserializers import PandasDeserializer
+from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 
 
 class TimeSeriesEndpoint:
-    """High-level endpoint for time series prediction.
+    """High-level handle for an AutoGluon-Cloud time series inference endpoint.
 
-    Wraps an Endpoint and handles serialization/deserialization,
-    providing a clean predict() interface.
+    Wraps a SageMaker endpoint with the AutoGluon-Cloud serializer/deserializer pair, providing a clean
+    :meth:`predict` interface. Use this to attach to an existing endpoint by name. To create a new endpoint, call
+    :meth:`autogluon.cloud.TimeSeriesFoundationModel.deploy`, which returns a :class:`TimeSeriesEndpoint` already
+    pointing at the new endpoint.
     """
 
-    def __init__(self, endpoint: Endpoint):
-        # TODO: replace with sagemaker.Predictor directly (remove Endpoint/SagemakerEndpoint layer)
-        self._endpoint = endpoint
+    def __init__(self, endpoint_name: str, session: Optional[boto3.Session] = None):
+        """
+        Parameters
+        ----------
+        endpoint_name
+            Name of an existing SageMaker endpoint deployed via AutoGluon-Cloud (e.g. through
+            :meth:`autogluon.cloud.TimeSeriesFoundationModel.deploy`). The endpoint must understand the AutoGluon-Cloud
+            request payload format.
+        session
+            ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
+        """
+        boto_session = session or boto3.Session()
+        sagemaker_session = sagemaker.Session(boto_session=boto_session)
+        self._predictor = Predictor(
+            endpoint_name=endpoint_name,
+            sagemaker_session=sagemaker_session,
+            serializer=AutoGluonSerializer(),
+            deserializer=PandasDeserializer(),
+        )
 
     @property
     def endpoint_name(self) -> str:
-        return self._endpoint.endpoint_name
+        return self._predictor.endpoint_name
 
     def predict(
         self,
@@ -41,8 +62,8 @@ class TimeSeriesEndpoint:
         Parameters
         ----------
         data
-            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to
-            a data file. See the `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
+            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to a data file.
+            See the `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
             for the expected format.
         known_covariates
             Future values of the known covariates over the forecast horizon.
@@ -57,8 +78,8 @@ class TimeSeriesEndpoint:
         timestamp_column
             Name of the column with the observation timestamps.
         quantile_levels
-            List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults
-            to ``[0.1, 0.2, ..., 0.9]``.
+            List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults to
+            ``[0.1, 0.2, ..., 0.9]``.
         accept
             Response format. Options: 'application/x-parquet', 'text/csv', 'application/json'.
 
@@ -88,8 +109,9 @@ class TimeSeriesEndpoint:
             static_features=static_features,
             known_covariates=known_covariates,
         )
-        return self._endpoint.predict(payload, initial_args={"Accept": accept})
+        return self._predictor.predict(payload, initial_args={"Accept": accept})
 
     def delete_endpoint(self) -> None:
-        """Delete the endpoint and cleanup artifacts."""
-        self._endpoint.delete_endpoint()
+        """Delete the endpoint and its backing model + endpoint config."""
+        self._predictor.delete_model()
+        self._predictor.delete_endpoint(delete_endpoint_config=True)
