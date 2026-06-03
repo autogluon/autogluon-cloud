@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import pandas as pd
+from typing_extensions import Self
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
@@ -60,7 +61,7 @@ class FoundationModel:
     _backend_map: Dict[str, str] = {}
     _predictor_type: str
 
-    def __new__(cls, model_id: str, **kwargs) -> "FoundationModel":
+    def __new__(cls, model_id: str, **kwargs) -> Self:
         if cls is not FoundationModel:
             return super().__new__(cls)
         config = get_model_config(model_id)

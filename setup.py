@@ -123,6 +123,7 @@ install_requires = [
     "click>=8.0,<9",
     "rich>=13.0,<15",
     "huggingface_hub>=0.20,<2",
+    "typing_extensions>=4.0,<5",
 ]
 
 extras_require = dict()

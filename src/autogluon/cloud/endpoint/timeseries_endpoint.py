@@ -2,11 +2,11 @@ from typing import Any, Dict, List, Optional, Union
 
 import boto3
 import pandas as pd
-import sagemaker
 from sagemaker.predictor import Predictor
 
 from autogluon.common.loaders import load_pd
 
+from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.deserializers import PandasDeserializer
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 
@@ -31,11 +31,9 @@ class TimeSeriesEndpoint:
         session
             ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
         """
-        boto_session = session or boto3.Session()
-        sagemaker_session = sagemaker.Session(boto_session=boto_session)
         self._predictor = Predictor(
             endpoint_name=endpoint_name,
-            sagemaker_session=sagemaker_session,
+            sagemaker_session=setup_sagemaker_session(boto_session=session),
             serializer=AutoGluonSerializer(),
             deserializer=PandasDeserializer(),
         )
@@ -54,7 +52,6 @@ class TimeSeriesEndpoint:
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
         quantile_levels: Optional[List[float]] = None,
-        accept: str = "application/x-parquet",
     ) -> pd.DataFrame:
         """
         Run real-time prediction on the deployed endpoint.
@@ -80,8 +77,6 @@ class TimeSeriesEndpoint:
         quantile_levels
             List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults to
             ``[0.1, 0.2, ..., 0.9]``.
-        accept
-            Response format. Options: 'application/x-parquet', 'text/csv', 'application/json'.
 
         Returns
         -------
@@ -109,7 +104,7 @@ class TimeSeriesEndpoint:
             static_features=static_features,
             known_covariates=known_covariates,
         )
-        return self._predictor.predict(payload, initial_args={"Accept": accept})
+        return self._predictor.predict(payload, initial_args={"Accept": "application/x-parquet"})
 
     def delete_endpoint(self) -> None:
         """Delete the endpoint and its backing model + endpoint config."""
