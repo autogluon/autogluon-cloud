@@ -13,7 +13,7 @@ AutoGluon-Cloud runs training and inference on Amazon SageMaker on your behalf. 
 
 There are three ways to supply them — if you're unsure, start with option 1.
 
-### 1. Create new resources with [`bootstrap`](../api/autogluon.cloud.bootstrap.rst)
+### 1. Create new resources with {func}`~autogluon.cloud.bootstrap`
 
 Run this if you don't yet have an IAM role and S3 bucket set up for SageMaker. The role and bucket are provisioned on your account from a {repo-file}`CloudFormation template <src/autogluon/cloud/templates/ag_cloud_sagemaker.yaml>` and saved under `~/.autogluon/cloud.yaml` for future calls.
 
@@ -34,11 +34,9 @@ autogluon-cloud bootstrap
 :::
 ::::
 
-The CloudFormation stack is named `ag-cloud-sagemaker`. Your active AWS credentials are resolved in the [standard boto3 order](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials).
+### 2. Use existing resources with {func}`~autogluon.cloud.register`
 
-### 2. Use existing resources with [`register`](../api/autogluon.cloud.register.rst)
-
-Run this if you already have an IAM role and S3 bucket that you want to use with AutoGluon-Cloud. The values are saved under `~/.autogluon/cloud.yaml` for future calls. Makes no AWS calls.
+Run this if you already have an IAM role and S3 bucket that you want to use with AutoGluon-Cloud. The values are saved under `~/.autogluon/cloud.yaml` for future calls.
 
 ::::{tab-set}
 :::{tab-item} Python
@@ -64,7 +62,7 @@ autogluon-cloud register \
 :::
 ::::
 
-The role must trust the `sagemaker.amazonaws.com` principal and have permissions equivalent to AWS's [`AmazonSageMakerFullAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSageMakerFullAccess.html) managed policy plus read/write access to your bucket. The `region` must match the bucket's region.
+The role must trust the `sagemaker.amazonaws.com` principal and have permissions equivalent to AWS's [`AmazonSageMakerFullAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSageMakerFullAccess.html) managed policy plus read/write access to your bucket. The `region` where the jobs are executed must match the bucket's region.
 
 ### 3. Pass resources on each call
 
@@ -83,9 +81,9 @@ Useful for one-off scripts or when you need different roles and buckets per call
 
 ## Managing the saved config
 
-Once `bootstrap` or `register` has written to `~/.autogluon/cloud.yaml`, you may want to check that the role and bucket are still healthy before a long training run, or clean everything up when you're done with AutoGluon-Cloud. Two helper commands cover both:
+Once {func}`~autogluon.cloud.bootstrap` or {func}`~autogluon.cloud.register` has written to `~/.autogluon/cloud.yaml`, you may want to check that the role and bucket are still healthy before a long training run, or clean everything up when you're done with AutoGluon-Cloud. Two helper commands cover both:
 
-- [`status`](../api/autogluon.cloud.status.rst) checks that the saved role and bucket still exist and are accessible — handy after IAM or S3 changes.
-- [`teardown`](../api/autogluon.cloud.teardown.rst) deletes the CloudFormation stack created by `bootstrap` and clears the saved config. Resources registered via `register` are left untouched, since you own them.
+- {func}`~autogluon.cloud.status` checks that the saved role and bucket still exist and are accessible — handy after IAM or S3 changes.
+- {func}`~autogluon.cloud.teardown` deletes the CloudFormation stack created by {func}`~autogluon.cloud.bootstrap` and clears the saved config. Resources registered via {func}`~autogluon.cloud.register` are left untouched, since you own them.
 
 The config path can be overridden with the `AG_CONFIG_DIR` environment variable if you'd rather keep it somewhere other than `~/.autogluon/`.
