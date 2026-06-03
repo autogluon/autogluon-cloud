@@ -1,37 +1,26 @@
 # Train and Deploy a Time Series Predictor on Amazon SageMaker
 
-```{tip}
+```{note}
 This tutorial covers time series forecasting. For tabular classification/regression, see [Train a Tabular Predictor](./predictor-tabular.md).
 ```
 
 AutoGluon-Cloud lets you train, deploy, and run inference with AutoGluon time series predictors on AWS using the same APIs you'd use locally. Under the hood, it runs your jobs on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) using AWS's official [AutoGluon deep learning containers](https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon-training) — so you don't manage any infrastructure yourself.
 
-```{attention}
-SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud is a free wrapper, but it's your responsibility to monitor usage to avoid unexpected charges.
-```
-
 ## Training
 
-**Create the predictor.** A {py:class}`~autogluon.cloud.TimeSeriesCloudPredictor` needs an IAM execution role (so SageMaker can run jobs on your behalf) and an S3 bucket (to stage data and store trained artifacts). There are two ways to supply them:
+```{important}
+Before running any code below, follow the [Setup tutorial](setup.md) to register the IAM role and S3 bucket that SageMaker will use. The examples assume those resources are saved in `~/.autogluon/cloud.yaml`.
+```
 
-- Use a saved config (recommended). Save the role and bucket once to `~/.autogluon/cloud.yaml` — see [Setup](setup.md) — and subsequent constructor calls will pick them up automatically:
+Create the predictor:
 
-  ```python
-  from autogluon.cloud import TimeSeriesCloudPredictor
+```python
+from autogluon.cloud import TimeSeriesCloudPredictor
 
-  cloud_predictor = TimeSeriesCloudPredictor()
-  ```
+cloud_predictor = TimeSeriesCloudPredictor()
+```
 
-- Pass them at construction. Useful when you need different roles or buckets per call:
-
-  ```python
-  cloud_predictor = TimeSeriesCloudPredictor(
-      role="arn:aws:iam::222222222222:role/MyAutoGluonRole",
-      cloud_output_path="s3://my-autogluon-bucket/timeseries-demo",
-  )
-  ```
-
-**Train.** {py:meth}`autogluon.cloud.TimeSeriesCloudPredictor.fit` runs [`TimeSeriesPredictor.fit()`](https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html) inside a remote SageMaker job — along with `train_data`, the `predictor_init_args` and `predictor_fit_args` are forwarded straight through. Training, model artifacts, and AutoGluon itself all live on the remote instance, so you don't need AutoGluon installed locally.
+{py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.fit` runs [`TimeSeriesPredictor.fit()`](https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html) inside a remote SageMaker job — along with `train_data`, the `predictor_init_args` and `predictor_fit_args` are forwarded straight through. Training, model artifacts, and AutoGluon itself all live on the remote instance, so you don't need AutoGluon installed locally.
 
 `train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). The data must be in **long format** with one row per `(item_id, timestamp)` pair plus a target column. See the [Time Series Quick Start](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-quick-start.html) for the expected schema and the [Forecasting In-Depth](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-indepth.html) tutorial for an overview of the different covariate types AutoGluon supports.
 

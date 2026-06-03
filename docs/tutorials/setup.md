@@ -11,7 +11,11 @@ AutoGluon-Cloud runs training and inference on Amazon SageMaker on your behalf. 
 - an **IAM role** that SageMaker assumes to run training and inference jobs
 - an **S3 bucket** to stage data and store trained models
 
-There are three ways to supply them — if you're unsure, start with option 1.
+```{attention}
+SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud is a free wrapper, but it's your responsibility to monitor usage and delete endpoints when no longer needed.
+```
+
+There are three ways to supply these resources — if you're unsure, start with option 1.
 
 ### 1. Create new resources with {func}`~autogluon.cloud.bootstrap`
 

@@ -17,33 +17,19 @@ That makes the workflow much simpler than [training your own time series predict
 
 AutoGluon-Cloud exposes this workflow through {py:class}`~autogluon.cloud.TimeSeriesFoundationModel`. For now it covers time series forecasting only, with models like Chronos-2 available out of the box.
 
-```{attention}
-SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud is a free wrapper, but it's your responsibility to monitor usage and delete endpoints when no longer needed.
-```
-
 ## Create the model
 
-A {py:class}`~autogluon.cloud.TimeSeriesFoundationModel` needs an IAM execution role (so SageMaker can run jobs on your behalf) and an S3 bucket (to stage data and store outputs). There are two ways to supply them:
+```{important}
+Before running any code below, follow the [Setup tutorial](./setup.md) to register the IAM role and S3 bucket that SageMaker will use. The examples assume those resources are saved in `~/.autogluon/cloud.yaml`.
+```
 
-- Use a saved config (recommended). Save the role and bucket once to `~/.autogluon/cloud.yaml` — see [Setup](./setup.md) — and subsequent constructor calls will pick them up automatically:
+```python
+from autogluon.cloud import TimeSeriesFoundationModel
 
-  ```python
-  from autogluon.cloud import TimeSeriesFoundationModel
+model = TimeSeriesFoundationModel(model_id="chronos-2")
+```
 
-  model = TimeSeriesFoundationModel(model_id="chronos-2")
-  ```
-
-- Pass them at construction. Useful when you need different roles or buckets per call:
-
-  ```python
-  model = TimeSeriesFoundationModel(
-      model_id="chronos-2",
-      role="arn:aws:iam::222222222222:role/MyAutoGluonRole",
-      cloud_output_path="s3://my-autogluon-bucket/ag-foundation-model",
-  )
-  ```
-
-The examples in the rest of this tutorial reuse a single `model` object created this way.
+The rest of the tutorial reuses this `model` object.
 
 ### Available models
 
