@@ -1,52 +1,23 @@
 # Set Up AutoGluon-Cloud on AWS
 
-AutoGluon-Cloud trains and deploys models on AWS SageMaker on your behalf. To do that, every `CloudPredictor` or `FoundationModel` you create needs two AWS resources:
-
-- An **IAM role** that SageMaker assumes to run training and inference jobs.
-- An **S3 bucket** to stage training data and store trained models.
-
-You have two options for supplying them:
-
-1. **Save them once** to `~/.autogluon/cloud.yaml`, and AutoGluon-Cloud will pick them up automatically on every call. This is the recommended path — set it up with [`bootstrap`](#bootstrap) or [`register`](#register) below.
-2. **Pass them explicitly** to each `CloudPredictor` / `FoundationModel`, e.g. `CloudPredictor(role="arn:aws:iam::...", cloud_output_path="s3://my-bucket/...")`. Useful if you need different roles or buckets per call, or if you don't want a config file on disk.
-
-The rest of this page covers option 1.
-
-## Commands
-
-AutoGluon-Cloud ships four commands for managing the saved configuration:
-
-| Command | What it does | When to use it |
-|---|---|---|
-| [`bootstrap`](#bootstrap) | Provisions a role and bucket via CloudFormation, then saves them. | First-time setup with no existing AWS resources. |
-| [`register`](#register) | Saves an existing role and bucket without provisioning anything. | Your platform team already gave you a role and bucket. |
-| [`status`](#status) | Verifies the saved resources still exist and are accessible. | Sanity-check before training, or after IAM/S3 changes. |
-| [`teardown`](#teardown) | Deletes resources created by `bootstrap` and the saved config. | Cleanup when you're done with AutoGluon-Cloud. |
-
-Each command is available both as a CLI subcommand (`autogluon-cloud <command>`) and as a Python function (`from autogluon.cloud import <command>`). The sections below show both forms.
-
-## Install
+First, install the `autogluon.cloud` package:
 
 ```bash
-pip install -U autogluon.cloud
+pip install autogluon.cloud
 ```
 
-This installs the `autogluon-cloud` CLI alongside the Python API.
+AutoGluon-Cloud runs training and inference on Amazon SageMaker on your behalf. Every `CloudPredictor` or `FoundationModel` you create needs two AWS resources:
 
+- an **IAM role** that SageMaker assumes to run training and inference jobs
+- an **S3 bucket** to stage data and store trained models
 
-## `bootstrap`
+There are three ways to supply them — if you're unsure, start with option 1.
 
-Provisions an IAM role and S3 bucket via CloudFormation, then saves them to `~/.autogluon/cloud.yaml`. Use this if you don't already have AWS resources for AutoGluon-Cloud.
+### 1. Create new resources with [`bootstrap`](../api/autogluon.cloud.bootstrap.rst)
 
-`bootstrap` uses the [standard boto3 credential resolution order](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials) to find your AWS credentials, so anything that works for the AWS CLI or boto3 will work here (`aws configure`, `AWS_*` environment variables, an active SSO session, or an instance profile). Run:
+Run this if you don't yet have an IAM role and S3 bucket set up for SageMaker. The role and bucket are provisioned on your account from a {repo-file}`CloudFormation template <src/autogluon/cloud/templates/ag_cloud_sagemaker.yaml>` and saved under `~/.autogluon/cloud.yaml` for future calls.
 
 ::::{tab-set}
-:::{tab-item} CLI
-:sync: setup-cli
-```bash
-autogluon-cloud bootstrap
-```
-:::
 :::{tab-item} Python
 :sync: setup-py
 ```python
@@ -55,29 +26,21 @@ from autogluon.cloud import bootstrap
 bootstrap()
 ```
 :::
-::::
-
-The CloudFormation stack is named `ag-cloud-sagemaker` by default. Subsequent `CloudPredictor` calls pick the saved values up automatically.
-
-```{note}
-Review the CloudFormation template before deploying: {repo-file}`src/autogluon/cloud/templates/ag_cloud_sagemaker.yaml`.
-```
-
-
-## `register`
-
-Tells AutoGluon-Cloud to use an IAM role and S3 bucket you already have. Use this when your platform team has provisioned them for you and you want to skip CloudFormation.
-
-::::{tab-set}
 :::{tab-item} CLI
 :sync: setup-cli
 ```bash
-autogluon-cloud register \
-    --role arn:aws:iam::222222222222:role/MyAutoGluonRole \
-    --bucket my-autogluon-bucket \
-    --region us-east-1
+autogluon-cloud bootstrap
 ```
 :::
+::::
+
+The CloudFormation stack is named `ag-cloud-sagemaker`. Your active AWS credentials are resolved in the [standard boto3 order](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials).
+
+### 2. Use existing resources with [`register`](../api/autogluon.cloud.register.rst)
+
+Run this if you already have an IAM role and S3 bucket that you want to use with AutoGluon-Cloud. The values are saved under `~/.autogluon/cloud.yaml` for future calls. Makes no AWS calls.
+
+::::{tab-set}
 :::{tab-item} Python
 :sync: setup-py
 ```python
@@ -90,61 +53,39 @@ register(
 )
 ```
 :::
-::::
-
-`register` makes no AWS calls — it only persists the values to `~/.autogluon/cloud.yaml`. The IAM role must trust `sagemaker.amazonaws.com` and have permissions equivalent to AWS's [`AmazonSageMakerFullAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSageMakerFullAccess.html) managed policy plus read/write access to your bucket.
-
-
-## `status`
-
-Verifies that the saved IAM role, S3 bucket, and (if applicable) CloudFormation stack still exist and are accessible.
-
-::::{tab-set}
 :::{tab-item} CLI
 :sync: setup-cli
 ```bash
-autogluon-cloud status
-```
-:::
-:::{tab-item} Python
-:sync: setup-py
-```python
-from autogluon.cloud import status
-
-reports = status()
+autogluon-cloud register \
+    --role arn:aws:iam::222222222222:role/MyAutoGluonRole \
+    --bucket my-autogluon-bucket \
+    --region us-east-1
 ```
 :::
 ::::
 
-`ok` means the resource exists; `ok (unverified ...)` means the caller lacks the IAM permission to verify (the resource is probably fine, but `status` couldn't confirm).
+The role must trust the `sagemaker.amazonaws.com` principal and have permissions equivalent to AWS's [`AmazonSageMakerFullAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSageMakerFullAccess.html) managed policy plus read/write access to your bucket. The `region` must match the bucket's region.
 
+### 3. Pass resources on each call
 
-## `teardown`
+Skip the saved config entirely and provide the role and bucket every time you create a `CloudPredictor` or `FoundationModel`.
 
-Deletes the CloudFormation stacks created by `bootstrap` and removes `~/.autogluon/cloud.yaml`. Backends added via `register` only have their config entry removed — your existing role and bucket are left untouched.
-
-::::{tab-set}
-:::{tab-item} CLI
-:sync: setup-cli
-```bash
-autogluon-cloud teardown
-```
-:::
-:::{tab-item} Python
-:sync: setup-py
 ```python
-from autogluon.cloud import teardown
+from autogluon.cloud import TabularCloudPredictor
 
-teardown()
-```
-:::
-::::
-
-```{warning}
-CloudFormation refuses to delete non-empty S3 buckets. If your bucket holds training artifacts you want to discard, empty it first with `aws s3 rm s3://<bucket> --recursive`.
+predictor = TabularCloudPredictor(
+    cloud_output_path="s3://my-autogluon-bucket/output",
+    role="arn:aws:iam::222222222222:role/MyAutoGluonRole",
+)
 ```
 
+Useful for one-off scripts or when you need different roles and buckets per call. The same role and bucket requirements as option 2 apply.
 
-## Where the config lives
+## Managing the saved config
 
-`bootstrap` and `register` both write to `~/.autogluon/cloud.yaml`. The file is keyed by backend, so you can have separate entries for different backends side by side. Override the directory with the `AG_CONFIG_DIR` environment variable.
+Once `bootstrap` or `register` has written to `~/.autogluon/cloud.yaml`, you may want to check that the role and bucket are still healthy before a long training run, or clean everything up when you're done with AutoGluon-Cloud. Two helper commands cover both:
+
+- [`status`](../api/autogluon.cloud.status.rst) checks that the saved role and bucket still exist and are accessible — handy after IAM or S3 changes.
+- [`teardown`](../api/autogluon.cloud.teardown.rst) deletes the CloudFormation stack created by `bootstrap` and clears the saved config. Resources registered via `register` are left untouched, since you own them.
+
+The config path can be overridden with the `AG_CONFIG_DIR` environment variable if you'd rather keep it somewhere other than `~/.autogluon/`.
