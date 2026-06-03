@@ -1,6 +1,7 @@
 """Tests for the ``autogluon.cloud`` setup API."""
 
 import logging
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -109,6 +110,34 @@ def test_register_normalizes_bucket(bucket):
         region="us-east-1",
     )
     assert load_config().backends["sagemaker"].bucket == "my-bucket"
+
+
+def test_register_rejects_bucket_in_other_region():
+    session = MagicMock()
+    session.client.return_value.head_bucket.return_value = {
+        "ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "ap-southeast-1"}}
+    }
+    with pytest.raises(ValueError, match="ap-southeast-1"):
+        register(
+            role="arn:aws:iam::111122223333:role/x",
+            bucket="b1",
+            region="us-east-1",
+            session=session,
+        )
+
+
+def test_register_accepts_bucket_in_matching_region():
+    session = MagicMock()
+    session.client.return_value.head_bucket.return_value = {
+        "ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "us-east-1"}}
+    }
+    register(
+        role="arn:aws:iam::111122223333:role/x",
+        bucket="b1",
+        region="us-east-1",
+        session=session,
+    )
+    assert load_config().backends["sagemaker"].bucket == "b1"
 
 
 def test_register_records_stack_name_when_given():

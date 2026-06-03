@@ -95,6 +95,7 @@ def bootstrap(
         region=region,
         backend=backend,
         stack_name=stack_name,
+        session=session,
     )
 
 
@@ -105,6 +106,7 @@ def register(
     region: str,
     backend: BackendName = "sagemaker",
     stack_name: Optional[str] = None,
+    session: Optional[boto3.Session] = None,
 ) -> None:
     """Persist resource identifiers to ``~/.autogluon/cloud.yaml`` under the given backend key.
 
@@ -129,6 +131,8 @@ def register(
         Optional CloudFormation stack name. If you deployed the resources via your own CFN stack and want
         :func:`teardown` to be able to delete it later, pass the name here. Defaults to ``None``, meaning teardown
         will only remove the config entry, not touch AWS.
+    session
+        ``boto3.Session`` used to verify the bucket region. If ``None``, the default ambient session is used.
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
@@ -138,6 +142,7 @@ def register(
             f"`bucket` must be a bare bucket name without prefixes (got {bucket!r}). "
             "Pass prefixes via `cloud_output_path=` on the predictor/model instead."
         )
+    _validate_bucket_region(session=session or boto3.Session(), bucket=bucket, region=region)
     config = load_config() or CloudConfig()
     config.backends[backend] = BackendConfig(
         region=region,
@@ -306,6 +311,23 @@ def _is_permission_error(e: ClientError) -> bool:
         "Forbidden",
         "UnauthorizedOperation",
     }
+
+
+def _validate_bucket_region(*, session: boto3.Session, bucket: str, region: str) -> None:
+    """Raise if the bucket is in a different region than ``region``. Silently skips if the bucket
+    region can't be determined (no perms, missing bucket, etc.)."""
+    try:
+        bucket_region = session.client("s3").head_bucket(Bucket=bucket)["ResponseMetadata"]["HTTPHeaders"][
+            "x-amz-bucket-region"
+        ]
+    except (ClientError, BotoCoreError, KeyError):
+        return
+    if bucket_region != region:
+        raise ValueError(
+            f"Bucket {bucket!r} is in region {bucket_region!r}, but you registered it under {region!r}. "
+            "SageMaker requires the bucket and the job region to match. Either pass `--region "
+            f"{bucket_region}` (and run jobs there), or pick a bucket in {region!r}."
+        )
 
 
 def _check_bucket(session: boto3.Session, bucket: str) -> str:
