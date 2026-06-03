@@ -453,7 +453,10 @@ class TimeSeriesFoundationModel(FoundationModel):
             inference_config=inference_config,
             **backend_kwargs,
         )
-        return TimeSeriesEndpoint(self._backend.endpoint)
+        return TimeSeriesEndpoint(
+            endpoint_name=self._backend.endpoint.endpoint_name,
+            session=self._backend.sagemaker_session.boto_session,
+        )
 
     def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
