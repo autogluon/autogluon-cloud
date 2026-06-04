@@ -454,9 +454,9 @@ class SagemakerBackend(Backend):
 
         # Resolve model artifact:
         # - predictor_path provided → use as-is
-        # - predictor_path=None, fit job exists → use fit output
-        # - predictor_path=None, no fit job → no artifact (FM: weights downloaded at startup)
-        if predictor_path is None and self._fit_job is not None:
+        # - predictor_path=None, fit job exists, non-FM deploy → use fit output
+        # - predictor_path=None, no fit job (or FM deploy) → no artifact
+        if predictor_path is None and self._fit_job is not None and fm_serve_config is None:
             predictor_path = self._fit_job.get_output_path()
         if predictor_path:
             predictor_path = self._upload_predictor(predictor_path, f"endpoints/{endpoint_name}/predictor")
