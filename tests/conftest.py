@@ -62,6 +62,17 @@ class CloudTestHelper:
         return data
 
     @staticmethod
+    def assert_ag_cloud_tags(arn: str, *, module: str, model_id: str = None):
+        """Assert the resource at ``arn`` carries ``autogluon-cloud-module`` (and optionally ``autogluon-cloud-model-id``).
+
+        Works on any tagged SageMaker resource (training/transform jobs, models, endpoints).
+        """
+        tags = {t["Key"]: t["Value"] for t in boto3.client("sagemaker").list_tags(ResourceArn=arn)["Tags"]}
+        assert tags.get("autogluon-cloud-module") == module, f"missing/wrong module tag on {arn}: {tags}"
+        if model_id is not None:
+            assert tags.get("autogluon-cloud-model-id") == model_id, f"missing/wrong model-id tag on {arn}: {tags}"
+
+    @staticmethod
     def test_endpoint(cloud_predictor, test_data, inference_kwargs=None, **predict_real_time_kwargs):
         if inference_kwargs is None:
             inference_kwargs = {}
@@ -164,6 +175,10 @@ class CloudTestHelper:
         assert job_name is not None
         assert info["fit_job"]["status"] == "Completed"
 
+        sm = boto3.client("sagemaker")
+        training_job_arn = sm.describe_training_job(TrainingJobName=job_name)["TrainingJobArn"]
+        CloudTestHelper.assert_ag_cloud_tags(training_job_arn, module=cloud_predictor.predictor_type)
+
         cloud_predictor.attach_job(job_name)
 
         if deploy_kwargs is None:
@@ -171,6 +186,8 @@ class CloudTestHelper:
         if predict_real_time_kwargs is None:
             predict_real_time_kwargs = dict()
         cloud_predictor.deploy(**deploy_kwargs)
+        endpoint_arn = sm.describe_endpoint(EndpointName=cloud_predictor.endpoint_name)["EndpointArn"]
+        CloudTestHelper.assert_ag_cloud_tags(endpoint_arn, module=cloud_predictor.predictor_type)
         CloudTestHelper.test_endpoint(
             cloud_predictor,
             test_data,

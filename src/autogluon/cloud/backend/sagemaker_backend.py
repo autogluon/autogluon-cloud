@@ -32,6 +32,7 @@ from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
 from ..utils.dlc_utils import parse_framework_version
 from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.serializers import AutoGluonSerializationWrapper
+from ..utils.tag_utils import build_tags
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
@@ -67,6 +68,14 @@ class SagemakerBackend(Backend):
     def _realtime_predictor_cls(self) -> Predictor:
         """Class used for realtime endpoint"""
         return AutoGluonRealtimePredictor
+
+    def _resolve_tags(
+        self,
+        kwargs: Dict[str, Any],
+        extra_tags: Optional[List[Dict[str, str]]] = None,
+    ) -> None:
+        """In-place: replace ``kwargs['tags']`` with the merged default + extra + user tag list."""
+        kwargs["tags"] = build_tags(self.predictor_type, extra_tags=extra_tags, user_tags=kwargs.get("tags"))
 
     def initialize(self, role: Optional[str] = None, **kwargs) -> None:
         """Initialize the backend.
@@ -170,6 +179,7 @@ class SagemakerBackend(Backend):
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
+        extra_tags: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -317,6 +327,7 @@ class SagemakerBackend(Backend):
         )
         if fit_kwargs is None:
             fit_kwargs = {}
+        self._resolve_tags(autogluon_sagemaker_estimator_kwargs, extra_tags)
 
         self._fit_job.run(
             role=self.role_arn,
@@ -361,6 +372,7 @@ class SagemakerBackend(Backend):
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         repack: bool = True,
+        extra_tags: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -525,8 +537,8 @@ class SagemakerBackend(Backend):
             env=model_kwargs_env,
             **model_kwargs,
         )
-        if deploy_kwargs is None:
-            deploy_kwargs = {}
+        deploy_kwargs = copy.deepcopy(deploy_kwargs or {})
+        self._resolve_tags(deploy_kwargs, extra_tags)
 
         instance_kwargs = {
             "instance_type": instance_type,
@@ -1285,6 +1297,7 @@ class SagemakerBackend(Backend):
         if transformer_kwargs is None:
             transformer_kwargs = {}
         transformer_kwargs = copy.deepcopy(transformer_kwargs)
+        self._resolve_tags(transformer_kwargs)
         user_entry_point = model_kwargs.pop("entry_point", None)
         repack_model = False
         if predictor_path != self._fit_job.get_output_path() or user_entry_point is not None:

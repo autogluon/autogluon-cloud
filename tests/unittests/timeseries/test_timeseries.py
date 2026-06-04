@@ -209,6 +209,10 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
         head = boto3.client("s3").head_object(Bucket=bucket, Key=predictions_key)
         assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
 
+        sm = boto3.client("sagemaker")
+        job_arn = sm.describe_training_job(TrainingJobName=model._backend._fit_job.job_name)["TrainingJobArn"]
+        test_helper.assert_ag_cloud_tags(job_arn, module="timeseries", model_id="chronos-2")
+
 
 def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, framework_version, retail_sales_dataset):
     """Cache model artifact to S3, deploy to a serverless endpoint, and verify predictions."""
@@ -230,6 +234,8 @@ def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, fra
             inference_mode="serverless",
             inference_config={"memory_size_in_mb": 6144},
         )
+        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)["EndpointArn"]
+        test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id="chronos-bolt-tiny")
         try:
             expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
             predictions = endpoint.predict(
@@ -262,6 +268,8 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
         endpoint = model.deploy(
             custom_image_uri=inference_custom_image_uri,
         )
+        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)["EndpointArn"]
+        test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id="chronos-bolt-tiny")
 
         try:
             expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
