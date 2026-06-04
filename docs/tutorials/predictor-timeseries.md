@@ -73,7 +73,7 @@ Once a predictor is trained, you can get predictions in two ways:
 - **Real-time inference**: deploy the predictor as a long-running SageMaker endpoint and send requests to it. Best when you need low-latency forecasts on demand — e.g. behind a user-facing service.
 - **Batch inference**: launch a one-off SageMaker job that scores a dataset and writes the results to S3. Best for offline forecasting on larger datasets — compute spins up, runs, and shuts down automatically, so you only pay for what you use.
 
-A rough guideline: if you need predictions less often than once an hour and can tolerate ~10 minutes of compute spin-up, batch inference is usually cheaper and easier to operate.
+A rough guideline: if you need predictions less often than once an hour and can tolerate ~4 minutes of compute spin-up, batch inference is usually cheaper and easier to operate.
 
 ### Real-time inference
 
