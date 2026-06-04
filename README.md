@@ -25,7 +25,7 @@ AutoGluon-Cloud lets you train and deploy state-of-the-art ML models in the clou
 pip install autogluon.cloud
 ```
 
-Then provision the IAM role and S3 bucket AutoGluon-Cloud needs on AWS:
+Then provision the IAM role and S3 bucket AutoGluon-Cloud needs to run on AWS:
 
 ```python
 from autogluon.cloud import bootstrap

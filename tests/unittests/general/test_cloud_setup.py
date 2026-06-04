@@ -170,6 +170,7 @@ def test_bootstrap_calls_cfn_then_registers(monkeypatch, caplog):
         "autogluon.cloud.cloud_setup._provision_stack",
         lambda session, stack_name, backend: ("arn:aws:iam::123:role/r", "ag-cloud-bucket"),
     )
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._validate_bucket_region", lambda **kw: None)
 
     with caplog.at_level("INFO", logger="autogluon.cloud.cloud_setup"):
         bootstrap(backend="sagemaker", stack_name="my-stack")
@@ -194,6 +195,7 @@ def test_bootstrap_returns_none(monkeypatch):
         "autogluon.cloud.cloud_setup._provision_stack",
         lambda session, stack_name, backend: ("arn:...", "b"),
     )
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._validate_bucket_region", lambda **kw: None)
     assert bootstrap() is None
 
 
@@ -217,6 +219,7 @@ def test_bootstrap_default_stack_name_uses_backend(monkeypatch):
         lambda s: (FakeSession(), "123456789012"),
     )
     monkeypatch.setattr("autogluon.cloud.cloud_setup._provision_stack", fake_provision)
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._validate_bucket_region", lambda **kw: None)
 
     bootstrap(backend="ray_aws")
     assert captured["stack_name"] == "ag-cloud-ray-aws"
