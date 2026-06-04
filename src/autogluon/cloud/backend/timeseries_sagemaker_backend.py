@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -34,6 +34,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
         fit_kwargs: Optional[Dict] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
+        extra_tags: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
@@ -65,6 +66,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
             fit_kwargs=fit_kwargs,
             extra_ag_args=extra_ag_args,
+            extra_tags=extra_tags,
         )
 
     def predict_real_time(
