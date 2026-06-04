@@ -1,8 +1,10 @@
 """Tests for the ``autogluon.cloud`` setup API."""
 
 import logging
+from unittest.mock import MagicMock
 
 import pytest
+from botocore.exceptions import ClientError
 
 from autogluon.cloud import bootstrap, register, status, teardown
 from autogluon.cloud.config import (
@@ -111,6 +113,72 @@ def test_register_normalizes_bucket(bucket):
     assert load_config().backends["sagemaker"].bucket == "my-bucket"
 
 
+def test_register_rejects_bucket_in_other_region():
+    session = MagicMock()
+    session.client.return_value.head_bucket.return_value = {
+        "ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "ap-southeast-1"}}
+    }
+    with pytest.raises(ValueError, match="ap-southeast-1"):
+        register(
+            role="arn:aws:iam::111122223333:role/x",
+            bucket="b1",
+            region="us-east-1",
+            session=session,
+        )
+
+
+def test_register_accepts_bucket_in_matching_region():
+    session = MagicMock()
+    session.client.return_value.head_bucket.return_value = {
+        "ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "us-east-1"}}
+    }
+    register(
+        role="arn:aws:iam::111122223333:role/x",
+        bucket="b1",
+        region="us-east-1",
+        session=session,
+    )
+    assert load_config().backends["sagemaker"].bucket == "b1"
+
+
+def test_register_rejects_bucket_when_head_bucket_403_carries_region_header():
+    """Cross-region head_bucket returns 403 even without s3:HeadBucket perm, but the response
+    still carries the bucket region header. We must read it from the error path, otherwise the
+    mismatch slips through whenever the caller's role is locked down."""
+    session = MagicMock()
+    session.client.return_value.head_bucket.side_effect = ClientError(
+        error_response={
+            "Error": {"Code": "403", "Message": "Forbidden"},
+            "ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "ap-southeast-1"}},
+        },
+        operation_name="HeadBucket",
+    )
+    with pytest.raises(ValueError, match="ap-southeast-1"):
+        register(
+            role="arn:aws:iam::111122223333:role/x",
+            bucket="b1",
+            region="us-east-1",
+            session=session,
+        )
+
+
+def test_register_skips_when_head_bucket_error_has_no_region_header():
+    """If neither the success path nor the error response carries the bucket region header,
+    we silently skip validation rather than block legitimate setup attempts."""
+    session = MagicMock()
+    session.client.return_value.head_bucket.side_effect = ClientError(
+        error_response={"Error": {"Code": "404", "Message": "Not Found"}, "ResponseMetadata": {}},
+        operation_name="HeadBucket",
+    )
+    register(
+        role="arn:aws:iam::111122223333:role/x",
+        bucket="b1",
+        region="us-east-1",
+        session=session,
+    )
+    assert load_config().backends["sagemaker"].bucket == "b1"
+
+
 def test_register_records_stack_name_when_given():
     register(
         role="arn:aws:iam::111122223333:role/x",
@@ -141,6 +209,7 @@ def test_bootstrap_calls_cfn_then_registers(monkeypatch, caplog):
         "autogluon.cloud.cloud_setup._provision_stack",
         lambda session, stack_name, backend: ("arn:aws:iam::123:role/r", "ag-cloud-bucket"),
     )
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._validate_bucket_region", lambda **kw: None)
 
     with caplog.at_level("INFO", logger="autogluon.cloud.cloud_setup"):
         bootstrap(backend="sagemaker", stack_name="my-stack")
@@ -165,6 +234,7 @@ def test_bootstrap_returns_none(monkeypatch):
         "autogluon.cloud.cloud_setup._provision_stack",
         lambda session, stack_name, backend: ("arn:...", "b"),
     )
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._validate_bucket_region", lambda **kw: None)
     assert bootstrap() is None
 
 
@@ -188,6 +258,7 @@ def test_bootstrap_default_stack_name_uses_backend(monkeypatch):
         lambda s: (FakeSession(), "123456789012"),
     )
     monkeypatch.setattr("autogluon.cloud.cloud_setup._provision_stack", fake_provision)
+    monkeypatch.setattr("autogluon.cloud.cloud_setup._validate_bucket_region", lambda **kw: None)
 
     bootstrap(backend="ray_aws")
     assert captured["stack_name"] == "ag-cloud-ray-aws"

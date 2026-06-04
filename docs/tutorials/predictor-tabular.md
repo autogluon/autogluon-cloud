@@ -1,39 +1,26 @@
 # Train and Deploy a Tabular Predictor on Amazon SageMaker
 
-```{tip}
+```{note}
 This tutorial covers tabular classification and regression. For time series forecasting, see [Train a Time Series Predictor](./predictor-timeseries.md).
 ```
 
 AutoGluon-Cloud lets you train, deploy, and run inference with AutoGluon tabular predictors on AWS using the same APIs you'd use locally. Under the hood, it runs your jobs on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) using AWS's official [AutoGluon deep learning containers](https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon-training) — so you don't manage any infrastructure yourself.
 
-```{attention}
-SageMaker compute and S3 storage are billed to your AWS account. AutoGluon-Cloud is a free wrapper, but it's your responsibility to monitor usage to avoid unexpected charges.
-```
-
 ## Training
 
-**Create the predictor.** A {py:class}`~autogluon.cloud.TabularCloudPredictor` needs an IAM execution role (so SageMaker can run jobs on your behalf) and an S3 bucket (to stage data and store trained artifacts). There are two ways to supply them:
+```{important}
+Before running any code below, follow the [Setup tutorial](setup.md) to register the IAM role and S3 bucket that SageMaker will use. The examples assume those resources are saved in `~/.autogluon/cloud.yaml`.
+```
 
-- Use a saved config (recommended). Save the role and bucket once to `~/.autogluon/cloud.yaml` — see [Setup](setup.md) — and subsequent constructor calls will pick them up automatically:
+Create the predictor:
 
-  ```python
-  from autogluon.cloud import TabularCloudPredictor
+```python
+from autogluon.cloud import TabularCloudPredictor
 
-  cloud_predictor = TabularCloudPredictor()
-  ```
+cloud_predictor = TabularCloudPredictor()
+```
 
-- Pass them at construction. Useful when you need different roles or buckets per call:
-
-  ```python
-  cloud_predictor = TabularCloudPredictor(
-      role="arn:aws:iam::222222222222:role/MyAutoGluonRole",
-      cloud_output_path="s3://my-autogluon-bucket/tabular-demo",
-  )
-  ```
-
-**Train.** {py:meth}`autogluon.cloud.TabularCloudPredictor.fit` runs [`TabularPredictor.fit()`](https://auto.gluon.ai/stable/api/autogluon.tabular.TabularPredictor.fit.html) inside a remote SageMaker job — along with `train_data`, the `predictor_init_args` and `predictor_fit_args` are forwarded straight through. Training, model artifacts, and AutoGluon itself all live on the remote instance, so you don't need AutoGluon installed locally.
-
-`train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). In every case AutoGluon-Cloud loads the data locally and uploads it to your `cloud_output_path` bucket before kicking off the SageMaker job.
+{py:meth}`TabularCloudPredictor.fit() <autogluon.cloud.TabularCloudPredictor.fit>` runs [`TabularPredictor.fit()`](https://auto.gluon.ai/stable/api/autogluon.tabular.TabularPredictor.fit.html) inside a remote SageMaker job — along with `train_data`, the `predictor_init_args` and `predictor_fit_args` are forwarded straight through. Training, model artifacts, and AutoGluon itself all live on the remote instance, so you don't need AutoGluon installed locally.
 
 ```python
 cloud_predictor.fit(
@@ -43,6 +30,8 @@ cloud_predictor.fit(
     instance_type="ml.m5.2xlarge",
 )
 ```
+
+`train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). In every case AutoGluon-Cloud loads the data locally and uploads it to your `cloud_output_path` bucket before kicking off the SageMaker job.
 
 ### Reattach to a training job
 If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (`INFO:sagemaker:Creating training-job with name: ag-cloudpredictor-...`) and also visible in the SageMaker console.
