@@ -113,17 +113,15 @@ install_requires = [
     # <2 because unlikely to introduce breaking changes in minor releases. >=1.10 because 1.10 is 3 years old, no need to support older
     "boto3>=1.10,<2",
     "packaging>=23.0,<27",
-    # updated sagemaker is required to fetch latest container info, so we don't want to cap the version too strict
-    # otherwise cloud module needs to be released to support new container
     "sagemaker>=2.126.0,<3",
-    "pyarrow>=11.0,<25",
+    "pyarrow>=19.0.1,<25",  # lower bound to avoid https://github.com/apache/arrow/issues/45283
     "PyYAML~=6.0",
     "Pillow>=10.2,<13",
+    "huggingface_hub>=0.20,<2",
+    "typing_extensions>=4.0,<5",
     # CLI dependencies (autogluon-cloud command)
     "click>=8.0,<9",
     "rich>=13.0,<15",
-    "huggingface_hub>=0.20,<2",
-    "typing_extensions>=4.0,<5",
 ]
 
 extras_require = dict()
