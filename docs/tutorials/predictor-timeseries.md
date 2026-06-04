@@ -20,9 +20,7 @@ from autogluon.cloud import TimeSeriesCloudPredictor
 cloud_predictor = TimeSeriesCloudPredictor()
 ```
 
-{py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.fit` runs [`TimeSeriesPredictor.fit()`](https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html) inside a remote SageMaker job — along with `train_data`, the `predictor_init_args` and `predictor_fit_args` are forwarded straight through. Training, model artifacts, and AutoGluon itself all live on the remote instance, so you don't need AutoGluon installed locally.
-
-`train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). The data must be in **long format** with one row per `(item_id, timestamp)` pair plus a target column. See the [Time Series Quick Start](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-quick-start.html) for the expected schema and the [Forecasting In-Depth](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-indepth.html) tutorial for an overview of the different covariate types AutoGluon supports.
+{py:meth}`TimeSeriesCloudPredictor.fit() <autogluon.cloud.TimeSeriesCloudPredictor.fit>` runs [`TimeSeriesPredictor.fit()`](https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html) inside a remote SageMaker job — along with `train_data`, the `predictor_init_args` and `predictor_fit_args` are forwarded straight through. Training, model artifacts, and AutoGluon itself all live on the remote instance, so you don't need AutoGluon installed locally.
 
 ```python
 cloud_predictor.fit(
@@ -36,6 +34,8 @@ cloud_predictor.fit(
     instance_type="ml.m5.2xlarge",
 )
 ```
+
+`train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). The data must be in **long format** with one row per `(item_id, timestamp)` pair plus a target column. See the [Time Series Quick Start](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-quick-start.html) for the expected schema and the [Forecasting In-Depth](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-indepth.html) tutorial for an overview of the different covariate types AutoGluon supports.
 
 ### Fit and predict in a single job
 
@@ -95,7 +95,7 @@ Send requests to the endpoint with {py:meth}`~autogluon.cloud.TimeSeriesCloudPre
 
 ```python
 forecasts = cloud_predictor.predict_real_time(
-    "test.csv",
+    "train.csv",  # historical observations — forecasts start from the last timestamp per item
     known_covariates="known_covariates.csv",  # required if known_covariates_names was set
     static_features="static_features.csv",    # optional
 )
@@ -116,22 +116,106 @@ cloud_predictor.cleanup_deployment()
 To check whether an endpoint is currently attached, call {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.info` and look for the `endpoint` key in the returned dict.
 
 #### Invoke the endpoint without AutoGluon-Cloud
-The deployed endpoint is a normal SageMaker endpoint, and you can invoke it through other methods. For example, to invoke it with boto3 directly:
+The deployed endpoint is a normal SageMaker endpoint, so you can invoke it from any AWS SDK. The simplest payload is the historical observations as CSV — forecasts are generated starting from the last timestamp of each item:
 
 ```python
+import io
 import boto3
+import pandas as pd
 
-client = boto3.client('sagemaker-runtime')
+train_data = pd.read_csv("train.csv")  # long format with item_id, timestamp, target
+
+client = boto3.client("sagemaker-runtime")
 response = client.invoke_endpoint(
     EndpointName=ENDPOINT_NAME,
-    ContentType='text/csv',
-    Accept='application/json',
-    Body=test_data.to_csv()
+    ContentType="text/csv",
+    Accept="application/x-parquet",
+    Body=train_data.to_csv(index=False),
 )
-
-#: Print the model endpoint's output.
-print(response['Body'].read().decode())
+forecasts = pd.read_parquet(io.BytesIO(response["Body"].read()))
 ```
+
+The CSV format only carries the historical observations. To pass `static_features` or `known_covariates` (required when the predictor was fit with `known_covariates_names`), use one of the structured payload formats below.
+
+:::{dropdown} Advanced payload formats — with static_features and known_covariates
+:animate: fade-in-slide-down
+:color: secondary
+
+**Option 1: AutoGluon-Cloud's native `application/x-autogluon` envelope.** Each DataFrame is serialized as base64-encoded parquet and bundled in a single JSON object. This is what {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.predict_real_time` sends under the hood:
+
+```python
+import base64
+import io
+import json
+import boto3
+import pandas as pd
+
+def df_to_b64(df: pd.DataFrame) -> str:
+    return base64.b64encode(df.to_parquet()).decode("ascii")
+
+train_data = pd.read_csv("train.csv")
+known_covariates = pd.read_csv("known_covariates.csv")
+static_features = pd.read_csv("static_features.csv")  # optional
+
+payload = {
+    "version": 1,
+    "data": df_to_b64(train_data),
+    "known_covariates": df_to_b64(known_covariates),
+    "static_features": df_to_b64(static_features),
+    "inference_kwargs": {},  # prediction_length / quantile_levels are baked in at fit time
+}
+
+client = boto3.client("sagemaker-runtime")
+response = client.invoke_endpoint(
+    EndpointName=ENDPOINT_NAME,
+    ContentType="application/x-autogluon",
+    Accept="application/x-parquet",
+    Body=json.dumps(payload).encode("utf-8"),
+)
+forecasts = pd.read_parquet(io.BytesIO(response["Body"].read()))
+```
+
+**Option 2: Per-item JSON.** Each item is a JSON object with its target history and, optionally, past and future values of covariates inline. This is the same payload schema used by [Chronos-2 on SageMaker JumpStart](https://github.com/amazon-science/chronos-forecasting/blob/v2.2.2/notebooks/deploy-chronos-to-amazon-sagemaker.ipynb), so it's a drop-in if you already have code talking to a JumpStart endpoint:
+
+```python
+import io
+import json
+import boto3
+import pandas as pd
+
+payload = {
+    "inputs": [
+        {
+            "item_id": "store_1",
+            "start": "2014-01-05",                            # ISO timestamp of the first target value
+            "target": [123.0, 145.0, 167.0, ...],            # historical target values
+            "past_covariates": {                              # past values of known_covariates (same length as target)
+                "promo": [0, 1, 0, ...],
+                "holiday": [0, 0, 1, ...],
+            },
+            "future_covariates": {                            # future values over the forecast horizon (length = prediction_length)
+                "promo": [1, 0, ..., 1],
+                "holiday": [0, 1, ..., 0],
+            },
+        },
+        # ... one entry per item
+    ],
+    "parameters": {
+        "prediction_length": 24,                              # must match the trained predictor's prediction_length
+        "freq": "W",                                          # required when "start" is set
+    },
+}
+
+client = boto3.client("sagemaker-runtime")
+response = client.invoke_endpoint(
+    EndpointName=ENDPOINT_NAME,
+    ContentType="application/json",
+    Accept="application/x-parquet",
+    Body=json.dumps(payload).encode("utf-8"),
+)
+forecasts = pd.read_parquet(io.BytesIO(response["Body"].read()))
+```
+:::
 
 ### Batch inference
 
@@ -139,7 +223,7 @@ To score a dataset as a one-off job, use {py:meth}`~autogluon.cloud.TimeSeriesCl
 
 ```python
 forecasts = cloud_predictor.predict(
-    "test.csv",  # DataFrame, local path, or S3 URL (CSV/Parquet)
+    "train.csv",  # historical observations — DataFrame, local path, or S3 URL (CSV/Parquet)
     known_covariates="known_covariates.csv",  # required if known_covariates_names was set
     static_features="static_features.csv",    # optional
     instance_type="ml.m5.2xlarge",

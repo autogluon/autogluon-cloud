@@ -146,6 +146,96 @@ The endpoint stays active — and billed — until you delete it:
 endpoint.delete_endpoint()
 ```
 
+### Invoke the endpoint without AutoGluon-Cloud
+
+The deployed endpoint is a normal SageMaker endpoint, so you can invoke it from any AWS SDK. Unlike the trained-predictor case, foundation model endpoints always need per-request inference settings (`prediction_length`, `freq`, `target`, etc.) bundled into the payload — so plain CSV is not supported. Pick one of the two structured payload formats below.
+
+:::{dropdown} Payload formats — boto3 examples
+:animate: fade-in-slide-down
+:color: secondary
+
+**Option 1: AutoGluon-Cloud's native `application/x-autogluon` envelope.** Each DataFrame is serialized as base64-encoded parquet, with inference settings carried in `inference_kwargs`. This is what {py:meth}`autogluon.cloud.TimeSeriesEndpoint.predict` sends under the hood:
+
+```python
+import base64
+import io
+import json
+import boto3
+import pandas as pd
+
+def df_to_b64(df: pd.DataFrame) -> str:
+    return base64.b64encode(df.to_parquet()).decode("ascii")
+
+data = pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/train.parquet")
+known_covariates = (
+    pd.read_parquet("https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/test.parquet")
+    .drop(columns=["Sales"])
+)
+
+payload = {
+    "version": 1,
+    "data": df_to_b64(data),
+    "known_covariates": df_to_b64(known_covariates),
+    "inference_kwargs": {
+        "prediction_length": 13,
+        "target": "Sales",
+        "id_column": "id",
+        "timestamp_column": "timestamp",
+    },
+}
+
+client = boto3.client("sagemaker-runtime")
+response = client.invoke_endpoint(
+    EndpointName=ENDPOINT_NAME,
+    ContentType="application/x-autogluon",
+    Accept="application/x-parquet",
+    Body=json.dumps(payload).encode("utf-8"),
+)
+forecasts = pd.read_parquet(io.BytesIO(response["Body"].read()))
+```
+
+**Option 2: Per-item JSON.** Each item is a JSON object with its target history and, optionally, past and future values of covariates inline. This is the same payload schema used by [Chronos-2 on SageMaker JumpStart](https://github.com/amazon-science/chronos-forecasting/blob/v2.2.2/notebooks/deploy-chronos-to-amazon-sagemaker.ipynb), so it's a drop-in if you already have code talking to a JumpStart endpoint:
+
+```python
+import io
+import json
+import boto3
+import pandas as pd
+
+payload = {
+    "inputs": [
+        {
+            "item_id": "store_1",
+            "start": "2014-01-05",                  # ISO timestamp of the first target value
+            "target": [123.0, 145.0, 167.0, ...],   # historical target values
+            "past_covariates": {                    # past covariate values (same length as target)
+                "Promo": [0, 1, 0, ...],
+                "SchoolHoliday": [0, 0, 1, ...],
+            },
+            "future_covariates": {                  # future values over the forecast horizon (length = prediction_length)
+                "Promo": [1, 0, ..., 1],
+                "SchoolHoliday": [0, 1, ..., 0],
+            },
+        },
+        # ... one entry per item
+    ],
+    "parameters": {
+        "prediction_length": 13,
+        "freq": "W",                                # required when "start" is set
+    },
+}
+
+client = boto3.client("sagemaker-runtime")
+response = client.invoke_endpoint(
+    EndpointName=ENDPOINT_NAME,
+    ContentType="application/json",
+    Accept="application/x-parquet",
+    Body=json.dumps(payload).encode("utf-8"),
+)
+forecasts = pd.read_parquet(io.BytesIO(response["Body"].read()))
+```
+:::
+
 ### Reattaching to an existing endpoint
 
 To send requests to an endpoint that's already running (e.g. from a previous session, or one a
