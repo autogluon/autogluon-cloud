@@ -34,12 +34,18 @@ Train and Deploy AutoGluon in the Cloud
 
 ::::::
 
-[AutoGluon](https://auto.gluon.ai/stable/index.html) is an open-source AutoML library that trains state-of-the-art ML models on tabular, time-series, and multimodal data with just a few lines of code. AutoGluon-Cloud takes that same API and runs it on AWS — train models and serve predictions on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) without managing infrastructure or setting up a heavyweight ML environment on your local machine.
-
-It supports two workflows:
+AutoGluon-Cloud lets you train and deploy state-of-the-art ML models in the cloud in a few lines of code. Run [AutoGluon](https://auto.gluon.ai/stable/index.html) on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) without worrying about infrastructure, dependencies, or a heavy local ML environment. It supports two workflows:
 
 - **[Train your own predictor](tutorials/predictor-tabular.md)** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
 - **[Run pretrained foundation models](tutorials/foundation-model-timeseries.md)** — deploy state-of-the-art pretrained models like [Chronos-2](https://huggingface.co/amazon/chronos-2) for zero-shot inference, with no training required.
+
+## {octicon}`package` Installation
+
+```bash
+pip install autogluon.cloud
+```
+
+Before running any of the snippets below, follow the [Setup tutorial](tutorials/setup.md) to register the IAM role and S3 bucket that SageMaker will use.
 
 ## {octicon}`gear` Train AutoGluon predictors in the cloud
 
@@ -145,17 +151,6 @@ endpoint.delete_endpoint()
 ```
 :::
 
-
-## {octicon}`package` Installation
-
-[![PyPI](https://img.shields.io/pypi/v/autogluon.cloud.svg)](https://pypi.org/project/autogluon.cloud/)
-[![Python Versions](https://img.shields.io/pypi/pyversions/autogluon.cloud)](https://pypi.org/project/autogluon.cloud/)
-
-```bash
-pip install autogluon.cloud
-```
-
-Before running the examples above, set up your AWS resources (IAM role + S3 bucket) by following the [Setup](tutorials/setup.md) tutorial.
 
 ```{toctree}
 ---

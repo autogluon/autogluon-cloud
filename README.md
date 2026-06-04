@@ -14,9 +14,7 @@
 
 </div>
 
-[AutoGluon](https://auto.gluon.ai/stable/index.html) is an open-source AutoML library that trains state-of-the-art ML models on tabular, time-series, and multimodal data with just a few lines of code. AutoGluon-Cloud takes that same API and runs it on AWS — train models and serve predictions on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) without managing infrastructure or setting up a heavyweight ML environment on your local machine.
-
-It supports two workflows:
+AutoGluon-Cloud lets you train and deploy state-of-the-art ML models in the cloud in a few lines of code. Run [AutoGluon](https://auto.gluon.ai/stable/index.html) on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) without worrying about infrastructure, dependencies, or a heavy local ML environment. It supports two workflows:
 
 - **[Train your own predictor](https://auto.gluon.ai/cloud/stable/tutorials/predictor-tabular.html)** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
 - **[Run pretrained foundation models](https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html)** — deploy state-of-the-art pretrained models like [Chronos-2](https://huggingface.co/amazon/chronos-2) for zero-shot inference, with no training required.
@@ -38,6 +36,8 @@ bootstrap()
 See the [Setup tutorial](https://auto.gluon.ai/cloud/stable/tutorials/setup.html) for the full walkthrough, including how to register an existing role and bucket instead.
 
 ## ⚙️ Train your own model
+
+Train an AutoGluon predictor on your data and serve it from a SageMaker endpoint — same API as local AutoGluon, all heavy lifting on AWS. Full walkthrough: [tabular](https://auto.gluon.ai/cloud/stable/tutorials/predictor-tabular.html), [time series](https://auto.gluon.ai/cloud/stable/tutorials/predictor-timeseries.html).
 
 ```python
 from autogluon.cloud import TabularCloudPredictor
@@ -64,6 +64,8 @@ result = cloud_predictor.predict(test_data)
 ```
 
 ## 🚀 Run a pretrained foundation model
+
+Skip training entirely — deploy a pretrained model like Chronos-2 to SageMaker and get zero-shot predictions out of the box. Full walkthrough: [time series](https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html).
 
 ```python
 from autogluon.cloud import TimeSeriesFoundationModel
