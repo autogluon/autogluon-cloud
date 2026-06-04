@@ -452,7 +452,10 @@ class SagemakerBackend(Backend):
             )
             volume_size = None
 
-        # Reuse the fit-job tarball only for non-FM deploys — FM deploys need their own serve script.
+        # Resolve model artifact:
+        # - predictor_path provided → use as-is
+        # - predictor_path=None, fit job exists, non-FM deploy → use fit output
+        # - predictor_path=None, no fit job (or FM deploy) → no artifact
         if predictor_path is None and self._fit_job is not None and fm_serve_config is None:
             predictor_path = self._fit_job.get_output_path()
         if predictor_path:
