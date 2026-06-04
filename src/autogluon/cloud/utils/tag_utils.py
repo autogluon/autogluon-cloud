@@ -19,10 +19,8 @@ def build_tags(
     tag-restricted AWS orgs can opt out without losing other functionality.
     """
     if os.environ.get(DISABLE_DEFAULT_TAGS_ENV, "").lower() in ("1", "true", "yes"):
-        base: List[Dict[str, str]] = []
-    else:
-        base = [{"Key": "autogluon-cloud-module", "Value": module}]
-    base += extra_tags or []
+        return list(user_tags or [])
+    base = [{"Key": "autogluon-cloud-module", "Value": module}] + list(extra_tags or [])
     if not user_tags:
         return base
     user_keys = {t["Key"] for t in user_tags}
