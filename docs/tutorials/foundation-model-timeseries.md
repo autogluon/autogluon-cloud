@@ -283,3 +283,35 @@ model = TimeSeriesFoundationModel(
 )
 endpoint = model.deploy(inference_mode="serverless")
 ```
+
+## Choosing an instance type
+
+Each inference mode has different sweet spots. Defaults work for most users — read on if you want to optimize for cost or throughput, or the default GPU instance type isn't available in your account or region.
+
+### Real-time endpoints
+
+Pick a GPU if you need low latency, a CPU if cost matters more or a GPU instance isn't available in the chosen region.
+
+| Instance | Cost\* | Throughput\* | Notes |
+|---|---|---|---|
+| `ml.c6i.2xlarge` | 1× | 1× | CPU fallback. Cheap, broadly available. |
+| `ml.g4dn.xlarge` | ~2× | ~5× | Budget GPU. |
+| `ml.g5.xlarge` (default) | ~3× | ~10× | Lowest latency. |
+
+\*Rough ratios relative to `ml.c6i.2xlarge`. Throughput measured on `chronos-2` with a 100-item × 2000-step context, 64-step horizon. Actual numbers depend on payload, region, and pricing.
+
+**A few rules of thumb:**
+
+- **Single-GPU is enough.** Going beyond `xlarge` on a GPU instance gives little benefit — chronos-2 doesn't saturate one GPU at typical batch sizes.
+- **Newer GPU generations are faster** (`g6.xlarge`, `g6e.xlarge`); availability varies by region.
+- **For CPU, scaling vCPUs helps.** `c6i.2xlarge → 4xlarge → 8xlarge` roughly halves latency at each step.
+- **Slow deploy?** If a deploy takes much longer than ~6 min for GPU or ~4 min for CPU, the region is likely out of capacity for that instance type — try a different instance type or region.
+
+### Batch prediction
+
+Batch jobs don't care about latency, so default to CPU instances such as `ml.m5.2xlarge` (current default) or `ml.c6i.2xlarge`. Consider GPU only for very large datasets (>10M rows). Typical job startup overhead is ~4 min on CPU.
+
+### Serverless endpoints
+
+You don't choose an instance type — SageMaker manages CPU sizing automatically. Cold starts are typically ~30s. GPU is not available for serverless inference.
+
