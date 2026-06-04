@@ -47,7 +47,7 @@ The following `model_id` values are currently supported. Chronos-2 models native
 
 ## Data
 
-The examples use a [retail sales](https://autogluon.s3.amazonaws.com/datasets/timeseries/retail_sales/) dataset with weekly sales for 1,115 stores. Load the historical observations:
+The examples use a retail sales dataset with weekly sales for 1,115 stores. Load the historical observations:
 
 ```{code-cell} ipython3
 import pandas as pd
