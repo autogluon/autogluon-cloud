@@ -4,6 +4,7 @@ import logging
 from unittest.mock import MagicMock
 
 import pytest
+from botocore.exceptions import ClientError
 
 from autogluon.cloud import bootstrap, register, status, teardown
 from autogluon.cloud.config import (
@@ -131,6 +132,44 @@ def test_register_accepts_bucket_in_matching_region():
     session.client.return_value.head_bucket.return_value = {
         "ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "us-east-1"}}
     }
+    register(
+        role="arn:aws:iam::111122223333:role/x",
+        bucket="b1",
+        region="us-east-1",
+        session=session,
+    )
+    assert load_config().backends["sagemaker"].bucket == "b1"
+
+
+def test_register_rejects_bucket_when_head_bucket_403_carries_region_header():
+    """Cross-region head_bucket returns 403 even without s3:HeadBucket perm, but the response
+    still carries the bucket region header. We must read it from the error path, otherwise the
+    mismatch slips through whenever the caller's role is locked down."""
+    session = MagicMock()
+    session.client.return_value.head_bucket.side_effect = ClientError(
+        error_response={
+            "Error": {"Code": "403", "Message": "Forbidden"},
+            "ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "ap-southeast-1"}},
+        },
+        operation_name="HeadBucket",
+    )
+    with pytest.raises(ValueError, match="ap-southeast-1"):
+        register(
+            role="arn:aws:iam::111122223333:role/x",
+            bucket="b1",
+            region="us-east-1",
+            session=session,
+        )
+
+
+def test_register_skips_when_head_bucket_error_has_no_region_header():
+    """If neither the success path nor the error response carries the bucket region header,
+    we silently skip validation rather than block legitimate setup attempts."""
+    session = MagicMock()
+    session.client.return_value.head_bucket.side_effect = ClientError(
+        error_response={"Error": {"Code": "404", "Message": "Not Found"}, "ResponseMetadata": {}},
+        operation_name="HeadBucket",
+    )
     register(
         role="arn:aws:iam::111122223333:role/x",
         bucket="b1",

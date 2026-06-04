@@ -315,12 +315,21 @@ def _is_permission_error(e: ClientError) -> bool:
 
 def _validate_bucket_region(*, session: boto3.Session, bucket: str, region: str) -> None:
     """Raise if the bucket is in a different region than ``region``. Silently skips if the bucket
-    region can't be determined (no perms, missing bucket, etc.)."""
+    region can't be determined (missing bucket, network issues, etc.).
+
+    Cross-region ``head_bucket`` calls return 403 even when the caller lacks ``s3:HeadBucket``
+    permission, but the response still carries the ``x-amz-bucket-region`` header — so we read it
+    from the error path too, otherwise the very mismatch this function exists to catch slips through
+    whenever the caller's role is locked down.
+    """
     try:
-        bucket_region = session.client("s3").head_bucket(Bucket=bucket)["ResponseMetadata"]["HTTPHeaders"][
-            "x-amz-bucket-region"
-        ]
-    except (ClientError, BotoCoreError, KeyError):
+        response = session.client("s3").head_bucket(Bucket=bucket)
+        bucket_region = response["ResponseMetadata"]["HTTPHeaders"].get("x-amz-bucket-region")
+    except ClientError as e:
+        bucket_region = e.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}).get("x-amz-bucket-region")
+    except BotoCoreError:
+        return
+    if not bucket_region:
         return
     if bucket_region != region:
         raise ValueError(
