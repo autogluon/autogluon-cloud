@@ -9,6 +9,7 @@ import shutil
 from pprint import pprint
 
 import boto3
+import pandas as pd
 import pickle
 
 from autogluon.common.loaders import load_pd
@@ -59,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-dir", type=str, default=get_env_if_present("SM_MODEL_DIR"))
     parser.add_argument("--n_gpus", type=str, default=get_env_if_present("SM_NUM_GPUS"))
     parser.add_argument("--train_dir", type=str, default=get_env_if_present("SM_CHANNEL_TRAIN_DATA"))
+    parser.add_argument("--test_dir", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TEST_DATA"))
     parser.add_argument("--tune_dir", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TUNING_DATA"))
     parser.add_argument(
         "--train_images", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TRAIN_IMAGES")
@@ -176,16 +178,36 @@ if __name__ == "__main__":
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
 
     if ag_args.get("predict_after_fit", False):
-        if predictor_type != "timeseries":
-            raise NotImplementedError(
-                f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
-            )
         print("Running in-job prediction for fit_predict")
-        predictions = predictor.predict(training_data, known_covariates=known_covariates)
+        if predictor_type == "timeseries":
+            predictions = predictor.predict(training_data, known_covariates=known_covariates)
+            predictions = predictions.to_data_frame().reset_index()
+        elif predictor_type == "tabular":
+            if "image_column" in ag_args:
+                raise NotImplementedError(
+                    "`fit_predict` does not support image columns yet. "
+                    "Use `fit` + `predict` for tabular data with image columns."
+                )
+            assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
+            test_data = prepare_data(get_input_path(args.test_dir), predictor_type, ag_args)
+            # Duplicated from tabular_serve.py:88-93 (tracked tech debt to de-dup later).
+            from autogluon.core.constants import QUANTILE, REGRESSION
+            from autogluon.core.utils import get_pred_from_proba_df
+
+            if predictor.problem_type not in [REGRESSION, QUANTILE]:
+                pred_proba = predictor.predict_proba(test_data, as_pandas=True)
+                pred = get_pred_from_proba_df(pred_proba, problem_type=predictor.problem_type)
+                pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
+                pred.name = predictor.label
+                predictions = pd.concat([pred, pred_proba], axis=1)
+            else:
+                predictions = predictor.predict(test_data, as_pandas=True).to_frame()
+        else:
+            raise NotImplementedError(f"`fit_predict` is not supported for predictor_type='{predictor_type}'.")
         predictions_path = ag_args["predictions_path"]
         # Save locally then upload via boto3: s3fs/fsspec are not available in the training container.
         local_path = os.path.join(args.output_data_dir, os.path.basename(predictions_path))
-        save_pd.save(path=local_path, df=predictions.to_data_frame().reset_index())
+        save_pd.save(path=local_path, df=predictions)
         bucket, key = s3_path_to_bucket_prefix(predictions_path)
         boto3.client("s3").upload_file(local_path, bucket, key)
         print(f"Uploaded predictions to {predictions_path}")

@@ -1,6 +1,9 @@
 import os
 import tempfile
 
+import pandas as pd
+import pytest
+
 from autogluon.cloud import TabularCloudPredictor
 from autogluon.common.features.feature_metadata import FeatureMetadata
 
@@ -70,3 +73,60 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
         )
         models = local_predictor.model_names()
         assert "ImagePredictor" in models
+
+
+@pytest.mark.parametrize("problem", ["classification", "regression"])
+def test_tabular_fit_predict(test_helper, framework_version, problem):
+    """fit + in-job batch predict in a single SageMaker training job."""
+    import boto3
+
+    train_data = "tabular_train.csv"
+    test_data = "tabular_test.csv"
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    bucket = "autogluon-cloud-ci"
+    predictions_key = f"test-tabular-fit-predict-{problem}/{framework_version}/{timestamp}/custom_predictions.csv"
+    predictions_path = f"s3://{bucket}/{predictions_key}"
+
+    # The shared tabular dataset has a categorical `class` target; `age` is a numeric column we reuse as a
+    # regression target so both problem types exercise the same path.
+    label = "class" if problem == "classification" else "age"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        test_helper.prepare_data(train_data, test_data)
+        n_test_rows = len(pd.read_csv(test_data))
+
+        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
+
+        cloud_predictor = TabularCloudPredictor(
+            cloud_output_path=f"s3://{bucket}/test-tabular-fit-predict-{problem}/{framework_version}/{timestamp}",
+            local_output_path=f"test_tabular_fit_predict_{problem}_cloud_predictor",
+        )
+
+        pred, pred_proba = cloud_predictor.fit_predict_proba(
+            train_data=train_data,
+            test_data=test_data,
+            predictor_init_args=dict(label=label),
+            predictor_fit_args=dict(time_limit=60),
+            include_predict=True,
+            framework_version=framework_version,
+            custom_image_uri=training_custom_image_uri,
+            predictions_path=predictions_path,
+        )
+
+        assert isinstance(pred, pd.Series)
+        assert len(pred) == n_test_rows
+        if problem == "classification":
+            assert isinstance(pred_proba, pd.DataFrame)
+            assert len(pred_proba) == n_test_rows
+        else:
+            # Regression: proba mirrors pred.
+            pd.testing.assert_series_equal(pred, pred_proba)
+
+        head = boto3.client("s3").head_object(Bucket=bucket, Key=predictions_key)
+        assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
+
+        info = cloud_predictor.info()
+        assert info["fit_job"]["name"] is not None
+        assert info["fit_job"]["status"] == "Completed"
