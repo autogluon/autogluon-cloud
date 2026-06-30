@@ -13,6 +13,7 @@ from typing import Optional
 
 import boto3
 import click
+from packaging.version import Version
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
@@ -23,11 +24,26 @@ from . import register as _register
 from . import status as _status
 from . import teardown as _teardown
 from .config import load_config
+from .version import __version__
 
 # Backends exposed in the CLI. See all supported backends at backend.constant.SUPPORTED_BACKENDS
 _CLI_BACKENDS = ("sagemaker",)
 
 _console = Console()
+
+
+def _template_url(backend: str) -> str:
+    """GitHub URL of the CloudFormation template for ``backend``.
+
+    On a stable release the URL points at that release's tag (e.g. ``v0.5.0``); on
+    nightly/dev builds it falls back to ``master``.
+    """
+    v = Version(__version__)
+    ref = "master" if (v.is_prerelease or v.is_devrelease) else f"v{v.public}"
+    return (
+        f"https://github.com/autogluon/autogluon-cloud/blob/{ref}/"
+        f"src/autogluon/cloud/templates/ag_cloud_{backend}.yaml"
+    )
 
 
 def _make_session(aws_profile: Optional[str], region: Optional[str]) -> Optional[boto3.Session]:
@@ -93,15 +109,11 @@ def bootstrap(
         default_stack = f"ag-cloud-{backend.replace('_', '-')}"
         stack_name = Prompt.ask("Stack name", default=default_stack)
     effective_stack = stack_name
-    template_url = (
-        f"https://github.com/autogluon/autogluon-cloud/blob/master/"
-        f"src/autogluon/cloud/templates/ag_cloud_{backend}.yaml"
-    )
 
     _console.print(
         f"This will use CloudFormation to create AWS resources (IAM roles, S3 bucket, etc.) "
         f"needed to run AutoGluon-Cloud with '{backend}'.\n"
-        f"Verify the template: {template_url}\n"
+        f"Verify the template: {_template_url(backend)}\n"
     )
 
     plan = Table.grid(padding=(0, 2))
