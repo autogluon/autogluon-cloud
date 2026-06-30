@@ -83,7 +83,7 @@ class RayClusterManager(ClusterManager):
         cmd = f"ray dashboard -p {port} {self.config}"
         if not block:
             cmd = "nohup " + cmd + " >/dev/null 2>&1 &"
-        result = subprocess.run(cmd, shell=True, check=True)
+        result = subprocess.run(cmd, shell=True, check=True)  # nosec B602 - internal cluster args, not user input
         if result.returncode != 0:
             error_msg = "Failed to setup the dashboard."
             if block:
