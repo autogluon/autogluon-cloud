@@ -324,7 +324,8 @@ class FoundationModel:
                 tmp_path = Path(tmp)
                 weights_dir = tmp_path / "weights"
                 logger.info(f"Downloading {source_uri} from HuggingFace to {weights_dir}")
-                snapshot_download(repo_id=source_uri, local_dir=str(weights_dir))
+                # trusted AG-owned repo, numeric-only outputs, no code-execution path
+                snapshot_download(repo_id=source_uri, local_dir=str(weights_dir))  # nosec B615
 
                 # Mirror the layout produced by SagemakerBackend._create_serve_script_tarball:
                 # entry-point script + serving_utils/ under code/, so the cached endpoint can

@@ -18,8 +18,7 @@ image_dir = os.path.join("/tmp", "ag_images")
 def _save_image_and_update_dataframe_column(bytes):
     os.makedirs(image_dir, exist_ok=True)
     im_bytes = base64.b85decode(bytes)
-    # nosec B303 - not a cryptographic use
-    im_hash = hashlib.sha1(im_bytes).hexdigest()
+    im_hash = hashlib.sha1(im_bytes, usedforsecurity=False).hexdigest()
     im = Image.open(BytesIO(im_bytes))
     im_name = f"tabular_image_{im_hash}.png"
     im_path = os.path.join(image_dir, im_name)

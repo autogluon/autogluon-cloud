@@ -62,9 +62,14 @@ def is_image_file(filename):
 
 
 def unzip_file(tarball_path, save_path):
-    file = tarfile.open(tarball_path)
-    file.extractall(save_path)
-    file.close()
+    save_path_abs = os.path.abspath(save_path)
+    with tarfile.open(tarball_path) as file:
+        for member in file.getmembers():
+            member_path = os.path.abspath(os.path.join(save_path_abs, member.name))
+            if member_path != save_path_abs and not member_path.startswith(save_path_abs + os.sep):
+                raise ValueError(f"Unsafe path in tarball, refusing to extract: {member.name}")
+        # members validated above to stay within save_path (no absolute/`..` traversal)
+        file.extractall(save_path)  # nosec B202
 
 
 def split_pred_and_pred_proba(prediction):
