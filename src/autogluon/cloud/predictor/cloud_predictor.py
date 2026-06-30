@@ -62,9 +62,8 @@ class CloudPredictor(ABC):
               by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
               append a timestamped subfolder. Raises if no bucket is configured.
         backend: str, default = "sagemaker"
-            The backend to use. Valid options are: "sagemaker" and "ray_aws".
+            The backend to use. Currently only "sagemaker" is supported.
             SageMaker backend supports training, deploying and batch inference on AWS SageMaker. Only single instance training is supported.
-            RayAWS backend supports distributed training by creating an ephemeral ray cluster on AWS. Deployment and batch inferenc are not supported yet.
         role: Optional[str], default = None
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
@@ -80,6 +79,8 @@ class CloudPredictor(ABC):
         set_logger_verbosity(self.verbosity, logger=cloud_logger)
         self.local_output_path = self._setup_local_output_path(local_output_path)
         self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
+        if backend not in self.backend_map:
+            raise ValueError(f"Unsupported backend {backend!r}. Supported backends: {sorted(self.backend_map)}.")
         self.backend: Backend = BackendFactory.get_backend(
             backend=self.backend_map[backend],
             local_output_path=self.local_output_path,
