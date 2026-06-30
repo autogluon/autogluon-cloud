@@ -66,7 +66,7 @@ autogluon-cloud register \
 :::
 ::::
 
-The role must trust the `sagemaker.amazonaws.com` principal and have permissions equivalent to AWS's [`AmazonSageMakerFullAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSageMakerFullAccess.html) managed policy plus read/write access to your bucket. The `region` where the jobs are executed must match the bucket's region.
+The role must trust the `sagemaker.amazonaws.com` principal and grant the permissions AutoGluon-Cloud needs to run SageMaker jobs plus read/write access to your bucket — for example, a [SageMaker execution role](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-roles.html). For the exact set of permissions, see the {repo-file}`CloudFormation template <src/autogluon/cloud/templates/ag_cloud_sagemaker.yaml>` that {func}`~autogluon.cloud.bootstrap` uses. The `region` where the jobs are executed must match the bucket's region.
 
 ### 3. Pass resources on each call
 

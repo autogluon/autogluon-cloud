@@ -74,6 +74,7 @@ Resources:
                 Action:
                   - s3:ListBucket
                   - s3:GetBucketLocation
+                  - s3:CreateBucket
                 Resource:
                   - !Sub 'arn:aws:s3:::${AGCloudSageMakerBucket}'
                   - 'arn:aws:s3:::sagemaker-*'
