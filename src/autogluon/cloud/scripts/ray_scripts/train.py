@@ -45,7 +45,8 @@ def tear_down_cluster(cluster_config_file: str):
     print("Will tear down the cluster in 10 secs")
     time.sleep(10)
     cmd = f"ray stop --force; ray down {cluster_config_file} -y"
-    subprocess.Popen(cmd, shell=True, preexec_fn=os.setpgrp)  # Avoid being terminated because ray runtime is down
+    # Avoid being terminated because ray runtime is down
+    subprocess.Popen(cmd, shell=True, preexec_fn=os.setpgrp)  # nosec B602 - internal cluster config path, not user input
 
 
 def upload_file(file_name: str, bucket: str, prefix: Optional[str] = None):
