@@ -104,11 +104,12 @@ class TabularCloudPredictor(CloudPredictor):
             Predictions as a Series. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_results()``.
         """
-        self._fit_for_predict(
+        result = self.fit_predict_proba(
             train_data=train_data,
             test_data=test_data,
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
+            include_predict=True,
             leaderboard=leaderboard,
             framework_version=framework_version,
             job_name=job_name,
@@ -120,15 +121,10 @@ class TabularCloudPredictor(CloudPredictor):
             predictions_path=predictions_path,
             backend_kwargs=backend_kwargs,
         )
-
-        if not wait:
-            logger.info(
-                "fit_predict job launched asynchronously. Use `get_fit_job_status()` "
-                "to poll, then `get_fit_predict_results()` to fetch predictions."
-            )
+        if result is None:  # wait=False
             return None
-
-        return self.get_fit_predict_results()
+        pred, _ = result
+        return pred
 
     def fit_predict_proba(
         self,
@@ -197,7 +193,14 @@ class TabularCloudPredictor(CloudPredictor):
             ``predict_probability``. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_proba_results()``.
         """
-        self._fit_for_predict(
+        backend_kwargs = {} if backend_kwargs is None else dict(backend_kwargs)
+        extra_ag_args = dict(backend_kwargs.get("extra_ag_args") or {})
+        extra_ag_args["predict_after_fit"] = True
+        if predictions_path is not None:
+            extra_ag_args["predictions_path"] = predictions_path
+        backend_kwargs["extra_ag_args"] = extra_ag_args
+
+        self.fit(
             train_data=train_data,
             test_data=test_data,
             predictor_init_args=predictor_init_args,
@@ -210,7 +213,6 @@ class TabularCloudPredictor(CloudPredictor):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            predictions_path=predictions_path,
             backend_kwargs=backend_kwargs,
         )
 
@@ -222,48 +224,6 @@ class TabularCloudPredictor(CloudPredictor):
             return None
 
         return self.get_fit_predict_proba_results(include_predict=include_predict)
-
-    def _fit_for_predict(
-        self,
-        *,
-        train_data,
-        test_data,
-        predictor_init_args,
-        predictor_fit_args,
-        leaderboard,
-        framework_version,
-        job_name,
-        instance_type,
-        instance_count,
-        volume_size,
-        custom_image_uri,
-        wait,
-        predictions_path,
-        backend_kwargs,
-    ) -> None:
-        """Launch a fit + in-job-predict training job shared by ``fit_predict`` / ``fit_predict_proba``."""
-        backend_kwargs = {} if backend_kwargs is None else dict(backend_kwargs)
-        extra_ag_args = dict(backend_kwargs.get("extra_ag_args") or {})
-        extra_ag_args["predict_after_fit"] = True
-        if predictions_path is not None:
-            extra_ag_args["predictions_path"] = predictions_path
-        backend_kwargs["extra_ag_args"] = extra_ag_args
-        backend_kwargs["test_data"] = test_data
-
-        self.fit(
-            train_data=train_data,
-            predictor_init_args=predictor_init_args,
-            predictor_fit_args=predictor_fit_args,
-            leaderboard=leaderboard,
-            framework_version=framework_version,
-            job_name=job_name,
-            instance_type=instance_type,
-            instance_count=instance_count,
-            volume_size=volume_size,
-            custom_image_uri=custom_image_uri,
-            wait=wait,
-            backend_kwargs=backend_kwargs,
-        )
 
     def get_fit_predict_results(self) -> pd.Series:
         """

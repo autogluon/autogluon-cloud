@@ -51,7 +51,7 @@ def test_fit_predict_passes_predict_after_fit_and_test_data(cloud_predictor):
 
     backend_kwargs = fit.call_args.kwargs["backend_kwargs"]
     assert backend_kwargs["extra_ag_args"]["predict_after_fit"] is True
-    assert backend_kwargs["test_data"] is test_data
+    assert fit.call_args.kwargs["test_data"] is test_data
     assert "predictions_path" not in backend_kwargs["extra_ag_args"]
 
 
@@ -167,16 +167,6 @@ def backend():
     return backend
 
 
-def test_backend_fit_rejects_test_data_without_predict_after_fit(backend):
-    with pytest.raises(ValueError, match="predict_after_fit=True"):
-        backend.fit(
-            predictor_init_args={"label": "y"},
-            predictor_fit_args={},
-            data_channels={"train_data": pd.DataFrame({"x": [1], "y": [0]})},
-            test_data=pd.DataFrame({"x": [1]}),
-        )
-
-
 def test_backend_fit_rejects_test_data_missing_feature_columns(backend):
     train = pd.DataFrame({"x": [1, 2], "z": [3, 4], "y": [0, 1]})
     test = pd.DataFrame({"x": [5]})  # missing feature column `z`
@@ -184,13 +174,11 @@ def test_backend_fit_rejects_test_data_missing_feature_columns(backend):
         backend.fit(
             predictor_init_args={"label": "y"},
             predictor_fit_args={},
-            data_channels={"train_data": train},
-            test_data=test,
-            extra_ag_args={"predict_after_fit": True},
+            data_channels={"train_data": train, "test_data": test},
         )
 
 
-def test_backend_fit_injects_test_data_channel(backend):
+def test_backend_fit_forwards_test_data_channel(backend):
     train = pd.DataFrame({"x": [1, 2], "y": [0, 1]})
     test = pd.DataFrame({"x": [5, 6]})
 
@@ -198,23 +186,12 @@ def test_backend_fit_injects_test_data_channel(backend):
         backend.fit(
             predictor_init_args={"label": "y"},
             predictor_fit_args={},
-            data_channels={"train_data": train},
-            test_data=test,
-            extra_ag_args={"predict_after_fit": True},
+            data_channels={"train_data": train, "test_data": test},
         )
 
     forwarded_channels = super_fit.call_args.kwargs["data_channels"]
     assert "test_data" in forwarded_channels
     pd.testing.assert_frame_equal(forwarded_channels["test_data"], test)
-
-
-def test_parse_backend_fit_kwargs_extracts_test_data(backend):
-    """`test_data` must survive backend_kwargs parsing so it reaches `fit`."""
-    parsed = backend.parse_backend_fit_kwargs(
-        {"test_data": pd.DataFrame({"x": [1]}), "extra_ag_args": {"predict_after_fit": True}}
-    )
-    assert isinstance(parsed["test_data"], pd.DataFrame)
-    assert parsed["extra_ag_args"] == {"predict_after_fit": True}
 
 
 def test_backend_fit_test_data_allows_label_column_absent(backend):
@@ -226,7 +203,5 @@ def test_backend_fit_test_data_allows_label_column_absent(backend):
         backend.fit(
             predictor_init_args={"label": "y"},
             predictor_fit_args={},
-            data_channels={"train_data": train},
-            test_data=test,
-            extra_ag_args={"predict_after_fit": True},
+            data_channels={"train_data": train, "test_data": test},
         )
