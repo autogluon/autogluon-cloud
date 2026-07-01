@@ -36,16 +36,16 @@ class TabularSagemakerBackend(SagemakerBackend):
         *,
         data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         predictor_init_args: Dict[str, Any],
-    ) -> Dict[str, Optional[Union[str, pd.DataFrame]]]:
+    ) -> Dict[str, Optional[pd.DataFrame]]:
         """Validate tabular data channels client-side before launching the SageMaker job.
 
-        Resolves ``str`` paths via ``load_pd.load`` so column checks can run, and returns the (possibly loaded)
-        channel dict for the caller to reuse.
+        Resolves path inputs via ``load_pd.load`` so column checks can run, and returns the loaded channel
+        dict for the caller to reuse.
 
         A fused fit_predict job means a schema typo wastes the whole training run, so we check up front that
         ``test_data`` (if present) covers every training feature column (the train columns minus the label).
         """
-        loaded: Dict[str, Optional[Union[str, pd.DataFrame]]] = {}
+        loaded: Dict[str, Optional[pd.DataFrame]] = {}
         for name, df in data_channels.items():
             if isinstance(df, (str, os.PathLike)):
                 df = load_pd.load(str(df))
@@ -53,7 +53,7 @@ class TabularSagemakerBackend(SagemakerBackend):
 
         test_data = loaded.get("test_data")
         if test_data is not None:
-            label = predictor_init_args.get("label")
+            label = predictor_init_args["label"]
             feature_columns = [c for c in loaded["train_data"].columns if c != label]
             missing_columns = [c for c in feature_columns if c not in test_data.columns]
             if missing_columns:

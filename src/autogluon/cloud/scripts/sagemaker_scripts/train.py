@@ -183,20 +183,12 @@ if __name__ == "__main__":
             predictions = predictor.predict(training_data, known_covariates=known_covariates)
             predictions = predictions.to_data_frame().reset_index()
         elif predictor_type == "tabular":
-            if "image_column" in ag_args:
-                raise NotImplementedError(
-                    "`fit_predict` does not support image columns yet. "
-                    "Use `fit` + `predict` for tabular data with image columns."
-                )
             assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
             test_data = prepare_data(get_input_path(args.test_dir), predictor_type, ag_args)
-            # Duplicated from tabular_serve.py:88-93 (tracked tech debt to de-dup later).
-            from autogluon.core.constants import QUANTILE, REGRESSION
-            from autogluon.core.utils import get_pred_from_proba_df
-
-            if predictor.problem_type not in [REGRESSION, QUANTILE]:
+            if predictor.can_predict_proba:
+                # Concat [pred, <class>_proba...] so the client can split it (see split_pred_and_pred_proba).
                 pred_proba = predictor.predict_proba(test_data, as_pandas=True)
-                pred = get_pred_from_proba_df(pred_proba, problem_type=predictor.problem_type)
+                pred = predictor.predict_from_proba(pred_proba)
                 pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
                 pred.name = predictor.label
                 predictions = pd.concat([pred, pred_proba], axis=1)
