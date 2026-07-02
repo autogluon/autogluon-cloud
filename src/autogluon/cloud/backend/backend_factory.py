@@ -1,9 +1,13 @@
+import logging
+
 from .backend import Backend
 from .constant import RAY_AWS, TABULAR_RAY_AWS
 from .multimodal_sagemaker_backend import MultiModalSagemakerBackend
 from .sagemaker_backend import SagemakerBackend
 from .tabular_sagemaker_backend import TabularSagemakerBackend
 from .timeseries_sagemaker_backend import TimeSeriesSagemakerBackend
+
+logger = logging.getLogger(__name__)
 
 
 class BackendFactory:
@@ -20,6 +24,10 @@ class BackendFactory:
         if backend in BackendFactory._SAGEMAKER_BACKENDS:
             return BackendFactory._SAGEMAKER_BACKENDS[backend]
         if backend in BackendFactory._RAY_BACKEND_NAMES:
+            logger.warning(
+                f"The '{backend}' backend is experimental and not fully supported. Use at your own risk; "
+                "for production workloads prefer the 'sagemaker' backend."
+            )
             try:
                 from .ray_aws_backend import RayAWSBackend, TabularRayAWSBackend
             except ImportError as e:

@@ -209,11 +209,11 @@ class CloudPredictor(ABC):
             If None, CloudPredictor will create one with prefix ag-cloudpredictor
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
-        instance_count: int, default = 1
-            Number of instance used to fit the predictor.
-            If not specified, will decide by the backend
-        volumes_size: int, default = 256
-            Size in GB of the EBS volume to use for storing input data during training (default: 256).
+        instance_count: Union[int, str], default = "auto"
+            Number of instances used to fit the predictor.
+            If "auto", the backend decides the instance count.
+        volume_size: int, default = 256
+            Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
@@ -230,19 +230,6 @@ class CloudPredictor(ABC):
                 2. fit_kwargs
                     Any extra arguments needed to pass to fit.
                     Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
-            For RayAWS backend, valid keys are:
-                1. custom_config: Optional[Union[str, Dict[str, Any]]] = None,
-                    The custom cluster configuration.
-                    Please refer to https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#cluster-yaml-configuration-options for details
-                2. cluster_name: Optional[str] = None,
-                    The name of the ephemeral cluster being created.
-                    If not specified, will be auto-generated with format f"ag_ray_aws_default_{timestamp}"
-                3. initialization_commands: Optional[List[str]], default = None
-                    The initialization commands of the ray cluster.
-                    If not specified, will contain a default ECR login command to be able to pull AG DLC image, i.e.
-                        - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com
-                    To learn more about initialization_commands,
-                        https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html#initialization-commands
         Returns
         -------
         `CloudPredictor` object. Returns self.
@@ -431,9 +418,9 @@ class CloudPredictor(ABC):
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
             https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
-        volumes_size: int, default = None
-            Size in GB of the EBS volume to use for the endpoint (default: None).
-            SageMaker GPU instance endpoint currently doesn't support specifying volumes_size. Will ignore in such cases.
+        volume_size: int, default = None
+            Size in GB of the EBS volume to use for the endpoint.
+            SageMaker GPU instance endpoint currently doesn't support specifying volume_size. Will ignore in such cases.
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
