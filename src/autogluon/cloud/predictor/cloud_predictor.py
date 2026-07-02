@@ -178,6 +178,7 @@ class CloudPredictor(ABC):
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
         backend_kwargs: Optional[Dict] = None,
+        **kwargs,
     ) -> CloudPredictor:
         """
         Fit the predictor with the backend.
@@ -251,8 +252,13 @@ class CloudPredictor(ABC):
         )
         if backend_kwargs is None:
             backend_kwargs = {}
+        # `test_data` is an internal channel for the fit_predict path (see TabularCloudPredictor.fit_predict_proba);
+        # it is intentionally not part of the public `fit()` signature.
+        test_data = kwargs.pop("test_data", None)
+        if kwargs:
+            raise TypeError(f"fit() got unexpected keyword arguments: {sorted(kwargs)}")
         predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
-        data_channels = {"train_data": train_data, "tuning_data": tuning_data}
+        data_channels = {"train_data": train_data, "tuning_data": tuning_data, "test_data": test_data}
         for key in ("train_data", "tuning_data"):
             if key in predictor_fit_args:
                 warnings.warn(

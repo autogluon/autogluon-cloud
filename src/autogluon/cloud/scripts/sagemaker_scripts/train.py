@@ -9,6 +9,7 @@ import shutil
 from pprint import pprint
 
 import boto3
+import pandas as pd
 import pickle
 
 from autogluon.common.loaders import load_pd
@@ -59,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-dir", type=str, default=get_env_if_present("SM_MODEL_DIR"))
     parser.add_argument("--n_gpus", type=str, default=get_env_if_present("SM_NUM_GPUS"))
     parser.add_argument("--train_dir", type=str, default=get_env_if_present("SM_CHANNEL_TRAIN_DATA"))
+    parser.add_argument("--test_dir", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TEST_DATA"))
     parser.add_argument("--tune_dir", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TUNING_DATA"))
     parser.add_argument(
         "--train_images", type=str, required=False, default=get_env_if_present("SM_CHANNEL_TRAIN_IMAGES")
@@ -98,6 +100,7 @@ if __name__ == "__main__":
     predictor_init_args = ag_args["predictor_init_args"]
     predictor_init_args["path"] = save_path
     predictor_fit_args = ag_args["predictor_fit_args"]
+    predict_after_fit = ag_args.get("predict_after_fit", False)
     valid_predictor_types = ["tabular", "multimodal", "timeseries"]
     assert predictor_type in valid_predictor_types, (
         f"predictor_type {predictor_type} not supported. Valid options are {valid_predictor_types}"
@@ -157,6 +160,9 @@ if __name__ == "__main__":
         if "known_covariates_names" not in predictor_init_args:
             predictor_init_args["known_covariates_names"] = list(known_covariates.columns)
 
+    if predict_after_fit and predictor_type == "tabular":
+        assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
+
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
     # When use automm backend, predictor needs to be saved with standalone flag to avoid need of internet access when loading
@@ -175,17 +181,28 @@ if __name__ == "__main__":
             lb = predictor.leaderboard(silent=False)
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
 
-    if ag_args.get("predict_after_fit", False):
-        if predictor_type != "timeseries":
-            raise NotImplementedError(
-                f"`fit_predict` is only supported for predictor_type='timeseries', got '{predictor_type}'."
-            )
+    if predict_after_fit:
         print("Running in-job prediction for fit_predict")
-        predictions = predictor.predict(training_data, known_covariates=known_covariates)
+        if predictor_type == "timeseries":
+            predictions = predictor.predict(training_data, known_covariates=known_covariates)
+            predictions = predictions.to_data_frame().reset_index()
+        elif predictor_type == "tabular":
+            test_data = prepare_data(get_input_path(args.test_dir), predictor_type, ag_args)
+            if predictor.can_predict_proba:
+                # Concat [pred, <class>_proba...] so the client can split it (see split_pred_and_pred_proba).
+                pred_proba = predictor.predict_proba(test_data, as_pandas=True)
+                pred = predictor.predict_from_proba(pred_proba)
+                pred_proba.columns = [str(c) + "_proba" for c in pred_proba.columns]
+                pred.name = predictor.label
+                predictions = pd.concat([pred, pred_proba], axis=1)
+            else:
+                predictions = predictor.predict(test_data, as_pandas=True).to_frame()
+        else:
+            raise NotImplementedError(f"`fit_predict` is not supported for predictor_type='{predictor_type}'.")
         predictions_path = ag_args["predictions_path"]
         # Save locally then upload via boto3: s3fs/fsspec are not available in the training container.
         local_path = os.path.join(args.output_data_dir, os.path.basename(predictions_path))
-        save_pd.save(path=local_path, df=predictions.to_data_frame().reset_index())
+        save_pd.save(path=local_path, df=predictions)
         bucket, key = s3_path_to_bucket_prefix(predictions_path)
         boto3.client("s3").upload_file(local_path, bucket, key)
         print(f"Uploaded predictions to {predictions_path}")
