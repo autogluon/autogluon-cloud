@@ -56,9 +56,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
     ) -> TimeSeriesCloudPredictor:
         """
-        Fit the predictor with SageMaker.
-        This function will first upload necessary config and train data to s3 bucket.
-        Then launch a SageMaker training job with the AutoGluon training container.
+        Fit the predictor in a SageMaker training job.
 
         Parameters
         ----------
@@ -78,6 +76,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             explicit arguments above.
         tuning_data: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
             Optional tuning data in long format, as a DataFrame or local/S3 path to a data file.
+        known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+            Values of the known covariates. Must be provided if ``known_covariates_names`` was specified
+            in ``predictor_init_args``.
         static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
             Static (time-independent) features describing each individual time series.
         id_column: str, default = "item_id"
@@ -95,10 +96,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
-            Number of instance used to fit the predictor.
-        volumes_size: int, default = 30
-            Size in GB of the EBS volume to use for storing input data during training (default: 30).
+            Number of instances used to fit the predictor.
+        volume_size: int, default = 100
+            Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
+        custom_image_uri: Optional[str], default = None
+            Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
@@ -236,8 +239,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        then create a transformer with it, and call transform in the end.
 
         ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
 
@@ -344,9 +345,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         Fit and predict in a single SageMaker training job.
 
-        This is useful for foundation-model forecasting workflows (e.g. Chronos-2) where "fit" is essentially loading
-        a pretrained model. Running fit and predict in the same job avoids the SageMaker startup overhead twice.
-
         Predictions are generated inside the training container against ``train_data`` (the standard time-series
         forecasting flow where the last ``prediction_length`` steps of each series are forecast) and written
         directly to S3.
@@ -389,14 +387,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        backend_kwargs: Optional[dict], default = None
-            Backend-specific arguments. Same keys as ``fit()``.
         predictions_path: Optional[str]
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must have
             ``s3:PutObject`` permission for this location. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical column
             names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
+        backend_kwargs: Optional[dict], default = None
+            Backend-specific arguments. Same keys as ``fit()``.
 
         Returns
         -------
