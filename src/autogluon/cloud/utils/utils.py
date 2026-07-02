@@ -84,7 +84,7 @@ def split_pred_and_pred_proba(prediction):
     pred_proba = None
     if len(prediction.columns) > 1:
         pred_proba = prediction.iloc[:, 1:]
-        pred_proba.columns = [[c.rsplit("_", 1)[0] for c in pred_proba.columns]]
+        pred_proba.columns = [c.removesuffix("_proba") for c in pred_proba.columns]
 
     return pred, pred_proba
 

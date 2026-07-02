@@ -113,6 +113,10 @@ def test_fit_predict_proba_include_predict_true_returns_pred_and_proba(cloud_pre
     assert pred.tolist() == ["a", "b"]
     assert isinstance(proba, pd.DataFrame)
     assert proba.shape == (2, 2)
+    # Columns must be flat class labels (matching predict_proba), not the `_proba`-suffixed or MultiIndex
+    # form produced by the training container.
+    assert proba.columns.tolist() == ["a", "b"]
+    assert proba["a"].tolist() == [0.7, 0.3]
 
 
 def test_fit_predict_proba_include_predict_false_returns_only_proba(cloud_predictor):
@@ -204,4 +208,24 @@ def test_backend_fit_test_data_allows_label_column_absent(backend):
             predictor_init_args={"label": "y"},
             predictor_fit_args={},
             data_channels={"train_data": train, "test_data": test},
+        )
+
+
+def test_backend_fit_rejects_missing_label_in_init_args(backend):
+    train = pd.DataFrame({"x": [1, 2], "y": [0, 1]})
+    with pytest.raises(ValueError, match="must contain `label`"):
+        backend.fit(
+            predictor_init_args={},
+            predictor_fit_args={},
+            data_channels={"train_data": train},
+        )
+
+
+def test_backend_fit_rejects_label_absent_from_train_data(backend):
+    train = pd.DataFrame({"x": [1, 2], "y": [0, 1]})
+    with pytest.raises(ValueError, match="not present in `train_data`"):
+        backend.fit(
+            predictor_init_args={"label": "nonexistent"},
+            predictor_fit_args={},
+            data_channels={"train_data": train},
         )

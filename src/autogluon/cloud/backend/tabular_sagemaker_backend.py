@@ -51,9 +51,14 @@ class TabularSagemakerBackend(SagemakerBackend):
                 df = load_pd.load(str(df))
             loaded[name] = df
 
+        if "label" not in predictor_init_args:
+            raise ValueError("`predictor_init_args` must contain `label` for a Tabular predictor.")
+        label = predictor_init_args["label"]
+        if label not in loaded["train_data"].columns:
+            raise ValueError(f"Label column {label!r} is not present in `train_data`.")
+
         test_data = loaded.get("test_data")
         if test_data is not None:
-            label = predictor_init_args["label"]
             feature_columns = [c for c in loaded["train_data"].columns if c != label]
             missing_columns = [c for c in feature_columns if c not in test_data.columns]
             if missing_columns:
