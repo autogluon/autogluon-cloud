@@ -218,12 +218,15 @@ class TabularCloudPredictor(CloudPredictor):
 
         if not wait:
             logger.info(
-                "fit_predict_proba job launched asynchronously. Use `get_fit_job_status()` "
-                "to poll, then `get_fit_predict_proba_results()` to fetch probabilities."
+                "fit_predict job launched asynchronously. Use `get_fit_job_status()` to poll, then "
+                "`get_fit_predict_results()` / `get_fit_predict_proba_results()` to fetch the results."
             )
             return None
 
-        return self.get_fit_predict_proba_results(include_predict=include_predict)
+        pred, pred_proba = self.get_fit_predict_proba_results()
+        if include_predict:
+            return pred, pred_proba
+        return pred_proba
 
     def get_fit_predict_results(self) -> pd.Series:
         """
@@ -234,32 +237,22 @@ class TabularCloudPredictor(CloudPredictor):
         pd.Series
             Predictions for ``test_data``.
         """
-        raw = self.backend.get_fit_predict_results()
-        pred, _ = split_pred_and_pred_proba(raw)
+        pred, _ = self.get_fit_predict_proba_results()
         return pred
 
-    def get_fit_predict_proba_results(
-        self, include_predict: bool = True
-    ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]:
+    def get_fit_predict_proba_results(self) -> Tuple[pd.Series, Union[pd.DataFrame, pd.Series]]:
         """
-        Retrieve probabilities produced by a completed ``fit_predict_proba`` job.
-
-        Parameters
-        ----------
-        include_predict: bool, default = True
-            Whether to return the predictions along with the probabilities.
+        Retrieve predictions and probabilities produced by a completed ``fit_predict_proba`` job.
 
         Returns
         -------
-        Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]
-            If ``include_predict`` is True, returns ``(prediction, predict_probability)``; otherwise just
-            ``predict_probability``. For regression the probabilities are identical to the predictions.
+        Tuple[pd.Series, Union[pd.DataFrame, pd.Series]]
+            ``(prediction, predict_probability)``. For regression the probabilities are identical to the
+            predictions.
         """
         raw = self.backend.get_fit_predict_results()
         pred, pred_proba = split_pred_and_pred_proba(raw)
         # Regression: the job writes only the prediction column, so proba mirrors pred (matches predict_proba).
         if pred_proba is None:
             pred_proba = pred
-        if include_predict:
-            return pred, pred_proba
-        return pred_proba
+        return pred, pred_proba
