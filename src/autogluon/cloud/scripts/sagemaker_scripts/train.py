@@ -100,6 +100,7 @@ if __name__ == "__main__":
     predictor_init_args = ag_args["predictor_init_args"]
     predictor_init_args["path"] = save_path
     predictor_fit_args = ag_args["predictor_fit_args"]
+    predict_after_fit = ag_args.get("predict_after_fit", False)
     valid_predictor_types = ["tabular", "multimodal", "timeseries"]
     assert predictor_type in valid_predictor_types, (
         f"predictor_type {predictor_type} not supported. Valid options are {valid_predictor_types}"
@@ -159,6 +160,9 @@ if __name__ == "__main__":
         if "known_covariates_names" not in predictor_init_args:
             predictor_init_args["known_covariates_names"] = list(known_covariates.columns)
 
+    if predict_after_fit and predictor_type == "tabular":
+        assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
+
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 
     # When use automm backend, predictor needs to be saved with standalone flag to avoid need of internet access when loading
@@ -177,13 +181,12 @@ if __name__ == "__main__":
             lb = predictor.leaderboard(silent=False)
             lb.to_csv(f"{args.output_data_dir}/leaderboard.csv")
 
-    if ag_args.get("predict_after_fit", False):
+    if predict_after_fit:
         print("Running in-job prediction for fit_predict")
         if predictor_type == "timeseries":
             predictions = predictor.predict(training_data, known_covariates=known_covariates)
             predictions = predictions.to_data_frame().reset_index()
         elif predictor_type == "tabular":
-            assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
             test_data = prepare_data(get_input_path(args.test_dir), predictor_type, ag_args)
             if predictor.can_predict_proba:
                 # Concat [pred, <class>_proba...] so the client can split it (see split_pred_and_pred_proba).
