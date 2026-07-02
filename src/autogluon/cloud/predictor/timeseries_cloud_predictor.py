@@ -58,6 +58,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         Fit the predictor with SageMaker.
 
+        Equivalent to running
+
+            TimeSeriesPredictor(**predictor_init_args).fit(train_data=train_data, **predictor_fit_args)
+
+        as a remote SageMaker training job, with the fitted predictor saved to S3.
+
         Parameters
         ----------
         train_data: Union[str, pathlib.Path, pd.DataFrame]
