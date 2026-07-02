@@ -183,6 +183,13 @@ class CloudPredictor(ABC):
         """
         Fit the predictor with the backend.
 
+        Equivalent to running
+
+            predictor_cls(**predictor_init_args).fit(train_data=train_data, **predictor_fit_args)
+
+        as a remote SageMaker training job, with the fitted predictor saved to S3. ``predictor_cls`` is the
+        underlying AutoGluon predictor (e.g. ``TabularPredictor``, ``MultiModalPredictor``).
+
         Parameters
         ----------
         train_data: Union[str, pathlib.Path, pd.DataFrame]
