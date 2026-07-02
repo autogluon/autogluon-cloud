@@ -181,13 +181,7 @@ class CloudPredictor(ABC):
         **kwargs,
     ) -> CloudPredictor:
         """
-        Fit the predictor with the backend.
-
-        Equivalent to running
-
-            TabularPredictor(**predictor_init_args).fit(train_data=train_data, **predictor_fit_args)
-
-        as a remote SageMaker training job, with the fitted predictor saved to S3.
+        Fit the predictor in a SageMaker training job.
 
         Parameters
         ----------

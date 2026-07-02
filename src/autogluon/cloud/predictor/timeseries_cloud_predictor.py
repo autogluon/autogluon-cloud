@@ -56,13 +56,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
     ) -> TimeSeriesCloudPredictor:
         """
-        Fit the predictor with SageMaker.
-
-        Equivalent to running
-
-            TimeSeriesPredictor(**predictor_init_args).fit(train_data=train_data, **predictor_fit_args)
-
-        as a remote SageMaker training job, with the fitted predictor saved to S3.
+        Fit the predictor in a SageMaker training job.
 
         Parameters
         ----------
@@ -350,9 +344,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     ) -> Optional[pd.DataFrame]:
         """
         Fit and predict in a single SageMaker training job.
-
-        This is useful for foundation-model forecasting workflows (e.g. Chronos-2) where "fit" is essentially loading
-        a pretrained model. Running fit and predict in the same job avoids the SageMaker startup overhead twice.
 
         Predictions are generated inside the training container against ``train_data`` (the standard time-series
         forecasting flow where the last ``prediction_length`` steps of each series are forecast) and written
