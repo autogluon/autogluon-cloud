@@ -185,10 +185,9 @@ class CloudPredictor(ABC):
 
         Equivalent to running
 
-            predictor_cls(**predictor_init_args).fit(train_data=train_data, **predictor_fit_args)
+            TabularPredictor(**predictor_init_args).fit(train_data=train_data, **predictor_fit_args)
 
-        as a remote SageMaker training job, with the fitted predictor saved to S3. ``predictor_cls`` is the
-        underlying AutoGluon predictor (e.g. ``TabularPredictor``, ``MultiModalPredictor``).
+        as a remote SageMaker training job, with the fitted predictor saved to S3.
 
         Parameters
         ----------
