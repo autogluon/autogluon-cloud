@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Literal
-
-import pandas as pd
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from ..utils.ag_sagemaker import AutoGluonSagemakerEstimator
 
@@ -18,10 +16,11 @@ class JobPredictionFuture:
     """Pending result from a SageMaker job (e.g. ``predict(wait=False)``).
 
     Wraps the underlying job and exposes a small future-like surface: ``output_path``,
-    ``status()``, and ``result()``.
+    ``status()``, and ``result()``. The concrete result type is whatever the ``result_loader`` returns —
+    e.g. a ``pd.DataFrame`` of forecasts, a ``pd.Series`` of predictions, or a ``(pred, proba)`` tuple.
     """
 
-    def __init__(self, job: "SageMakerFitJob", result_loader: Callable[[], pd.DataFrame]) -> None:
+    def __init__(self, job: "SageMakerFitJob", result_loader: Callable[[], Any]) -> None:
         self._job = job
         self._result_loader = result_loader
 
@@ -41,7 +40,7 @@ class JobPredictionFuture:
             return "Failed"
         return "InProgress"
 
-    def result(self) -> pd.DataFrame:
+    def result(self) -> Any:
         if not self._job.completed:
             AutoGluonSagemakerEstimator.attach(self._job.job_name, sagemaker_session=self._job.session).logs()
         if self.status() == "Failed":

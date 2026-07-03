@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class MultiModalCloudPredictor(CloudPredictor):
-    """Train and deploy AutoGluon multimodal models (image, text, tabular) on AWS SageMaker.
+    """Train and deploy AutoGluon multimodal models (image, text, tabular) on Amazon SageMaker.
 
     Wraps :class:`autogluon.multimodal.MultiModalPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.multimodal.MultiModalPredictor.html>`_)
     and runs ``fit``, ``predict``, and endpoint deployment as managed SageMaker jobs.

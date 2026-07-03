@@ -46,6 +46,18 @@ FOUNDATION_MODEL_REGISTRY: Dict[str, FoundationModelConfig] = {
         ag_model_key="Chronos2",
         model_source_uri="autogluon/chronos-2",
     ),
+    "mitra-classifier": FoundationModelConfig(
+        task="classification",
+        ag_model_key="Mitra",
+        model_source_uri="autogluon/mitra-classifier",
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "mitra-regressor": FoundationModelConfig(
+        task="regression",
+        ag_model_key="Mitra",
+        model_source_uri="autogluon/mitra-regressor",
+        predict_instance_type="ml.g5.xlarge",
+    ),
 }
 
 
