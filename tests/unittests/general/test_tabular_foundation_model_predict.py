@@ -57,6 +57,19 @@ def test_predict_launches_predict_after_fit_job():
     assert "predictions_path" not in extra_ag_args  # not passed -> backend fills in a default
 
 
+@pytest.mark.parametrize(
+    "model_id, expected_problem_type",
+    [("mitra-classifier", "multiclass"), ("mitra-regressor", "regression")],
+)
+def test_predict_pins_problem_type_from_registry(model_id, expected_problem_type):
+    """The checkpoint's task is enforced via problem_type, not inferred from the label — otherwise a
+    continuous label would silently route mitra-classifier to the default regressor."""
+    fm = _make_fm(model_id=model_id, result=REGRESSION_FRAME)
+    fm.predict(train_data="t.csv", test_data="s.csv", label="y")
+    init_args = fm._backend.fit.call_args.kwargs["predictor_init_args"]
+    assert init_args["problem_type"] == expected_problem_type
+
+
 def test_predict_proba_returns_prediction_and_flat_proba_columns():
     fm = _make_fm()
     pred, proba = fm.predict_proba(**PREDICT_ARGS, include_predict=True)

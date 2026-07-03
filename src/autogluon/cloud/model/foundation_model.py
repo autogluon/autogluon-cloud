@@ -66,12 +66,12 @@ class FoundationModel:
         if cls is not FoundationModel:
             return super().__new__(cls)
         config = get_model_config(model_id)
-        task = config.task
-        if task == "forecasting":
+        problem_type = config.problem_type
+        if problem_type == "forecasting":
             return super().__new__(TimeSeriesFoundationModel)
-        elif task in ("classification", "regression"):
+        elif problem_type in ("multiclass", "regression"):
             return super().__new__(TabularFoundationModel)
-        raise ValueError(f"Unsupported task: {task}")
+        raise ValueError(f"Unsupported problem_type: {problem_type}")
 
     def __init__(
         self,
@@ -495,12 +495,12 @@ class TimeSeriesFoundationModel(FoundationModel):
         static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
         prediction_length: int = 1,
         quantile_levels: Optional[List[float]] = None,
+        predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
         **backend_kwargs,
     ) -> Union[pd.DataFrame, JobPredictionFuture]:
         """
@@ -528,6 +528,13 @@ class TimeSeriesFoundationModel(FoundationModel):
         quantile_levels
             List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults
             to ``[0.1, 0.2, ..., 0.9]``.
+        predictions_path
+            S3 URL where predictions will be written by the prediction job (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
+            role must have ``s3:PutObject`` permission for this location. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical
+            column names ``item_id`` and ``timestamp``, regardless of the ``id_column`` /
+            ``timestamp_column`` passed in.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type
@@ -540,13 +547,6 @@ class TimeSeriesFoundationModel(FoundationModel):
             If True, block and return a DataFrame. If False, return a
             :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
             retrieve the DataFrame, or ``.status()`` to check progress.
-        predictions_path
-            S3 URL where predictions will be written by the prediction job (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
-            role must have ``s3:PutObject`` permission for this location. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical
-            column names ``item_id`` and ``timestamp``, regardless of the ``id_column`` /
-            ``timestamp_column`` passed in.
         **backend_kwargs
             Additional backend-specific arguments (e.g., job_name, volume_size,
             autogluon_sagemaker_estimator_kwargs).
@@ -624,8 +624,9 @@ class TabularFoundationModel(FoundationModel):
         raise NotImplementedError("Tabular FM deploy is not yet supported")
 
     def _build_predictor_init_args(self, label: str = "target", **kwargs) -> Dict[str, Any]:
-        """Map user kwargs to TabularPredictor init args."""
-        return {"label": label}
+        """Map user kwargs to TabularPredictor init args. Pins ``problem_type`` from the registry so the
+        selected checkpoint's task is enforced rather than inferred from the label column."""
+        return {"label": label, "problem_type": self._config.problem_type}
 
     def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
@@ -636,15 +637,16 @@ class TabularFoundationModel(FoundationModel):
 
     def predict(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
         test_data: Union[str, Path, pd.DataFrame],
+        train_data: Union[str, Path, pd.DataFrame],
         label: str,
+        *,
+        predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
         **backend_kwargs,
     ) -> Union[pd.Series, JobPredictionFuture]:
         """
@@ -656,13 +658,17 @@ class TabularFoundationModel(FoundationModel):
 
         Parameters
         ----------
-        train_data
-            Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         test_data
             Data to predict on. Must contain every feature column present in ``train_data`` (the label column
             is not required).
+        train_data
+            Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         label
             Target column name in ``train_data``.
+        predictions_path
+            S3 URL where predictions will be written by the training container (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type
@@ -674,10 +680,6 @@ class TabularFoundationModel(FoundationModel):
         wait
             If True, block and return the predictions. If False, return a :class:`JobPredictionFuture`
             immediately — call ``.result()`` on it later to retrieve the predictions.
-        predictions_path
-            S3 URL where predictions will be written by the training container (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``.
         **backend_kwargs
             Additional backend-specific arguments (e.g., job_name, volume_size).
 
@@ -687,16 +689,16 @@ class TabularFoundationModel(FoundationModel):
             Predictions as a Series if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
         """
         result = self.predict_proba(
-            train_data,
             test_data,
+            train_data,
             label=label,
             include_predict=True,
+            predictions_path=predictions_path,
             hyperparameters=hyperparameters,
             instance_type=instance_type,
             framework_version=framework_version,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            predictions_path=predictions_path,
             **backend_kwargs,
         )
         if not wait:
@@ -706,16 +708,17 @@ class TabularFoundationModel(FoundationModel):
 
     def predict_proba(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
         test_data: Union[str, Path, pd.DataFrame],
+        train_data: Union[str, Path, pd.DataFrame],
         label: str,
+        *,
         include_predict: bool = True,
+        predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
         **backend_kwargs,
     ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series], JobPredictionFuture]:
         """
@@ -726,15 +729,18 @@ class TabularFoundationModel(FoundationModel):
 
         Parameters
         ----------
-        train_data
-            Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         test_data
             Data to predict on. Must contain every feature column present in ``train_data``.
+        train_data
+            Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         label
             Target column name in ``train_data``.
         include_predict
             Whether to return the predictions along with the probabilities. Comes for free — the job always
             computes both.
+        predictions_path
+            S3 URL where predictions will be written by the training container. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type
@@ -745,9 +751,6 @@ class TabularFoundationModel(FoundationModel):
             Custom Docker image URI for the container.
         wait
             If True, block and return the result. If False, return a :class:`JobPredictionFuture` immediately.
-        predictions_path
-            S3 URL where predictions will be written by the training container. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``.
         **backend_kwargs
             Additional backend-specific arguments (e.g., job_name, volume_size).
 
