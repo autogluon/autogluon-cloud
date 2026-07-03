@@ -74,21 +74,27 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
         assert "ImagePredictor" in models
 
 
-def test_tabular_fit_predict(test_helper, framework_version):
-    """fit + in-job batch predict in a single SageMaker training job.
+def test_tabular_foundation_model_predict(test_helper, framework_version):
+    """TabularFoundationModel batch predict: fit + in-job predict in a single SageMaker training job.
 
-    Only the classification path is exercised end-to-end (it is the superset: it produces both the
-    prediction and the proba frame). The regression path — where proba mirrors pred — is covered by the
-    pure-unit tests in test_tabular_fit_predict.py, so it does not warrant a second SageMaker job.
+    Exercises the same ``predict_after_fit`` mechanism as ``TabularCloudPredictor.fit_predict`` end-to-end,
+    which is why there is no separate TabularCloudPredictor.fit_predict live test — the argument plumbing
+    and result shaping shared by both paths are pinned by the pure-unit tests in
+    general/test_tabular_foundation_model_predict.py.
+
+    Uses Mitra (classification): it produces both the prediction and the proba frame. The regression path —
+    where proba mirrors pred — is covered by the pure-unit tests, so it does not warrant a second job.
     """
     import boto3
+
+    from autogluon.cloud.model import TabularFoundationModel
 
     train_data = "tabular_train.csv"
     test_data = "tabular_test.csv"
     timestamp = test_helper.get_utc_timestamp_now()
 
     bucket = "autogluon-cloud-ci"
-    predictions_key = f"test-tabular-fit-predict/{framework_version}/{timestamp}/custom_predictions.csv"
+    predictions_key = f"test-tabular-fm-predict/{framework_version}/{timestamp}/custom_predictions.csv"
     predictions_path = f"s3://{bucket}/{predictions_key}"
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -98,16 +104,15 @@ def test_tabular_fit_predict(test_helper, framework_version):
 
         training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
 
-        cloud_predictor = TabularCloudPredictor(
-            cloud_output_path=f"s3://{bucket}/test-tabular-fit-predict/{framework_version}/{timestamp}",
-            local_output_path="test_tabular_fit_predict_cloud_predictor",
+        model = TabularFoundationModel(
+            "mitra-classifier",
+            cloud_output_path=f"s3://{bucket}/test-tabular-fm-predict/{framework_version}/{timestamp}",
         )
 
-        pred, pred_proba = cloud_predictor.fit_predict_proba(
+        pred, pred_proba = model.predict_proba(
             train_data=train_data,
             test_data=test_data,
-            predictor_init_args=dict(label="class"),
-            predictor_fit_args=dict(time_limit=60),
+            label="class",
             include_predict=True,
             framework_version=framework_version,
             custom_image_uri=training_custom_image_uri,
@@ -121,7 +126,3 @@ def test_tabular_fit_predict(test_helper, framework_version):
 
         head = boto3.client("s3").head_object(Bucket=bucket, Key=predictions_key)
         assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
-
-        info = cloud_predictor.info()
-        assert info["fit_job"]["name"] is not None
-        assert info["fit_job"]["status"] == "Completed"

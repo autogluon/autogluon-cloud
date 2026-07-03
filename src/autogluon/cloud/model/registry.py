@@ -48,15 +48,15 @@ FOUNDATION_MODEL_REGISTRY: Dict[str, FoundationModelConfig] = {
     ),
     "mitra-classifier": FoundationModelConfig(
         task="classification",
-        ag_model_key="Mitra",
+        ag_model_key="MITRA",
         model_source_uri="autogluon/mitra-classifier",
-        predict_instance_type="ml.g5.xlarge",
+        inference_hyperparameters={"fine_tune": False},
     ),
     "mitra-regressor": FoundationModelConfig(
         task="regression",
-        ag_model_key="Mitra",
+        ag_model_key="MITRA",
         model_source_uri="autogluon/mitra-regressor",
-        predict_instance_type="ml.g5.xlarge",
+        inference_hyperparameters={"fine_tune": False},
     ),
 }
 
