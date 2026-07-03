@@ -75,16 +75,6 @@ def test_tabular_tabular_text_image(test_helper, framework_version):
 
 
 def test_tabular_foundation_model_predict(test_helper, framework_version):
-    """TabularFoundationModel batch predict: fit + in-job predict in a single SageMaker training job.
-
-    Exercises the same ``predict_after_fit`` mechanism as ``TabularCloudPredictor.fit_predict`` end-to-end,
-    which is why there is no separate TabularCloudPredictor.fit_predict live test — the argument plumbing
-    and result shaping shared by both paths are pinned by the pure-unit tests in
-    general/test_tabular_foundation_model_predict.py.
-
-    Uses Mitra (classification): it produces both the prediction and the proba frame. The regression path —
-    where proba mirrors pred — is covered by the pure-unit tests, so it does not warrant a second job.
-    """
     import boto3
 
     from autogluon.cloud.model import TabularFoundationModel

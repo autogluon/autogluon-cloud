@@ -609,8 +609,7 @@ class TabularFoundationModel(FoundationModel):
 
     Predictions are produced in batch mode: :meth:`predict` (and :meth:`predict_proba`) runs a one-off
     SageMaker training job where the labeled ``train_data`` provides the in-context examples and the
-    predictions for ``test_data`` are written to S3. Both fitting and prediction happen inside that
-    single job. Best for one-shot inference.
+    predictions for ``test_data`` are written to S3.
     """
 
     _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
@@ -624,8 +623,7 @@ class TabularFoundationModel(FoundationModel):
         raise NotImplementedError("Tabular FM deploy is not yet supported")
 
     def _build_predictor_init_args(self, label: str = "target", **kwargs) -> Dict[str, Any]:
-        """Map user kwargs to TabularPredictor init args. Pins ``problem_type`` from the registry so the
-        selected checkpoint's task is enforced rather than inferred from the label column."""
+        """Map user kwargs to TabularPredictor init args."""
         return {"label": label, "problem_type": self._config.problem_type}
 
     def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -653,14 +651,12 @@ class TabularFoundationModel(FoundationModel):
         Run batch prediction for tabular tasks.
 
         For tabular foundation models (e.g., Mitra), ``train_data`` provides the few-shot context and
-        ``test_data`` contains the rows to predict on. Both fitting and prediction run inside a single
-        SageMaker training job.
+        ``test_data`` contains the rows to predict on.
 
         Parameters
         ----------
         test_data
-            Data to predict on. Must contain every feature column present in ``train_data`` (the label column
-            is not required).
+            Data to predict on. Must contain every feature column present in ``train_data`` except ``label``.
         train_data
             Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         label
@@ -730,7 +726,7 @@ class TabularFoundationModel(FoundationModel):
         Parameters
         ----------
         test_data
-            Data to predict on. Must contain every feature column present in ``train_data``.
+            Data to predict on. Must contain every feature column present in ``train_data`` except ``label``.
         train_data
             Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         label
