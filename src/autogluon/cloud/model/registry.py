@@ -4,14 +4,16 @@ Maps model_id to AG-compatible configuration for deploy / predict.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Optional
 
 
 @dataclass(frozen=True)
 class FoundationModelConfig:
     task: Literal["forecasting", "classification", "regression"]
-    ag_model_key: str  # key in the AG hyperparameters dict (e.g. "Chronos", "Chronos2", "Mitra")
+    ag_model_key: str  # key in the AG hyperparameters dict (e.g. "Chronos", "Chronos2", "MITRA")
     model_source_uri: str  # where weights are downloaded from (e.g. "autogluon/chronos-2")
+    # AG-model hyperparameter that `model_source_uri` is injected into (None => don't inject).
+    model_source_hyperparameter: Optional[str] = None
     predict_instance_type: str = "ml.m5.2xlarge"  # batch predict
     deploy_instance_type: str = "ml.g5.xlarge"  # real-time endpoint
     fit_instance_type: str = "ml.g5.xlarge"  # fine-tuning
@@ -25,37 +27,44 @@ FOUNDATION_MODEL_REGISTRY: Dict[str, FoundationModelConfig] = {
         task="forecasting",
         ag_model_key="Chronos",
         model_source_uri="autogluon/chronos-bolt-tiny",
+        model_source_hyperparameter="model_path",
     ),
     "chronos-bolt-small": FoundationModelConfig(
         task="forecasting",
         ag_model_key="Chronos",
         model_source_uri="autogluon/chronos-bolt-small",
+        model_source_hyperparameter="model_path",
     ),
     "chronos-bolt-base": FoundationModelConfig(
         task="forecasting",
         ag_model_key="Chronos",
         model_source_uri="autogluon/chronos-bolt-base",
+        model_source_hyperparameter="model_path",
     ),
     "chronos-2-small": FoundationModelConfig(
         task="forecasting",
         ag_model_key="Chronos2",
         model_source_uri="autogluon/chronos-2-small",
+        model_source_hyperparameter="model_path",
     ),
     "chronos-2": FoundationModelConfig(
         task="forecasting",
         ag_model_key="Chronos2",
         model_source_uri="autogluon/chronos-2",
+        model_source_hyperparameter="model_path",
     ),
     "mitra-classifier": FoundationModelConfig(
         task="classification",
         ag_model_key="MITRA",
         model_source_uri="autogluon/mitra-classifier",
+        model_source_hyperparameter="hf_cls_model",
         inference_hyperparameters={"fine_tune": False},
     ),
     "mitra-regressor": FoundationModelConfig(
         task="regression",
         ag_model_key="MITRA",
         model_source_uri="autogluon/mitra-regressor",
+        model_source_hyperparameter="hf_reg_model",
         inference_hyperparameters={"fine_tune": False},
     ),
 }

@@ -61,10 +61,6 @@ class FoundationModel:
 
     _backend_map: Dict[str, str] = {}
     _predictor_type: str
-    # Whether to default the `model_path` hyperparameter to `model_source_uri`. True for models whose AG
-    # model reads `model_path` to locate weights (Chronos). Tabular FMs (Mitra/TabICL) resolve weights
-    # internally from their HF repo and reject a stray `model_path`, so they set this False.
-    _inject_model_path_hp: bool = True
 
     def __new__(cls, model_id: str, **kwargs) -> Self:
         if cls is not FoundationModel:
@@ -139,15 +135,15 @@ class FoundationModel:
     def _get_hyperparameters(
         self, context: Literal["inference", "training"], overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Merge registry defaults → constructor overrides → call-site overrides, defaulting ``model_path`` to
-        ``model_source_uri`` if not set."""
+        """Merge registry defaults → constructor overrides → call-site overrides, defaulting the model's
+        weights-source hyperparameter (``model_source_hyperparameter``) to ``model_source_uri`` if not set."""
         if context == "inference":
             registry_defaults = self._config.inference_hyperparameters
         else:
             registry_defaults = self._config.training_hyperparameters
         merged = registry_defaults | self._hyperparameter_overrides | (overrides or {})
-        if self._inject_model_path_hp:
-            merged.setdefault("model_path", self._config.model_source_uri)
+        if self._config.model_source_hyperparameter is not None:
+            merged.setdefault(self._config.model_source_hyperparameter, self._config.model_source_uri)
         return merged
 
     @abstractmethod
@@ -204,16 +200,15 @@ class FoundationModel:
 
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
         if self.model_artifact_uri is not None:
-            user_model_path = (hyperparameters or {}).get("model_path") or self._hyperparameter_overrides.get(
-                "model_path"
-            )
+            source_hp = self._config.model_source_hyperparameter
+            user_model_path = (hyperparameters or {}).get(source_hp) or self._hyperparameter_overrides.get(source_hp)
             if user_model_path is not None:
                 raise ValueError(
-                    "Cannot set hyperparameters['model_path'] when model_artifact_uri is in use — the bundled artifact "
-                    f"determines the in-container weights path ({_CONTAINER_WEIGHTS_DIR}). Drop model_path, or call "
-                    "deploy() on a FoundationModel without model_artifact_uri."
+                    f"Cannot set hyperparameters['{source_hp}'] when model_artifact_uri is in use — the bundled "
+                    f"artifact determines the in-container weights path ({_CONTAINER_WEIGHTS_DIR}). Drop "
+                    f"'{source_hp}', or call deploy() on a FoundationModel without model_artifact_uri."
                 )
-            merged_hp["model_path"] = _CONTAINER_WEIGHTS_DIR
+            merged_hp[source_hp] = _CONTAINER_WEIGHTS_DIR
         fm_serve_config = {
             "ag_model_key": self._config.ag_model_key,
             "hyperparameters": merged_hp,
@@ -620,7 +615,6 @@ class TabularFoundationModel(FoundationModel):
 
     _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
     _predictor_type = "tabular"
-    _inject_model_path_hp = False
 
     @property
     def _serve_script_path(self) -> str:

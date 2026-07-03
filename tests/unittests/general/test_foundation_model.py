@@ -76,6 +76,20 @@ def test_inference_hyperparameters_default_model_path_to_source_uri():
     assert hp["model_path"] == "autogluon/chronos-2"
 
 
+def test_tabular_inference_hyperparameters_inject_task_specific_hf_model_not_model_path():
+    """Mitra reads task-specific `hf_cls_model`/`hf_reg_model` (-> hf_hub_download), not `model_path`.
+    Injecting `model_path` would be ignored by Mitra and is semantically wrong (repo id, not a fs path)."""
+    clf = FoundationModel("mitra-classifier", cloud_output_path="s3://b")
+    clf_hp = clf._get_hyperparameters("inference")
+    assert clf_hp["hf_cls_model"] == "autogluon/mitra-classifier"
+    assert "model_path" not in clf_hp
+
+    reg = FoundationModel("mitra-regressor", cloud_output_path="s3://b")
+    reg_hp = reg._get_hyperparameters("inference")
+    assert reg_hp["hf_reg_model"] == "autogluon/mitra-regressor"
+    assert "model_path" not in reg_hp
+
+
 def test_user_hyperparameter_override_wins_over_default_model_path():
     fm = FoundationModel(
         "chronos-2",
