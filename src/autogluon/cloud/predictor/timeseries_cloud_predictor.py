@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class TimeSeriesCloudPredictor(CloudPredictor):
-    """Train and deploy AutoGluon time series forecasting models on AWS SageMaker.
+    """Train and deploy AutoGluon time series forecasting models on Amazon SageMaker.
 
     Wraps :class:`autogluon.timeseries.TimeSeriesPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_)
     and runs ``fit``, ``predict``, and endpoint deployment as managed SageMaker jobs.
@@ -332,6 +332,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
+        predictions_path: Optional[str] = None,
         framework_version: str = "latest",
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
@@ -339,7 +340,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
         backend_kwargs: Optional[Dict] = None,
     ) -> Optional[pd.DataFrame]:
         """
@@ -372,6 +372,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Name of the column with the unique identifier of each time series (item).
         timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
+        predictions_path: Optional[str]
+            S3 URL where predictions will be written by the training container (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must have
+            ``s3:PutObject`` permission for this location. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical column
+            names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
         framework_version: str, default = `latest`
             Training container version of autogluon. If `latest`, will use the latest available container version.
             If `custom_image_uri` is set, this argument will be ignored.
@@ -387,12 +393,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        predictions_path: Optional[str]
-            S3 URL where predictions will be written by the training container (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must have
-            ``s3:PutObject`` permission for this location. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical column
-            names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
         backend_kwargs: Optional[dict], default = None
             Backend-specific arguments. Same keys as ``fit()``.
 

@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import pandas as pd
 from typing_extensions import Self
@@ -21,6 +21,7 @@ from ..endpoint.prediction_future import JobPredictionFuture
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
+from ..utils.utils import split_pred_and_pred_proba
 from ..version import __version__
 from .registry import get_model_config
 
@@ -65,12 +66,12 @@ class FoundationModel:
         if cls is not FoundationModel:
             return super().__new__(cls)
         config = get_model_config(model_id)
-        task = config.task
-        if task == "forecasting":
+        problem_type = config.problem_type
+        if problem_type == "forecasting":
             return super().__new__(TimeSeriesFoundationModel)
-        elif task in ("classification", "regression"):
+        elif problem_type in ("multiclass", "regression"):
             return super().__new__(TabularFoundationModel)
-        raise ValueError(f"Unsupported task: {task}")
+        raise ValueError(f"Unsupported problem_type: {problem_type}")
 
     def __init__(
         self,
@@ -134,14 +135,15 @@ class FoundationModel:
     def _get_hyperparameters(
         self, context: Literal["inference", "training"], overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Merge registry defaults → constructor overrides → call-site overrides, defaulting ``model_path`` to
-        ``model_source_uri`` if not set."""
+        """Merge registry defaults → constructor overrides → call-site overrides, defaulting the model's
+        weights-source hyperparameter (``model_source_hyperparameter``) to ``model_source_uri`` if not set."""
         if context == "inference":
             registry_defaults = self._config.inference_hyperparameters
         else:
             registry_defaults = self._config.training_hyperparameters
         merged = registry_defaults | self._hyperparameter_overrides | (overrides or {})
-        merged.setdefault("model_path", self._config.model_source_uri)
+        if self._config.model_source_hyperparameter is not None:
+            merged.setdefault(self._config.model_source_hyperparameter, self._config.model_source_uri)
         return merged
 
     @abstractmethod
@@ -198,16 +200,15 @@ class FoundationModel:
 
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
         if self.model_artifact_uri is not None:
-            user_model_path = (hyperparameters or {}).get("model_path") or self._hyperparameter_overrides.get(
-                "model_path"
-            )
+            source_hp = self._config.model_source_hyperparameter
+            user_model_path = (hyperparameters or {}).get(source_hp) or self._hyperparameter_overrides.get(source_hp)
             if user_model_path is not None:
                 raise ValueError(
-                    "Cannot set hyperparameters['model_path'] when model_artifact_uri is in use — the bundled artifact "
-                    f"determines the in-container weights path ({_CONTAINER_WEIGHTS_DIR}). Drop model_path, or call "
-                    "deploy() on a FoundationModel without model_artifact_uri."
+                    f"Cannot set hyperparameters['{source_hp}'] when model_artifact_uri is in use — the bundled "
+                    f"artifact determines the in-container weights path ({_CONTAINER_WEIGHTS_DIR}). Drop "
+                    f"'{source_hp}', or call deploy() on a FoundationModel without model_artifact_uri."
                 )
-            merged_hp["model_path"] = _CONTAINER_WEIGHTS_DIR
+            merged_hp[source_hp] = _CONTAINER_WEIGHTS_DIR
         fm_serve_config = {
             "ag_model_key": self._config.ag_model_key,
             "hyperparameters": merged_hp,
@@ -243,7 +244,7 @@ class FoundationModel:
         hyperparameters: Optional[Dict[str, Any]] = None,
         wait: bool = True,
         **kwargs,
-    ) -> "FoundationModel":
+    ) -> Self:
         """
         Fine-tune the model. Returns a new FoundationModel pointing to the fine-tuned artifact.
 
@@ -274,7 +275,7 @@ class FoundationModel:
             raise ValueError(f"Model '{self.model_id}' does not support fine-tuning.")
         raise NotImplementedError
 
-    def cache_model_artifact(self, cache_path: str, *, overwrite: bool = False) -> "FoundationModel":
+    def cache_model_artifact(self, cache_path: str, *, overwrite: bool = False) -> Self:
         """
         Download model weights from HuggingFace, bundle them with the FM serve script into a SageMaker-compatible
         ``model.tar.gz``, and upload to S3.
@@ -368,18 +369,18 @@ class FoundationModel:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_dict(cls, config: Dict[str, Any], **runtime_context: Any) -> "FoundationModel":
+    def from_dict(cls, config: Dict[str, Any], **runtime_context: Any) -> Self:
         """Restore from :meth:`to_dict` output. Pass ``role`` / ``cloud_output_path`` as ``runtime_context``."""
         return cls(**config, **runtime_context)
 
     @classmethod
-    def from_json(cls, s: str, **runtime_context: Any) -> "FoundationModel":
+    def from_json(cls, s: str, **runtime_context: Any) -> Self:
         """Restore from a :meth:`to_json` string."""
         return cls.from_dict(json.loads(s), **runtime_context)
 
 
 class TimeSeriesFoundationModel(FoundationModel):
-    """Pretrained time series foundation model for zero-shot forecasting on AWS SageMaker.
+    """Pretrained time series foundation model for zero-shot forecasting on Amazon SageMaker.
 
     Wraps pretrained models like `Chronos-2 <https://huggingface.co/autogluon/chronos-2>`_ and
     Chronos-Bolt and runs prediction as a managed SageMaker job, with no training required. See
@@ -494,12 +495,12 @@ class TimeSeriesFoundationModel(FoundationModel):
         static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
         prediction_length: int = 1,
         quantile_levels: Optional[List[float]] = None,
+        predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
         **backend_kwargs,
     ) -> Union[pd.DataFrame, JobPredictionFuture]:
         """
@@ -527,6 +528,13 @@ class TimeSeriesFoundationModel(FoundationModel):
         quantile_levels
             List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults
             to ``[0.1, 0.2, ..., 0.9]``.
+        predictions_path
+            S3 URL where predictions will be written by the prediction job (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
+            role must have ``s3:PutObject`` permission for this location. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical
+            column names ``item_id`` and ``timestamp``, regardless of the ``id_column`` /
+            ``timestamp_column`` passed in.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type
@@ -539,13 +547,6 @@ class TimeSeriesFoundationModel(FoundationModel):
             If True, block and return a DataFrame. If False, return a
             :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
             retrieve the DataFrame, or ``.status()`` to check progress.
-        predictions_path
-            S3 URL where predictions will be written by the prediction job (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
-            role must have ``s3:PutObject`` permission for this location. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical
-            column names ``item_id`` and ``timestamp``, regardless of the ``id_column`` /
-            ``timestamp_column`` passed in.
         **backend_kwargs
             Additional backend-specific arguments (e.g., job_name, volume_size,
             autogluon_sagemaker_estimator_kwargs).
@@ -600,7 +601,16 @@ class TimeSeriesFoundationModel(FoundationModel):
 
 
 class TabularFoundationModel(FoundationModel):
-    """Foundation model for tabular prediction (Mitra, TabICL, etc.)."""
+    """Foundation model for tabular prediction on Amazon SageMaker.
+
+    Wraps pretrained tabular models like `Mitra <https://huggingface.co/autogluon/mitra-classifier>`_ and
+    runs prediction as a managed SageMaker job, with no training required. Each ``model_id`` targets a
+    single task — ``mitra-classifier`` for classification and ``mitra-regressor`` for regression.
+
+    Predictions are produced in batch mode: :meth:`predict` (and :meth:`predict_proba`) runs a one-off
+    SageMaker training job where the labeled ``train_data`` provides the in-context examples and the
+    predictions for ``test_data`` are written to S3.
+    """
 
     _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
     _predictor_type = "tabular"
@@ -614,34 +624,62 @@ class TabularFoundationModel(FoundationModel):
 
     def _build_predictor_init_args(self, label: str = "target", **kwargs) -> Dict[str, Any]:
         """Map user kwargs to TabularPredictor init args."""
-        return {"label": label}
+        return {"label": label, "problem_type": self._config.problem_type}
+
+    def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        merged_hp = self._get_hyperparameters("inference", hyperparameters)
+        return {
+            "hyperparameters": {self._config.ag_model_key: merged_hp},
+            "fit_weighted_ensemble": False,
+        }
+
+    def _load_results(
+        self, *, include_predict: bool, predict_only: bool = False
+    ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]:
+        # The training container writes [pred, <class>_proba...]; regression has only the pred column.
+        raw = self._backend.get_fit_predict_results()
+        pred, pred_proba = split_pred_and_pred_proba(raw)
+        if pred_proba is None:  # regression: proba mirrors pred, matching TabularPredictor.predict_proba
+            pred_proba = pred
+        if predict_only:
+            return pred
+        elif include_predict:
+            return pred, pred_proba
+        else:
+            return pred_proba
 
     def predict(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
         test_data: Union[str, Path, pd.DataFrame],
-        label: str = "target",
+        train_data: Union[str, Path, pd.DataFrame],
+        label: str,
+        *,
+        predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Optional[pd.DataFrame]:
+    ) -> Union[pd.Series, JobPredictionFuture]:
         """
         Run batch prediction for tabular tasks.
 
-        For tabular foundation models (e.g., Mitra), train_data provides the few-shot
-        context and test_data contains the rows to predict on.
+        For tabular foundation models (e.g., Mitra), ``train_data`` provides the few-shot context and
+        ``test_data`` contains the rows to predict on.
 
         Parameters
         ----------
-        train_data
-            Labeled few-shot context for the foundation model.
         test_data
-            Unlabeled data to predict on.
+            Data to predict on. Must contain every feature column present in ``train_data`` except ``label``.
+        train_data
+            Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         label
-            Target column name in train_data.
+            Target column name in ``train_data``.
+        predictions_path
+            S3 URL where predictions will be written by the training container (e.g.
+            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type
@@ -651,56 +689,114 @@ class TabularFoundationModel(FoundationModel):
         custom_image_uri
             Custom Docker image URI for the container.
         wait
-            If True, block and return DataFrame. If False, return the job handle.
+            If True, block and return the predictions. If False, return a :class:`JobPredictionFuture`
+            immediately — call ``.result()`` on it later to retrieve the predictions.
         **backend_kwargs
-            Additional backend-specific arguments.
+            Additional backend-specific arguments (e.g., job_name, volume_size).
 
         Returns
         -------
-        Optional[pd.DataFrame]
+        pd.Series or JobPredictionFuture
+            Predictions as a Series if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
         """
-        # TODO: requires fit_predict support for TabularCloudPredictor
-        raise NotImplementedError
+        result = self.predict_proba(
+            test_data,
+            train_data,
+            label=label,
+            include_predict=True,
+            predictions_path=predictions_path,
+            hyperparameters=hyperparameters,
+            instance_type=instance_type,
+            framework_version=framework_version,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            **backend_kwargs,
+        )
+        if not wait:
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=lambda: self._load_results(include_predict=True, predict_only=True),
+            )
+        pred, _ = result
+        return pred
 
     def predict_proba(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
         test_data: Union[str, Path, pd.DataFrame],
-        label: str = "target",
+        train_data: Union[str, Path, pd.DataFrame],
+        label: str,
+        *,
+        include_predict: bool = True,
+        predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
-        output_path: Optional[str] = None,
         instance_type: Optional[str] = None,
+        framework_version: str = "latest",
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Optional[pd.DataFrame]:
+    ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series], JobPredictionFuture]:
         """
         Run batch prediction returning class probabilities.
 
+        Identical to :meth:`predict` but returns class probabilities. For regression the probabilities are
+        identical to the predictions.
+
         Parameters
         ----------
-        train_data
-            Labeled few-shot context for the foundation model.
         test_data
-            Unlabeled data to predict on.
+            Data to predict on. Must contain every feature column present in ``train_data`` except ``label``.
+        train_data
+            Labeled few-shot context for the foundation model, as a DataFrame or local/S3 path to a data file.
         label
-            Target column name in train_data.
+            Target column name in ``train_data``.
+        include_predict
+            Whether to return the predictions along with the probabilities. Comes for free — the job always
+            computes both.
+        predictions_path
+            S3 URL where predictions will be written by the training container. Defaults to
+            ``{cloud_output_path}/{job_name}/predictions.csv``.
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
-            Available hyperparameters for each model are listed in the AutoGluon documentation.
-        output_path
-            S3 path to store predictions.
-            If None, will auto-generate under cloud_output_path.
         instance_type
-            Instance type for the prediction job.
-            If None, will use the default from the model registry.
+            Instance type for the prediction job. If None, uses registry default.
+        framework_version
+            Container framework version.
+        custom_image_uri
+            Custom Docker image URI for the container.
         wait
-            If True, block and return DataFrame. If False, return the job handle.
+            If True, block and return the result. If False, return a :class:`JobPredictionFuture` immediately.
         **backend_kwargs
-            Additional backend-specific arguments (e.g. job_name, custom_image_uri,
-            framework_version, volume_size).
+            Additional backend-specific arguments (e.g., job_name, volume_size).
 
         Returns
         -------
-        Optional[pd.DataFrame]
+        (pd.Series, pd.DataFrame | pd.Series) or (pd.DataFrame | pd.Series) or JobPredictionFuture
+            If ``include_predict`` is True, returns ``(prediction, predict_probability)``; otherwise just
+            ``predict_probability``. Returns a :class:`JobPredictionFuture` when ``wait=False``.
         """
-        raise NotImplementedError
+        if instance_type is None:
+            instance_type = self._config.predict_instance_type
+
+        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True}
+        if predictions_path is not None:
+            extra_ag_args["predictions_path"] = predictions_path
+
+        self._backend.fit(
+            predictor_init_args=self._build_predictor_init_args(label=label),
+            predictor_fit_args=self._build_predictor_fit_args(hyperparameters),
+            data_channels={"train_data": train_data, "test_data": test_data},
+            framework_version=framework_version,
+            instance_type=instance_type,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            extra_ag_args=extra_ag_args,
+            extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            **backend_kwargs,
+        )
+
+        if not wait:
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=lambda: self._load_results(include_predict=include_predict),
+            )
+        return self._load_results(include_predict=include_predict)

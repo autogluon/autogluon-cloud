@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class TabularCloudPredictor(CloudPredictor):
-    """Train and deploy AutoGluon tabular models (classification and regression) on AWS SageMaker.
+    """Train and deploy AutoGluon tabular models (classification and regression) on Amazon SageMaker.
 
     Wraps :class:`autogluon.tabular.TabularPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.tabular.TabularPredictor.html>`_)
     and runs ``fit``, ``predict``, and endpoint deployment as managed SageMaker jobs.

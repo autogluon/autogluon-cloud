@@ -63,7 +63,7 @@ class CloudPredictor(ABC):
               append a timestamped subfolder. Raises if no bucket is configured.
         backend: str, default = "sagemaker"
             The backend to use. Currently only "sagemaker" is supported.
-            SageMaker backend supports training, deploying and batch inference on AWS SageMaker. Only single instance training is supported.
+            SageMaker backend supports training, deploying and batch inference on Amazon SageMaker. Only single instance training is supported.
         role: Optional[str], default = None
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
