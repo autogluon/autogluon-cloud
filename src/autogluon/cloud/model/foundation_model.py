@@ -633,6 +633,21 @@ class TabularFoundationModel(FoundationModel):
             "fit_weighted_ensemble": False,
         }
 
+    def _load_results(
+        self, *, include_predict: bool, predict_only: bool = False
+    ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]:
+        # The training container writes [pred, <class>_proba...]; regression has only the pred column.
+        raw = self._backend.get_fit_predict_results()
+        pred, pred_proba = split_pred_and_pred_proba(raw)
+        if pred_proba is None:  # regression: proba mirrors pred, matching TabularPredictor.predict_proba
+            pred_proba = pred
+        if predict_only:
+            return pred
+        elif include_predict:
+            return pred, pred_proba
+        else:
+            return pred_proba
+
     def predict(
         self,
         test_data: Union[str, Path, pd.DataFrame],
@@ -698,7 +713,10 @@ class TabularFoundationModel(FoundationModel):
             **backend_kwargs,
         )
         if not wait:
-            return JobPredictionFuture(job=self._backend._fit_job, result_loader=lambda: result.result()[0])
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=lambda: self._load_results(include_predict=True, predict_only=True),
+            )
         pred, _ = result
         return pred
 
@@ -776,16 +794,9 @@ class TabularFoundationModel(FoundationModel):
             **backend_kwargs,
         )
 
-        def _load() -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]:
-            # The training container writes [pred, <class>_proba...]; regression has only the pred column.
-            raw = self._backend.get_fit_predict_results()
-            pred, pred_proba = split_pred_and_pred_proba(raw)
-            if pred_proba is None:  # regression: proba mirrors pred, matching TabularPredictor.predict_proba
-                pred_proba = pred
-            if include_predict:
-                return pred, pred_proba
-            return pred_proba
-
         if not wait:
-            return JobPredictionFuture(job=self._backend._fit_job, result_loader=_load)
-        return _load()
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=lambda: self._load_results(include_predict=include_predict),
+            )
+        return self._load_results(include_predict=include_predict)
