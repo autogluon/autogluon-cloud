@@ -57,12 +57,18 @@ Resources:
                   - sagemaker:InvokeEndpoint
                   - sagemaker:AddTags
                   - sagemaker:ListTags
+                Resource: !Sub 'arn:aws:sagemaker:*:${AWS::AccountId}:*'
+
+              # List* APIs (except ListTags) do not support resource-level
+              # permissions and must use a wildcard resource.
+              - Sid: SageMakerList
+                Effect: Allow
+                Action:
                   - sagemaker:ListEndpoints
                   - sagemaker:ListEndpointConfigs
                   - sagemaker:ListModels
                   - sagemaker:ListTrainingJobs
                   - sagemaker:ListTransformJobs
-                  - s3:ListAllMyBuckets
                 Resource: '*'
 
               - Sid: PassExecutionRole
