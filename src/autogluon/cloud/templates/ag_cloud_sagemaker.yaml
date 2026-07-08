@@ -59,8 +59,8 @@ Resources:
                   - sagemaker:ListTags
                 Resource: !Sub 'arn:aws:sagemaker:*:${AWS::AccountId}:*'
 
-              # List* APIs (except ListTags) do not support resource-level
-              # permissions and must use a wildcard resource.
+              # List* APIs (except ListTags) do not support resource-level permissions and must use a wildcard resource.
+              # See https://docs.aws.amazon.com/sagemaker/latest/dg/api-permissions-reference.html
               - Sid: SageMakerList
                 Effect: Allow
                 Action:
@@ -101,6 +101,7 @@ Resources:
                   - !Sub 'arn:aws:s3:::${AGCloudSageMakerBucket}/*'
                   - 'arn:aws:s3:::sagemaker-*/*'
 
+              # DLC images live in AWS-owned regional accounts, so ECR pulls cannot be resource-scoped.
               - Sid: ECRPull
                 Effect: Allow
                 Action:
