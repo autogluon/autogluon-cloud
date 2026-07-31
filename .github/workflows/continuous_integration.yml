@@ -5,6 +5,15 @@ on:
   schedule:
     - cron: "59 10 * * *"  # 2 hrs after the nightly image build workflow
   push:
+    # Branches with an open PR are covered by the pull_request trigger; running
+    # both would launch the SageMaker jobs twice per commit. Tags still build
+    # versioned docs, and a branches filter alone would exclude them.
+    branches:
+      - master
+      - stable
+      - dev
+    tags:
+      - 'v*'
   pull_request:
 
 permissions:
