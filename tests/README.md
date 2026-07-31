@@ -1,4 +1,14 @@
-# Welcome to Contributing to AutoGLuon-Cloud!
-We do not run CI on your PRs directly for security reasons.
-Please @ the maintainers to add `cloud safe to test` label to the PR so that they can kick off the CI for you.
-The above statement is true for each commit you push as we cannot make assumption that your commit is always benign.
+# Welcome to Contributing to AutoGluon-Cloud!
+
+Most tests in this repo launch real SageMaker jobs and need credentials for the project's AWS
+account, so CI cannot run them on pull requests from forks. On a fork PR only the lint check runs;
+the test and doc jobs are skipped.
+
+A maintainer needs to push your branch to this repository to get a full CI run against it. Ping the
+maintainers on your PR once it is ready for review.
+
+Pure unit tests (config, serializers, IAM, etc.) do not need AWS access and can be run locally:
+
+```
+pytest tests/unittests/general/
+```

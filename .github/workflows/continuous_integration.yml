@@ -5,56 +5,23 @@ on:
   schedule:
     - cron: "59 10 * * *"  # 2 hrs after the nightly image build workflow
   push:
-  pull_request_target:
-    types: [labeled, synchronize, opened]
+  pull_request:
 
 permissions:
   id-token: write
   contents: read
-  pull-requests: write  # For removing tags from the PR
+  pull-requests: write  # For commenting the docs preview link on PRs
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  permission_check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check for Actor Permission
-        id: check
-        continue-on-error: true
-        uses: prince-chrismc/check-actor-permissions-action@v3
-        with:
-          github_token: ${{ github.token }}
-          permission: write
-      - name: Debug Information
-        if: ${{ github.event_name == 'pull_request_target' }}
-        run: |
-          echo "Event Name: ${{ github.event_name }}"
-          echo "Labels: ${{ toJson(github.event.pull_request.labels) }}"
-          echo "Permitted: ${{ steps.check.outputs.permitted }}"
-          echo "Safe to Test Label Present: ${{ contains(github.event.pull_request.labels.*.name, 'safe to test') }}"
-      - name: Check PR Safe to Run
-        if: ${{ github.event_name == 'pull_request_target' && !contains(github.event.pull_request.labels.*.name, 'safe to test') && steps.check.outputs.permitted == 'false' }}
-        run: exit 1
-      - name: Remove Safe to Test Label  # One commit is safe doesn't mean the next commit is safe.
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions-ecosystem/action-remove-labels@v1.3.0
-        with:
-          labels: 'safe to test'
   cloud_lint_check:
-    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -78,6 +45,8 @@ jobs:
           args: "check"
           src: "src tests"
   test_general_cloud:
+    # Fork PRs cannot assume the CI role, so skip instead of failing.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     strategy:
       fail-fast: false
       matrix:
@@ -86,13 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -110,6 +73,8 @@ jobs:
           submodule-to-test: general
           ag_version: '${{ matrix.AG_VERSION }}'
   test_tabular_cloud:
+    # Fork PRs cannot assume the CI role, so skip instead of failing.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     strategy:
       fail-fast: false
       matrix:
@@ -118,13 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -151,13 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -184,13 +137,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -217,13 +164,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -241,6 +182,8 @@ jobs:
           submodule-to-test: multimodal
           ag_version: '${{ matrix.AG_VERSION }}'
   test_timeseries_cloud:
+    # Fork PRs cannot assume the CI role, so skip instead of failing.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     strategy:
       fail-fast: false
       matrix:
@@ -249,13 +192,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -282,13 +219,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -311,18 +242,13 @@ jobs:
           chmod +x ./.github/workflow_scripts/test_cluster.sh
           ./.github/workflow_scripts/test_cluster.sh '${{ matrix.AG_VERSION }}'
   build_doc:
-    if: ${{ github.event_name != 'schedule' }}
+    # Fork PRs cannot assume the doc role or comment on the PR, so skip instead of failing.
+    if: ${{ github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     needs: [test_general_cloud, test_tabular_cloud, test_timeseries_cloud]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
         uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Setup Env Vars
         uses: ./.github/actions/setup-env-vars
       - uses: actions/setup-python@v6
@@ -341,14 +267,14 @@ jobs:
           chmod +x ./.github/workflow_scripts/build_doc.sh
           ./.github/workflow_scripts/build_doc.sh '${{ github.ref }}' '${{ github.repository }}' '${{ env.SHORT_SHA }}'
       - name: Build Doc(For pull request)
-        if: ${{ github.event_name == 'pull_request_target' }}
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           branch: ${{ github.event.pull_request.head.ref }}
         run: |
           chmod +x ./.github/workflow_scripts/build_doc.sh
           ./.github/workflow_scripts/build_doc.sh "$branch" '${{ github.event.pull_request.head.repo.full_name }}' '${{ env.SHORT_SHA }}' PR-'${{ github.event.number }}'
       - name: Comment on PR
-        if: ${{ github.event_name == 'pull_request_target' }}
+        if: ${{ github.event_name == 'pull_request' }}
         uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.number }}
