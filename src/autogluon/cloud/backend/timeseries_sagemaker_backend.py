@@ -38,7 +38,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
-        ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.pkl``.
+        ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.json``.
         ``known_covariates`` (if present in ``data_channels``) is only honored when
         ``extra_ag_args["predict_after_fit"]`` is True.
         """
