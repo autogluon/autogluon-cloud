@@ -1,0 +1,43 @@
+name: Lint
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cloud_lint_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Check if changes beside docs
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            other_than_docs:
+              - '!(docs/**)**'
+      - name: Ruff Format Check
+        if: steps.changes.outputs.other_than_docs == 'true'
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: "format --check"
+          src: "src tests"
+      - name: Ruff Lint Check
+        if: steps.changes.outputs.other_than_docs == 'true'
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: "check"
+          src: "src tests"

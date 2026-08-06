@@ -43,46 +43,12 @@ jobs:
         uses: actions-ecosystem/action-remove-labels@v1.3.0
         with:
           labels: 'safe to test'
-  cloud_lint_check:
-    needs: permission_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        if: ${{ github.event_name != 'pull_request_target' }}
-        uses: actions/checkout@v5
-      - name: Checkout repository(Pull Request Target)
-        if: ${{ github.event_name == 'pull_request_target' }}
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Check if changes beside docs
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            other_than_docs:
-              - '!(docs/**)**'
-      - name: Ruff Format Check
-        if: steps.changes.outputs.other_than_docs == 'true'
-        uses: astral-sh/ruff-action@v3
-        with:
-          args: "format --check"
-          src: "src tests"
-      - name: Ruff Lint Check
-        if: steps.changes.outputs.other_than_docs == 'true'
-        uses: astral-sh/ruff-action@v3
-        with:
-          args: "check"
-          src: "src tests"
   test_general_cloud:
     strategy:
       fail-fast: false
       matrix:
         AG_VERSION: ["1.5.0"]
-    needs: cloud_lint_check
+    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -114,7 +80,7 @@ jobs:
       fail-fast: false
       matrix:
         AG_VERSION: ["1.5.0"]
-    needs: cloud_lint_check
+    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -147,7 +113,7 @@ jobs:
       fail-fast: false
       matrix:
         AG_VERSION: ["source", "1.2.0"]
-    needs: cloud_lint_check
+    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -180,7 +146,7 @@ jobs:
       fail-fast: false
       matrix:
         AG_VERSION: ["source", "1.2.0"]
-    needs: cloud_lint_check
+    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -213,7 +179,7 @@ jobs:
       fail-fast: false
       matrix:
         AG_VERSION: ["source", "1.2.0"]
-    needs: cloud_lint_check
+    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -245,7 +211,7 @@ jobs:
       fail-fast: false
       matrix:
         AG_VERSION: ["1.5.0"]
-    needs: cloud_lint_check
+    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -278,7 +244,7 @@ jobs:
       fail-fast: false
       matrix:
         AG_VERSION: ["source", "1.2.0"]
-    needs: cloud_lint_check
+    needs: permission_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
