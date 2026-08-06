@@ -1,6 +1,6 @@
 import argparse
+import json
 import os
-import pickle
 import shutil
 import time
 from datetime import datetime, timezone
@@ -91,8 +91,8 @@ if __name__ == "__main__":
         tune_data = None
         if args.tune_data is not None:
             tune_data = TabularDataset(args.tune_data)
-        with open(args.ag_args_path, "rb") as f:
-            ag_args = pickle.load(f)
+        with open(args.ag_args_path, "r") as f:
+            ag_args = json.load(f)
         predictor_init_args = ag_args["predictor_init_args"]
         predictor_fit_args = ag_args["predictor_fit_args"]
         save_path = f"ag_distributed_training_{get_utc_timestamp_now()}"

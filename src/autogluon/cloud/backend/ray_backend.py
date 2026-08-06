@@ -211,7 +211,7 @@ class RayBackend(Backend):
         image_uri = self._get_image_uri(
             framework_version=framework_version, custom_image_uri=custom_image_uri, instance_type=instance_type
         )
-        ag_args_path = os.path.join(self.local_output_path, "job", "ag_args.pkl")
+        ag_args_path = os.path.join(self.local_output_path, "job", "ag_args.json")
         self.prepare_args(
             path=ag_args_path, predictor_init_args=predictor_init_args, predictor_fit_args=predictor_fit_args
         )

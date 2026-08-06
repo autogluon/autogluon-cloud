@@ -1,13 +1,42 @@
 from __future__ import annotations
 
+import json
 import os
-import pickle
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
 from ..endpoint.endpoint import Endpoint
+
+
+def dumps_ag_args(config: Dict[str, Any]) -> str:
+    """Serialize the remote-training config to JSON, raising a user-facing error on failure.
+
+    The config carries the user's predictor init/fit arguments. Some objects (search spaces,
+    custom metric objects, classes/callables in ``hyperparameters``) are not JSON-serializable;
+    when that happens we pinpoint the offending argument so the error names what the user passed.
+    """
+    try:
+        return json.dumps(config)
+    except TypeError:
+        pass
+    for group in ("predictor_init_args", "predictor_fit_args"):
+        for key, value in (config.get(group) or {}).items():
+            try:
+                json.dumps(value)
+            except TypeError as e:
+                raise TypeError(
+                    f"The value passed for `{key}` is not JSON-serializable. This can happen with "
+                    f"search spaces (Real/Categorical/Int), custom metric objects, or classes/callables "
+                    f"in `hyperparameters`. Please pass these as plain values (e.g. metric names as strings). "
+                    f"Original error: {e}"
+                ) from e
+    # Culprit is outside the known arg groups; re-raise the original error with generic guidance.
+    try:
+        return json.dumps(config)
+    except TypeError as e:
+        raise TypeError(f"The provided arguments are not JSON-serializable. Original error: {e}") from e
 
 
 class Backend(ABC):
@@ -83,18 +112,19 @@ class Backend(ABC):
     def prepare_args(self, path: str, **kwargs):
         """
         prepare parameter args required to be passed to remote AG, i.e. init args and fit args
-        The args will be saved as a pickle object
+        The args will be saved as a JSON file
 
         Parameters
         ----------
         path: str
-            Path to save the pickle file
+            Path to save the JSON file
         """
         assert self.predictor_type is not None
         config = self._construct_ag_args(**kwargs)
+        payload = dumps_ag_args(config)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(config, f)
+        with open(path, "w") as f:
+            f.write(payload)
 
     def _construct_ag_args(**kwargs):
         raise NotImplementedError
