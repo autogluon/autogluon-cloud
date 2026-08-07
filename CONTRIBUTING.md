@@ -38,7 +38,7 @@ To run a specific test:
 pytest tests/path_to_file.py::test_name
 ```
 
-Note: most tests require AWS credentials and will launch SageMaker jobs. The CI will not run automatically for external contributors — ping a maintainer to tag your PR with `safe to test`.
+Note: most tests require AWS credentials and will launch SageMaker jobs. CI cannot run them on pull requests from forks — only the lint check runs there, and the test and doc jobs are skipped. The full jobs only run when the PR's branch lives in this repository, not a fork. To get a full CI run, ping the maintainers on your PR once it is ready for review — they will re-create your branch in this repository and open a PR from it. Pushing to your fork's branch (even as a maintainer) will not trigger the AWS jobs. See [tests/README.md](tests/README.md) for details.
 
 ## Security Issue Notifications
 
