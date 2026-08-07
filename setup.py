@@ -24,7 +24,8 @@ def update_version(version):
     return version
 
 
-version = update_version("0.5.1")
+version = "0.5.1"
+version = update_version(version)
 
 if __name__ == "__main__":
     create_version_file(version=version)
