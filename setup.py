@@ -5,8 +5,6 @@ from setuptools import setup
 AUTOGLUON = "autogluon"
 CLOUD = "cloud"
 
-PYTHON_REQUIRES = ">=3.10, <3.14"
-
 
 def create_version_file(*, version):
     print("-- Building version " + version)
@@ -29,60 +27,18 @@ def update_version(version):
 def default_setup_args(*, version):
     from setuptools import find_namespace_packages
 
-    long_description = open("README.md").read()
-    name = f"{AUTOGLUON}.{CLOUD}"
     setup_args = dict(
-        name=name,
         version=version,
-        author="AutoGluon Community",
-        url="https://github.com/autogluon/autogluon-cloud",
-        description="Train and deploy AutoGluon backed models on the cloud",
-        long_description=long_description,
-        long_description_content_type="text/markdown",
-        license="Apache-2.0",
-        license_files=("LICENSE", "NOTICE"),
-        # Package info
         packages=find_namespace_packages("src"),
         package_dir={"": "src"},
         zip_safe=True,
         include_package_data=True,
-        python_requires=PYTHON_REQUIRES,
         package_data={
             "autogluon.cloud": [
                 "default_cluster_configs/*.yaml",
                 "utils/autogluon_dlc.json",
                 "templates/*.yaml",
             ],
-        },
-        classifiers=[
-            "Development Status :: 4 - Beta",
-            "Intended Audience :: Education",
-            "Intended Audience :: Developers",
-            "Intended Audience :: Science/Research",
-            "Intended Audience :: Customer Service",
-            "Intended Audience :: Financial and Insurance Industry",
-            "Intended Audience :: Healthcare Industry",
-            "Intended Audience :: Telecommunications Industry",
-            "License :: OSI Approved :: Apache Software License",
-            "Operating System :: MacOS",
-            "Operating System :: Microsoft :: Windows",
-            "Operating System :: POSIX",
-            "Operating System :: Unix",
-            "Programming Language :: Python :: 3",
-            "Programming Language :: Python :: 3.10",
-            "Programming Language :: Python :: 3.11",
-            "Programming Language :: Python :: 3.12",
-            "Programming Language :: Python :: 3.13",
-            "Topic :: Software Development",
-            "Topic :: Scientific/Engineering :: Artificial Intelligence",
-            "Topic :: Scientific/Engineering :: Information Analysis",
-            "Topic :: Scientific/Engineering :: Image Recognition",
-        ],
-        project_urls={
-            "Documentation": "https://auto.gluon.ai",
-            "Bug Reports": "https://github.com/autogluon/autogluon-cloud/issues",
-            "Source": "https://github.com/autogluon/autogluon-cloud/",
-            "Contribute!": "https://github.com/autogluon/autogluon-cloud/blob/master/CONTRIBUTING.md",
         },
     )
     return setup_args
@@ -129,10 +85,5 @@ if __name__ == "__main__":
     setup(
         install_requires=install_requires,
         extras_require=extras_require,
-        entry_points={
-            "console_scripts": [
-                "autogluon-cloud=autogluon.cloud.cli:main",
-            ],
-        },
         **setup_args,
     )
