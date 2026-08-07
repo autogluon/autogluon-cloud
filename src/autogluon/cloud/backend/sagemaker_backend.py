@@ -2,7 +2,6 @@ import copy
 import json
 import logging
 import os
-import pickle
 import shutil
 import tarfile
 import tempfile
@@ -229,7 +228,7 @@ class SagemakerBackend(Backend):
             Any extra arguments needed to pass to fit.
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
         extra_ag_args: Optional[Dict[str, Any]], default = None
-            Additional entries to merge into ``ag_args.pkl``. Use this to ship caller-specific metadata to the
+            Additional entries to merge into ``ag_args.json``. Use this to ship caller-specific metadata to the
             train script (e.g. ``predict_after_fit``, or ``id_column`` / ``timestamp_column`` for time series).
         """
         if data_channels.get("train_data") is None:
@@ -314,7 +313,7 @@ class SagemakerBackend(Backend):
                     f"`predictions_path` must be a full S3 URL ending in '.csv' or '.parquet' "
                     f"(e.g. 's3://bucket/key/predictions.parquet'), got {predictions_path!r}."
                 )
-        ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.pkl")
+        ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.json")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
             data_channels=data_channels,
@@ -1015,9 +1014,9 @@ class SagemakerBackend(Backend):
             return load_pd.load(local_path)
 
     def _download_ag_args_from_job(self) -> Dict[str, Any]:
-        """Fetch and unpickle the ``ag_args.pkl`` that was uploaded as the ``ag_args`` channel.
+        """Fetch and parse the ``ag_args.json`` that was uploaded as the ``ag_args`` channel.
 
-        Each training job carries the exact pickle it was launched with as an input channel,
+        Each training job carries the exact config it was launched with as an input channel,
         making this the authoritative source — independent of local-disk lifetime.
         """
         job_name = self._fit_job.job_name
@@ -1029,12 +1028,12 @@ class SagemakerBackend(Backend):
             f"Training job {job_name!r} has no `ag_args` input channel — cannot recover predictions_path."
         )
         bucket, key = s3_path_to_bucket_prefix(ag_args_uri)
-        assert key.endswith(".pkl"), f"Expected ag_args channel to point to a .pkl file, got {ag_args_uri!r}"
+        assert key.endswith(".json"), f"Expected ag_args channel to point to a .json file, got {ag_args_uri!r}"
         with tempfile.TemporaryDirectory(prefix="ag_args_") as tmpdir:
             local_path = os.path.join(tmpdir, os.path.basename(key))
             self.sagemaker_session.boto_session.client("s3").download_file(bucket, key, local_path)
-            with open(local_path, "rb") as f:
-                return pickle.load(f)
+            with open(local_path, "r") as f:
+                return json.load(f)
 
     def _construct_ag_args(self, predictor_init_args, predictor_fit_args, leaderboard, **kwargs):
         config = dict(

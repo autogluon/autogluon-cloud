@@ -10,7 +10,6 @@ from pprint import pprint
 
 import boto3
 import pandas as pd
-import pickle
 
 from autogluon.common.loaders import load_pd
 from autogluon.common.savers import save_pd
@@ -85,8 +84,8 @@ if __name__ == "__main__":
     os.makedirs(args.output_data_dir, mode=0o777, exist_ok=True)
 
     ag_args_file = get_input_path(args.ag_args)
-    with open(ag_args_file, "rb") as f:
-        ag_args = pickle.load(f)  # AutoGluon-specific args
+    with open(ag_args_file, "r") as f:
+        ag_args = json.load(f)  # AutoGluon-specific args
 
     if args.n_gpus:
         ag_args["num_gpus"] = int(args.n_gpus)

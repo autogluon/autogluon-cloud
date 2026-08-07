@@ -194,9 +194,6 @@ class CloudPredictor(ABC):
         predictor_fit_args: Optional[dict], default = None
             Additional fit args forwarded to the underlying predictor's ``fit()``. Must NOT contain
             ``train_data`` or ``tuning_data`` — pass those as explicit arguments above.
-        image_column: str, default = None
-            The column name in the training/tuning data that contains the image paths.
-            The image paths MUST be absolute paths to you local system.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact
         framework_version: str, default = `latest`
@@ -263,6 +260,12 @@ class CloudPredictor(ABC):
                     )
         if data_channels["train_data"] is None:
             raise TypeError("fit() missing required argument: 'train_data'")
+        if image_column is not None and self.predictor_type == "tabular":
+            raise ValueError(
+                "`image_column` is no longer supported for tabular predictors: image models in "
+                "AutoGluon-Tabular require autogluon.multimodal, which is being deprecated. "
+                "Use `MultiModalCloudPredictor` for image data."
+            )
         backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
