@@ -16,29 +16,13 @@ def create_version_file(*, version):
         f.write("__version__ = '{}'\n".format(version))
 
 
-def update_version(version, use_file_if_exists=True, create_file=False):
+def update_version(version):
     """
-    To release a new stable version on PyPi, simply tag the release on github, and the Github CI will automatically publish
-    a new stable version to PyPi using the configurations in .github/workflows/pypi_release.yml .
-    You need to increase the version number after stable release, so that the nightly pypi can work properly.
+    To release a new stable version on PyPi, tag the release on github; the Github CI publishes it to PyPi
+    (see .github/workflows/pypi_release.yml, which sets RELEASE=1). Non-release builds get a `.dev0` suffix.
     """
-    try:
-        if not os.getenv("RELEASE"):
-            from datetime import date
-
-            minor_version_file_path = "VERSION.minor"
-            if use_file_if_exists and os.path.isfile(minor_version_file_path):
-                with open(minor_version_file_path) as f:
-                    day = f.read().strip()
-            else:
-                today = date.today()
-                day = today.strftime("b%Y%m%d")
-            version += day
-    except Exception:
-        pass
-    if create_file and not os.getenv("RELEASE"):
-        with open("VERSION.minor", "w") as f:
-            f.write(day)
+    if not os.getenv("RELEASE"):
+        version += ".dev0"
     return version
 
 
@@ -105,7 +89,7 @@ def default_setup_args(*, version):
 
 
 version = "0.5.1"
-version = update_version(version, use_file_if_exists=False, create_file=True)
+version = update_version(version)
 
 install_requires = [
     # common module provides utils with stable api across minor version
@@ -133,14 +117,10 @@ all_requires = ["autogluon>=0.7,<1.6"] + ray_requires  # To allow user to pass a
 extras_require["all"] = all_requires
 
 test_requirements = [
-    "tox",
     "pytest",
-    "pytest-cov",
     "moto",
     "autogluon.common>=0.7",
-]  # Install pre-release of common for testing
-
-test_requirements = list(set(test_requirements))
+]
 extras_require["tests"] = test_requirements
 
 if __name__ == "__main__":
