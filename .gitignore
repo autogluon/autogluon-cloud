@@ -39,7 +39,6 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
-.tox/
 .nox/
 .coverage
 .coverage.*
@@ -130,7 +129,6 @@ dmypy.json
 .pyre/
 
 src/autogluon/cloud/version.py
-VERSION.minor
 .idea
 .vscode
 .DS_Store
