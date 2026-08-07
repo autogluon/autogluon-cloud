@@ -2,9 +2,9 @@ name: "Code scanning - action"
 
 on:
   push:
-    # Exclude Dependabot branches from triggering on push
-    branches-ignore:
-      - 'dependabot/**'
+    branches:
+      - master
+      - stable
   pull_request:
   schedule:
     - cron: '0 19 * * 0'
