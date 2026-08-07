@@ -19,8 +19,8 @@ def dumps_ag_args(config: Dict[str, Any]) -> str:
     """
     try:
         return json.dumps(config)
-    except TypeError:
-        pass
+    except TypeError as e:
+        original_error = e
     for group in ("predictor_init_args", "predictor_fit_args"):
         for key, value in (config.get(group) or {}).items():
             try:
@@ -33,10 +33,9 @@ def dumps_ag_args(config: Dict[str, Any]) -> str:
                     f"Original error: {e}"
                 ) from e
     # Culprit is outside the known arg groups; re-raise the original error with generic guidance.
-    try:
-        return json.dumps(config)
-    except TypeError as e:
-        raise TypeError(f"The provided arguments are not JSON-serializable. Original error: {e}") from e
+    raise TypeError(
+        f"The provided arguments are not JSON-serializable. Original error: {original_error}"
+    ) from original_error
 
 
 class Backend(ABC):
