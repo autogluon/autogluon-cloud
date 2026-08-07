@@ -15,6 +15,11 @@ on:
       - 'v*'
   pull_request:
 
+concurrency:
+  # Per-ref so a tag/branch push never cancels a build for a different ref
+  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   id-token: write
   contents: read
