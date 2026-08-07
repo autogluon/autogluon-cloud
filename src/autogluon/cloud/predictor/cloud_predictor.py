@@ -194,10 +194,6 @@ class CloudPredictor(ABC):
         predictor_fit_args: Optional[dict], default = None
             Additional fit args forwarded to the underlying predictor's ``fit()``. Must NOT contain
             ``train_data`` or ``tuning_data`` — pass those as explicit arguments above.
-        image_column: str, default = None
-            The column name in the training/tuning data that contains the image paths.
-            The image paths MUST be absolute paths to you local system.
-            Not supported for tabular predictors (raises an error) — use `MultiModalCloudPredictor` for image data.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact
         framework_version: str, default = `latest`
