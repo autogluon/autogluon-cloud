@@ -101,6 +101,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# uv (library, not app — devs regenerate the lockfile locally)
+uv.lock
+
 # Environments
 .env
 .venv
