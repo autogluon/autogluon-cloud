@@ -4,7 +4,7 @@
 
 * Ensure `master` is stable: CI is green, no in-flight critical PRs.
 * Confirm `setup.py` has the intended release version (e.g. `version = "0.5.0"`).
-* Sanity-check dependency version ranges in `setup.py`:
+* Sanity-check dependency version ranges in `pyproject.toml`:
   * No major-version caps without an inline comment justifying it.
   * Every dependency has both a lower bound and an upper cap (using `<`, not `<=`).
   * Caps are at the minor level (`<x.y`), not micro (`<x.y.z`).
