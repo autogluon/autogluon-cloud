@@ -13,36 +13,12 @@ _TUNE_DATA = "tabular_tune.csv"
 _TEST_DATA = "tabular_test.csv"
 
 
-def _shared_training_job_name() -> str:
-    return os.environ["AG_CLOUD_SHARED_TRAINING_JOB_NAME"]
-
-
-def _training_cloud_output_path(framework_version: str, job_name: str) -> str:
-    return f"s3://autogluon-cloud-ci/test-tabular/{framework_version}/{job_name}"
-
-
-def _followup_cloud_output_path(framework_version: str, job_name: str, test_name: str) -> str:
-    return f"s3://autogluon-cloud-ci/test-tabular-followups/{framework_version}/{job_name}/{test_name}"
-
-
 def _prepare_data(test_helper) -> None:
     test_helper.prepare_data(_TRAIN_DATA, _TUNE_DATA, _TEST_DATA)
 
 
-def _attached_predictor(framework_version: str, test_name: str):
-    job_name = _shared_training_job_name()
-    predictor = TabularCloudPredictor(
-        cloud_output_path=_followup_cloud_output_path(framework_version, job_name, test_name),
-        local_output_path=f"test_tabular_{test_name}",
-    )
-    predictor.attach_job(job_name)
-    assert predictor.get_fit_job_status() == "Completed"
-    return predictor
-
-
-def test_tabular_train(test_helper, framework_version):
+def test_tabular_train(test_helper, framework_version, shared_training_job_name):
     """Train the predictor once; follow-up tests attach to this completed SageMaker job."""
-    job_name = _shared_training_job_name()
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
@@ -57,7 +33,9 @@ def test_tabular_train(test_helper, framework_version):
             )
 
         predictor = TabularCloudPredictor(
-            cloud_output_path=_training_cloud_output_path(framework_version, job_name),
+            cloud_output_path=test_helper.shared_training_output_path(
+                "tabular", framework_version, shared_training_job_name
+            ),
             local_output_path="test_tabular_training",
         )
         predictor.fit(
@@ -67,21 +45,29 @@ def test_tabular_train(test_helper, framework_version):
             predictor_fit_args=predictor_fit_args,
             framework_version=framework_version,
             custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
-            job_name=job_name,
+            job_name=shared_training_job_name,
         )
         info = predictor.info()
-        assert info["fit_job"]["name"] == job_name
+        assert info["fit_job"]["name"] == shared_training_job_name
         assert info["fit_job"]["status"] == "Completed"
-        job_arn = boto3.client("sagemaker").describe_training_job(TrainingJobName=job_name)["TrainingJobArn"]
+        job_arn = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
+            "TrainingJobArn"
+        ]
         test_helper.assert_ag_cloud_tags(job_arn, module="tabular")
 
 
-def test_tabular_endpoint_lifecycle(test_helper, framework_version):
+def test_tabular_endpoint_lifecycle(test_helper, framework_version, shared_training_job_name):
     """Deploy the shared predictor and exercise detach, attach, save, and load."""
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
-        predictor = _attached_predictor(framework_version, "endpoint-lifecycle")
+        predictor = test_helper.attach_shared_training_job(
+            TabularCloudPredictor,
+            module="tabular",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="endpoint-lifecycle",
+        )
 
         predictor.deploy(
             framework_version=framework_version,
@@ -101,12 +87,18 @@ def test_tabular_endpoint_lifecycle(test_helper, framework_version):
         predictor.cleanup_deployment()
 
 
-def test_tabular_batch_predict(test_helper, framework_version):
+def test_tabular_batch_predict(test_helper, framework_version, shared_training_job_name):
     """Run batch prediction from a predictor attached to the shared training job."""
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
-        predictor = _attached_predictor(framework_version, "batch-predict")
+        predictor = test_helper.attach_shared_training_job(
+            TabularCloudPredictor,
+            module="tabular",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="batch-predict",
+        )
 
         pred, pred_proba = predictor.predict_proba(
             _TEST_DATA,
@@ -118,17 +110,18 @@ def test_tabular_batch_predict(test_helper, framework_version):
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
 
 
-def test_tabular_deploy_trained_artifact(test_helper, framework_version):
+def test_tabular_deploy_trained_artifact(test_helper, framework_version, shared_training_job_name):
     """Deploy the shared model artifact from a fresh CloudPredictor."""
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
-        job_name = _shared_training_job_name()
-        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=job_name)["ModelArtifacts"][
-            "S3ModelArtifacts"
-        ]
+        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
+            "ModelArtifacts"
+        ]["S3ModelArtifacts"]
         predictor = TabularCloudPredictor(
-            cloud_output_path=_followup_cloud_output_path(framework_version, job_name, "deploy-trained-artifact"),
+            cloud_output_path=test_helper.shared_followup_output_path(
+                "tabular", framework_version, shared_training_job_name, "deploy-trained-artifact"
+            ),
             local_output_path="test_tabular_deploy_trained_artifact",
         )
 
@@ -141,17 +134,18 @@ def test_tabular_deploy_trained_artifact(test_helper, framework_version):
         predictor.cleanup_deployment()
 
 
-def test_tabular_predict_trained_artifact(test_helper, framework_version):
+def test_tabular_predict_trained_artifact(test_helper, framework_version, shared_training_job_name):
     """Run batch prediction from the shared model artifact with a fresh CloudPredictor."""
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
-        job_name = _shared_training_job_name()
-        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=job_name)["ModelArtifacts"][
-            "S3ModelArtifacts"
-        ]
+        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
+            "ModelArtifacts"
+        ]["S3ModelArtifacts"]
         predictor = TabularCloudPredictor(
-            cloud_output_path=_followup_cloud_output_path(framework_version, job_name, "predict-trained-artifact"),
+            cloud_output_path=test_helper.shared_followup_output_path(
+                "tabular", framework_version, shared_training_job_name, "predict-trained-artifact"
+            ),
             local_output_path="test_tabular_predict_trained_artifact",
         )
 

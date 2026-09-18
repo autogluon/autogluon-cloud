@@ -27,11 +27,7 @@ runs:
         module='${{ inputs.submodule-to-test }}'
         version='${{ inputs.ag_version }}'
         export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
-        if [[ "$module" == "tabular" ]]; then
-          setup_test="tests/unittests/tabular/test_tabular.py::test_tabular_train"
-        else
-          setup_test="tests/unittests/timeseries/test_timeseries.py::test_timeseries_train"
-        fi
+        setup_test="tests/unittests/${module}/test_${module}.py::test_${module}_train"
         python3 -m pytest "$setup_test" --framework_version "$version"
     - name: Test Cloud Submodule
       shell: bash
@@ -41,11 +37,7 @@ runs:
         extra_args=()
         if [[ "$module" == "tabular" || "$module" == "timeseries" ]]; then
           export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
-        fi
-        if [[ "$module" == "tabular" ]]; then
-          extra_args+=(--deselect "tests/unittests/tabular/test_tabular.py::test_tabular_train")
-        elif [[ "$module" == "timeseries" ]]; then
-          extra_args+=(--deselect "tests/unittests/timeseries/test_timeseries.py::test_timeseries_train")
+          extra_args+=(--deselect "tests/unittests/${module}/test_${module}.py::test_${module}_train")
         fi
         python3 -m pytest -n 4 --junitxml=results.xml "tests/unittests/$module/" \
           --framework_version "$version" "${extra_args[@]}"
