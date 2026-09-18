@@ -831,6 +831,7 @@ class TabularFoundationModel(FoundationModel):
         extra_ag_args: Dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
+        backend_kwargs["leaderboard"] = False
 
         self._backend.fit(
             predictor_init_args=self._build_predictor_init_args(label=label),

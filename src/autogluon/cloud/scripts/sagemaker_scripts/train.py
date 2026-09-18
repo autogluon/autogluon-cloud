@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import shutil
+import tempfile
 from pprint import pprint
 
 import boto3
@@ -201,10 +202,11 @@ if __name__ == "__main__":
             raise NotImplementedError(f"`fit_predict` is not supported for predictor_type='{predictor_type}'.")
         predictions_path = ag_args["predictions_path"]
         # Save locally then upload via boto3: s3fs/fsspec are not available in the training container.
-        local_path = os.path.join(args.output_data_dir, os.path.basename(predictions_path))
-        save_pd.save(path=local_path, df=predictions)
-        bucket, key = s3_path_to_bucket_prefix(predictions_path)
-        boto3.client("s3").upload_file(local_path, bucket, key)
+        with tempfile.TemporaryDirectory(prefix="ag_predictions_") as temp_dir:
+            local_path = os.path.join(temp_dir, os.path.basename(predictions_path))
+            save_pd.save(path=local_path, df=predictions)
+            bucket, key = s3_path_to_bucket_prefix(predictions_path)
+            boto3.client("s3").upload_file(local_path, bucket, key)
         print(f"Uploaded predictions to {predictions_path}")
 
     if not save_predictor:
