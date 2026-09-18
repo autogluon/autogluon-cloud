@@ -24,7 +24,7 @@ from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
 from ..utils.aws_utils import resolve_cloud_output_path
-from ..utils.utils import unzip_file
+from ..utils.utils import safe_unpack_archive
 
 logger = logging.getLogger(__name__)
 
@@ -786,7 +786,7 @@ class CloudPredictor(ABC):
         s3.download_file(predictor_bucket, predictor_key_prefix, tarball_path)
         logger.log(20, "Extracting the trained model tarball")
         save_path = os.path.join(save_path, "AutoGluonModels")
-        unzip_file(tarball_path, save_path)
+        safe_unpack_archive(tarball_path, save_path)
         return save_path
 
     def save(self, silent: bool = False) -> None:
