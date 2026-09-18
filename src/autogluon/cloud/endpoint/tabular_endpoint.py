@@ -81,7 +81,12 @@ class TabularEndpoint:
         label: str,
         **inference_kwargs: Any,
     ) -> pd.Series:
-        """Fit the foundation model on ``train_data`` and predict ``data``."""
+        """Fit the foundation model on ``train_data`` and predict ``data``.
+
+        The serialized request includes both ``train_data`` and ``data`` and must not exceed SageMaker's
+        6 MiB real-time invocation payload limit. Use
+        :meth:`autogluon.cloud.TabularFoundationModel.predict` for larger inputs.
+        """
         pred, _ = self._predict(
             data=data,
             train_data=train_data,
@@ -102,6 +107,10 @@ class TabularEndpoint:
         """Fit the foundation model and return class probabilities.
 
         For regression, the probability result is identical to the prediction.
+
+        The serialized request includes both ``train_data`` and ``data`` and must not exceed SageMaker's
+        6 MiB real-time invocation payload limit. Use
+        :meth:`autogluon.cloud.TabularFoundationModel.predict_proba` for larger inputs.
         """
         pred, pred_proba = self._predict(
             data=data,

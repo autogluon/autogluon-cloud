@@ -156,6 +156,18 @@ def test_tabular_deploy_uses_tabular_fm_handler_and_returns_tabular_endpoint():
     assert endpoint is endpoint_cls.return_value
 
 
+def test_tabular_deploy_rejects_serverless_inference():
+    fm = FoundationModel("mitra-classifier", cloud_output_path="s3://b")
+
+    with pytest.raises(ValueError, match="only supports `inference_mode='realtime'`"):
+        fm.deploy(inference_mode="serverless")
+
+    with pytest.raises(ValueError, match="`inference_config` is not supported"):
+        fm.deploy(inference_config={"memory_size_in_mb": 6144})
+
+    fm._backend.deploy.assert_not_called()
+
+
 def test_deploy_rejects_user_model_path_when_artifact_uri_set():
     """User-supplied model_path is incoherent with model_artifact_uri (the bundled tarball dictates the in-container
     path). Raise rather than silently overwrite."""

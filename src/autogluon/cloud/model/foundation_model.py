@@ -630,7 +630,7 @@ class TabularFoundationModel(FoundationModel):
         framework_version: str = "latest",
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        inference_mode: Literal["realtime", "serverless"] = "realtime",
+        inference_mode: Literal["realtime"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         **backend_kwargs,
     ) -> TabularEndpoint:
@@ -638,7 +638,20 @@ class TabularFoundationModel(FoundationModel):
 
         The returned endpoint accepts both labeled ``train_data`` and the rows to predict. It fits a
         request-scoped :class:`TabularPredictor` before producing predictions.
+
+        Only real-time inference is supported. Tabular foundation models such as Mitra require a
+        provisioned instance and cannot be deployed with SageMaker Serverless Inference.
         """
+        if inference_mode != "realtime":
+            raise ValueError(
+                "TabularFoundationModel.deploy only supports `inference_mode='realtime'`; "
+                "SageMaker Serverless Inference does not provide sufficient resources for tabular foundation models."
+            )
+        if inference_config is not None:
+            raise ValueError(
+                "`inference_config` is not supported by TabularFoundationModel.deploy because tabular foundation "
+                "models do not support SageMaker Serverless Inference."
+            )
         self._deploy_backend(
             instance_type=instance_type,
             endpoint_name=endpoint_name,
@@ -646,8 +659,7 @@ class TabularFoundationModel(FoundationModel):
             framework_version=framework_version,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            inference_mode=inference_mode,
-            inference_config=inference_config,
+            inference_mode="realtime",
             **backend_kwargs,
         )
         return TabularEndpoint(

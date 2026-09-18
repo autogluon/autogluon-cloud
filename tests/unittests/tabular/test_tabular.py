@@ -80,7 +80,6 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
                 data=test_data,
                 train_data=train_data,
                 label="class",
-                decision_threshold=0.4,
             )
             assert isinstance(pred, pd.Series)
             assert len(pred) == n_test_rows
