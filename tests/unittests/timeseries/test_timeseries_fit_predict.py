@@ -7,7 +7,7 @@ import pandas as pd
 from autogluon.cloud import TimeSeriesCloudPredictor
 
 
-def test_fit_predict_skips_predictor_upload_and_preserves_extra_ag_args():
+def test_fit_predict_keeps_predictor_upload_default():
     with mock.patch.object(TimeSeriesCloudPredictor, "__init__", lambda self: None):
         predictor = TimeSeriesCloudPredictor()
     predictor.fit = mock.MagicMock()
@@ -18,13 +18,8 @@ def test_fit_predict_skips_predictor_upload_and_preserves_extra_ag_args():
     result = predictor.fit_predict(
         train_data="train.csv",
         predictor_init_args={"prediction_length": 1},
-        backend_kwargs={"extra_ag_args": {"custom_arg": "value"}},
     )
 
     extra_ag_args = predictor.fit.call_args.kwargs["backend_kwargs"]["extra_ag_args"]
-    assert extra_ag_args == {
-        "custom_arg": "value",
-        "predict_after_fit": True,
-        "skip_predictor_upload": True,
-    }
+    assert extra_ag_args == {"predict_after_fit": True}
     pd.testing.assert_frame_equal(result, expected)

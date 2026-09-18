@@ -229,7 +229,7 @@ class SagemakerBackend(Backend):
             Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
         extra_ag_args: Optional[Dict[str, Any]], default = None
             Additional entries to merge into ``ag_args.json``. Use this to ship caller-specific metadata to the
-            train script (e.g. ``predict_after_fit``, ``skip_predictor_upload``, or ``id_column`` /
+            train script (e.g. ``predict_after_fit``, ``save_predictor``, or ``id_column`` /
             ``timestamp_column`` for time series).
         """
         if data_channels.get("train_data") is None:

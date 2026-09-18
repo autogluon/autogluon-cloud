@@ -59,8 +59,8 @@ class TabularCloudPredictor(CloudPredictor):
 
         Fits a ``TabularPredictor`` on ``train_data`` and runs batch prediction on ``test_data`` inside the same
         training container. This avoids the overhead of a separate batch-transform job (one cold start, one data
-        upload, no predictor-tarball round-trip). The trained predictor is not included in the SageMaker model
-        artifact; call :meth:`fit` instead if you need to deploy it or use it for later predictions.
+        upload, no predictor-tarball round-trip). The predictor is left fitted afterward, so ``deploy()`` /
+        ``predict()`` still work.
 
         Parameters
         ----------
@@ -196,7 +196,6 @@ class TabularCloudPredictor(CloudPredictor):
         backend_kwargs = {} if backend_kwargs is None else dict(backend_kwargs)
         extra_ag_args = dict(backend_kwargs.get("extra_ag_args") or {})
         extra_ag_args["predict_after_fit"] = True
-        extra_ag_args["skip_predictor_upload"] = True
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
         backend_kwargs["extra_ag_args"] = extra_ag_args

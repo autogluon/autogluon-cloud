@@ -101,7 +101,7 @@ def test_user_hyperparameter_override_wins_over_default_model_path():
     assert hp["model_path"] == "my-org/my-finetune"
 
 
-def test_timeseries_predict_skips_predictor_upload():
+def test_timeseries_predict_does_not_save_predictor():
     fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
     fm._backend.get_fit_predict_results.return_value = pd.DataFrame({"mean": [1.0]})
 
@@ -119,7 +119,7 @@ def test_timeseries_predict_skips_predictor_upload():
 
     extra_ag_args = fm._backend.fit.call_args.kwargs["extra_ag_args"]
     assert extra_ag_args["predict_after_fit"] is True
-    assert extra_ag_args["skip_predictor_upload"] is True
+    assert extra_ag_args["save_predictor"] is False
 
 
 def test_deploy_passes_artifact_uri_and_overrides_model_path_to_container_dir():
