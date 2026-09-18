@@ -34,7 +34,7 @@ cloud_predictor.fit(
 `train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). In every case AutoGluon-Cloud loads the data locally and uploads it to your `cloud_output_path` bucket before kicking off the SageMaker job.
 
 ### Reattach to a training job
-If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (`INFO:sagemaker:Creating training-job with name: ag-tabular-...`) and also visible in the SageMaker console.
+If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (`INFO:sagemaker:Creating training-job with name: ag-cloud-tabular-...`) and also visible in the SageMaker console.
 
 ```python
 another_cloud_predictor = TabularCloudPredictor()
@@ -165,18 +165,18 @@ It will output a dict similar to this:
     'local_output_path': '/home/ubuntu/XXX/demo/AutogluonCloudPredictor/ag-20221111_174928',
     'cloud_output_path': 's3://XXX/tabular-demo',
     'fit_job': {
-        'name': 'ag-tabular-1668188968-e5c3',
+        'name': 'ag-cloud-tabular-1668188968-e5c3',
         'status': 'Completed',
         'framework_version': '0.6.1',
-        'artifact_path': 's3://XXX/tabular-demo/model/ag-tabular-1668188968-e5c3/output/model.tar.gz'
+        'artifact_path': 's3://XXX/tabular-demo/model/ag-cloud-tabular-1668188968-e5c3/output/model.tar.gz'
     },
     'recent_transform_job': {
-        'name': 'ag-tabular-1668189393-e95c',
+        'name': 'ag-cloud-tabular-1668189393-e95c',
         'status': 'Completed',
         'result_path': 's3://XXX/tabular-demo/batch_transform/2022-11-11-17-56-33-991/results/test.csv.out'
     },
-    'transform_jobs': ['ag-tabular-1668189393-e95c'],
-    'endpoint': 'ag-tabular-1668189208-d23b'
+    'transform_jobs': ['ag-cloud-tabular-1668189393-e95c'],
+    'endpoint': 'ag-cloud-tabular-1668189208-d23b'
 }
 ```
 
