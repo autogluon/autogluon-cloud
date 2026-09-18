@@ -39,10 +39,12 @@ dynamic = ["version"]
 dependencies = [
     # common module provides utils with stable api across minor version
     "autogluon.common>=0.7,<1.6",
-    # <2 because unlikely to introduce breaking changes in minor releases. >=1.10 because 1.10 is 3 years old, no need to support older
-    "boto3>=1.10,<2",
+    # <2 because unlikely to introduce breaking changes in minor releases.
+    # TransformAmiVersion was added to the SageMaker service model in botocore 1.37.23.
+    "boto3>=1.37.23,<2",
     "packaging>=23.0,<27",
-    "sagemaker>=2.126.0,<3",
+    # Supports forwarding inference_ami_version from Model.deploy.
+    "sagemaker>=2.240.0,<3",
     "pyarrow>=19.0.1,<25",  # lower bound to avoid https://github.com/apache/arrow/issues/45283
     "PyYAML~=6.0",
     "Pillow>=10.2,<13",

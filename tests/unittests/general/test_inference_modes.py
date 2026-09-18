@@ -7,6 +7,8 @@ from sagemaker.serverless import ServerlessInferenceConfig
 
 from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend
 
+GPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cu133-amzn2023"
+
 
 @pytest.fixture
 def deploy_kwargs():
@@ -39,6 +41,20 @@ def test_when_inference_mode_realtime_then_instance_kwargs_are_passed(deploy_kwa
     assert captured["instance_type"] == "ml.m5.xlarge"
     assert captured["initial_instance_count"] == 2
     assert "serverless_inference_config" not in captured
+
+
+def test_when_cuda_13_custom_image_then_inference_ami_is_inferred(deploy_kwargs):
+    captured = deploy_kwargs(instance_type="ml.g4dn.xlarge", custom_image_uri=GPU_IMAGE_URI)
+    assert captured["inference_ami_version"] == "al2023-ami-sagemaker-inference-gpu-4-1"
+
+
+def test_when_inference_ami_is_provided_then_it_is_not_overridden(deploy_kwargs):
+    captured = deploy_kwargs(
+        instance_type="ml.g4dn.xlarge",
+        custom_image_uri=GPU_IMAGE_URI,
+        deploy_kwargs={"inference_ami_version": "custom-ami"},
+    )
+    assert captured["inference_ami_version"] == "custom-ami"
 
 
 def test_when_inference_mode_serverless_then_preset_serverless_config_is_used(deploy_kwargs):
