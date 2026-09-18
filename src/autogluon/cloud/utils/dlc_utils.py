@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from packaging import version
@@ -6,6 +7,11 @@ from packaging.version import Version
 
 _CONFIG_PATH = Path(__file__).parent / "autogluon_dlc.json"
 _GPU_INSTANCE_PREFIXES = ("ml.p", "ml.g")
+_BATCH_AMI_INSTANCE_PREFIXES = ("ml.g4dn.", "ml.g5.", "ml.g6.")
+_CUDA_13_AMI_VERSIONS = {
+    "inference": "al2023-ami-sagemaker-inference-gpu-4-1",
+    "transform": "al2-ami-sagemaker-batch-gpu-535",
+}
 
 
 def _load_config():
@@ -15,6 +21,20 @@ def _load_config():
 
 def _is_gpu_instance(instance_type):
     return instance_type.startswith(_GPU_INSTANCE_PREFIXES) or instance_type == "local_gpu"
+
+
+def infer_sagemaker_ami_version(image_uri, instance_type, image_scope):
+    """Infer the SageMaker host AMI required by a custom GPU image."""
+    assert image_scope in _CUDA_13_AMI_VERSIONS
+    if not image_uri or not instance_type.startswith(_GPU_INSTANCE_PREFIXES):
+        return None
+    if image_scope == "transform" and not instance_type.startswith(_BATCH_AMI_INSTANCE_PREFIXES):
+        return None
+
+    image_tag = image_uri.rsplit(":", 1)[-1]
+    if re.search(r"-cu13\d*-amzn2023$", image_tag):
+        return _CUDA_13_AMI_VERSIONS[image_scope]
+    return None
 
 
 def retrieve_available_framework_versions(framework_type="training", details=False):

@@ -10,6 +10,7 @@ from ..utils.ag_sagemaker import (
     AutoGluonSagemakerEstimator,
 )
 from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, MODEL_ARTIFACT_NAME
+from ..utils.dlc_utils import infer_sagemaker_ami_version
 from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
@@ -301,6 +302,13 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         )
         logger.log(20, "Inference model created successfully")
         logger.log(20, "Creating transformer...")
+        transform_ami_version = infer_sagemaker_ami_version(
+            custom_image_uri,
+            instance_type,
+            image_scope="transform",
+        )
+        if transform_ami_version is not None:
+            transformer_kwargs.setdefault("transform_ami_version", transform_ami_version)
         transformer = model.transformer(
             instance_count=instance_count,
             instance_type=instance_type,

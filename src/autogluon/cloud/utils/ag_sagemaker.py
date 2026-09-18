@@ -13,6 +13,22 @@ from .dlc_utils import retrieve_image_uri, retrieve_latest_framework_version
 from .serializers import AutoGluonSerializer, MultiModalSerializer
 
 
+class _TransformAmiVersionSession:
+    """Delegate to a SageMaker session while adding a Batch Transform AMI."""
+
+    def __init__(self, session, transform_ami_version):
+        self._session = session
+        self._transform_ami_version = transform_ami_version
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def transform(self, **kwargs):
+        kwargs["resource_config"] = copy.deepcopy(kwargs["resource_config"])
+        kwargs["resource_config"]["TransformAmiVersion"] = self._transform_ami_version
+        return self._session.transform(**kwargs)
+
+
 # Estimator documentation: https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#estimators
 class AutoGluonSagemakerEstimator(Estimator):
     def __init__(
@@ -162,9 +178,10 @@ class AutoGluonSagemakerInferenceModel(Model):
         max_concurrent_transforms=1,  # The maximum number of HTTP requests to be made to each individual transform container at one time.
         accept="application/json",
         assemble_with="Line",
+        transform_ami_version=None,
         **kwargs,
     ):
-        return super().transformer(
+        transformer = super().transformer(
             instance_count=instance_count,
             instance_type=instance_type,
             strategy=strategy,
@@ -174,6 +191,12 @@ class AutoGluonSagemakerInferenceModel(Model):
             assemble_with=assemble_with,
             **kwargs,
         )
+        if transform_ami_version is not None:
+            transformer.sagemaker_session = _TransformAmiVersionSession(
+                transformer.sagemaker_session,
+                transform_ami_version,
+            )
+        return transformer
 
 
 class AutoGluonRepackInferenceModel(AutoGluonSagemakerInferenceModel):

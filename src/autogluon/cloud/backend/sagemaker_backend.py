@@ -28,7 +28,7 @@ from ..utils.ag_sagemaker import (
 )
 from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
 from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
-from ..utils.dlc_utils import parse_framework_version
+from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version
 from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.serializers import AutoGluonSerializationWrapper
 from ..utils.tag_utils import build_tags
@@ -538,6 +538,13 @@ class SagemakerBackend(Backend):
         )
         deploy_kwargs = copy.deepcopy(deploy_kwargs or {})
         self._resolve_tags(deploy_kwargs, extra_tags)
+        inference_ami_version = infer_sagemaker_ami_version(
+            custom_image_uri,
+            instance_type,
+            image_scope="inference",
+        )
+        if inference_ami_version is not None:
+            deploy_kwargs.setdefault("inference_ami_version", inference_ami_version)
 
         instance_kwargs = {
             "instance_type": instance_type,
