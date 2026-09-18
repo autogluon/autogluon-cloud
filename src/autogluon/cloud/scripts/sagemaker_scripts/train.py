@@ -209,8 +209,12 @@ if __name__ == "__main__":
 
     if not save_predictor:
         print("Removing predictor artifacts before SageMaker model upload")
-        shutil.rmtree(save_path)
-        os.makedirs(save_path, mode=0o777, exist_ok=True)
+        with os.scandir(save_path) as entries:
+            for entry in entries:
+                if entry.is_dir(follow_symlinks=False):
+                    shutil.rmtree(entry.path)
+                else:
+                    os.unlink(entry.path)
     else:
         print("Saving serving artifacts")
         shutil.copytree(args.serving_script, os.path.join(save_path, "code"))
