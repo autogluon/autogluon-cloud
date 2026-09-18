@@ -29,6 +29,7 @@ class AutoGluonSerializationWrapper:
 
     data: pd.DataFrame
     inference_kwargs: Dict[str, Any]
+    train_data: Optional[pd.DataFrame] = field(default=None)
     static_features: Optional[pd.DataFrame] = field(default=None)
     known_covariates: Optional[pd.DataFrame] = field(default=None)
 
@@ -64,6 +65,8 @@ class AutoGluonSerializer(SimpleBaseSerializer):
             "data": _dataframe_to_b64(data.data),
             "inference_kwargs": inference_kwargs,
         }
+        if data.train_data is not None:
+            package["train_data"] = _dataframe_to_b64(data.train_data)
         if data.static_features is not None:
             package["static_features"] = _dataframe_to_b64(data.static_features)
         if data.known_covariates is not None:

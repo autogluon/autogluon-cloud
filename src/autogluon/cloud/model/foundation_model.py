@@ -13,11 +13,13 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import pandas as pd
 from typing_extensions import Self
 
+from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
 from ..endpoint.prediction_future import JobPredictionFuture
+from ..endpoint.tabular_endpoint import TabularEndpoint
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
@@ -213,6 +215,7 @@ class FoundationModel:
         fm_serve_config = {
             "ag_model_key": self._config.ag_model_key,
             "hyperparameters": merged_hp,
+            "problem_type": self._config.problem_type,
         }
 
         model_kwargs = backend_kwargs.pop("model_kwargs", {})
@@ -608,9 +611,9 @@ class TabularFoundationModel(FoundationModel):
     runs prediction as a managed SageMaker job, with no training required. Each ``model_id`` targets a
     single task — ``mitra-classifier`` for classification and ``mitra-regressor`` for regression.
 
-    Predictions are produced in batch mode: :meth:`predict` (and :meth:`predict_proba`) runs a one-off
-    SageMaker training job where the labeled ``train_data`` provides the in-context examples and the
-    predictions for ``test_data`` are written to S3.
+    Predictions can be produced in batch mode with :meth:`predict` / :meth:`predict_proba`, or through a
+    real-time endpoint created with :meth:`deploy`. In both modes, labeled ``train_data`` provides the
+    in-context examples for each prediction.
     """
 
     _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
@@ -618,10 +621,52 @@ class TabularFoundationModel(FoundationModel):
 
     @property
     def _serve_script_path(self) -> str:
-        raise NotImplementedError("Tabular FM deploy is not yet supported")
+        return ScriptManager.SAGEMAKER_TABULAR_FM_SERVE_SCRIPT_PATH
 
-    def deploy(self, **kwargs):
-        raise NotImplementedError("Tabular FM deploy is not yet supported")
+    def deploy(
+        self,
+        instance_type: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        framework_version: str = "latest",
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        inference_mode: Literal["realtime"] = "realtime",
+        inference_config: Optional[Dict[str, Any]] = None,
+        **backend_kwargs,
+    ) -> TabularEndpoint:
+        """Deploy the tabular foundation model to an inference endpoint.
+
+        The returned endpoint accepts both labeled ``train_data`` and the rows to predict. It fits a
+        request-scoped :class:`TabularPredictor` before producing predictions.
+
+        Only real-time inference is supported. Tabular foundation models such as Mitra require a
+        provisioned instance and cannot be deployed with SageMaker Serverless Inference.
+        """
+        if inference_mode != "realtime":
+            raise ValueError(
+                "TabularFoundationModel.deploy only supports `inference_mode='realtime'`; "
+                "SageMaker Serverless Inference does not provide sufficient resources for tabular foundation models."
+            )
+        if inference_config is not None:
+            raise ValueError(
+                "`inference_config` is not supported by TabularFoundationModel.deploy because tabular foundation "
+                "models do not support SageMaker Serverless Inference."
+            )
+        self._deploy_backend(
+            instance_type=instance_type,
+            endpoint_name=endpoint_name,
+            hyperparameters=hyperparameters,
+            framework_version=framework_version,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            inference_mode="realtime",
+            **backend_kwargs,
+        )
+        return TabularEndpoint(
+            endpoint_name=self._backend.endpoint.endpoint_name,
+            session=self._backend.sagemaker_session.boto_session,
+        )
 
     def _build_predictor_init_args(self, label: str = "target", **kwargs) -> Dict[str, Any]:
         """Map user kwargs to TabularPredictor init args."""
@@ -778,6 +823,11 @@ class TabularFoundationModel(FoundationModel):
         if instance_type is None:
             instance_type = self._config.predict_instance_type
 
+        if isinstance(train_data, (str, Path)):
+            train_data = load_pd.load(str(train_data))
+        # Duplicate one tuning row so AutoGluon/Mitra do not hold out any rows from the prediction context.
+        tuning_data = train_data.iloc[[0]].copy()
+
         extra_ag_args: Dict[str, Any] = {"predict_after_fit": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
@@ -785,7 +835,7 @@ class TabularFoundationModel(FoundationModel):
         self._backend.fit(
             predictor_init_args=self._build_predictor_init_args(label=label),
             predictor_fit_args=self._build_predictor_fit_args(hyperparameters),
-            data_channels={"train_data": train_data, "test_data": test_data},
+            data_channels={"train_data": train_data, "tuning_data": tuning_data, "test_data": test_data},
             framework_version=framework_version,
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,

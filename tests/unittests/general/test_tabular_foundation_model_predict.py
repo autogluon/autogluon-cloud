@@ -20,7 +20,9 @@ from autogluon.cloud.model import FoundationModel
 CLASSIFICATION_FRAME = pd.DataFrame({"class": ["a", "b"], "a_proba": [0.7, 0.3], "b_proba": [0.3, 0.7]})
 REGRESSION_FRAME = pd.DataFrame({"target": [1.5, 2.5]})
 
-PREDICT_ARGS = dict(train_data="train.csv", test_data="test.csv", label="class")
+TRAIN_DATA = pd.DataFrame({"feature": [1, 2], "class": ["a", "b"]})
+TEST_DATA = pd.DataFrame({"feature": [3, 4]})
+PREDICT_ARGS = dict(train_data=TRAIN_DATA, test_data=TEST_DATA, label="class")
 
 
 @pytest.fixture(autouse=True)
@@ -52,9 +54,12 @@ def test_predict_returns_prediction_series():
 def test_predict_launches_predict_after_fit_job():
     fm = _make_fm()
     fm.predict(**PREDICT_ARGS)
-    extra_ag_args = fm._backend.fit.call_args.kwargs["extra_ag_args"]
+    fit_kwargs = fm._backend.fit.call_args.kwargs
+    extra_ag_args = fit_kwargs["extra_ag_args"]
     assert extra_ag_args["predict_after_fit"] is True
     assert "predictions_path" not in extra_ag_args  # not passed -> backend fills in a default
+    pd.testing.assert_frame_equal(fit_kwargs["data_channels"]["train_data"], TRAIN_DATA)
+    pd.testing.assert_frame_equal(fit_kwargs["data_channels"]["tuning_data"], TRAIN_DATA.iloc[[0]])
 
 
 @pytest.mark.parametrize(
@@ -65,7 +70,11 @@ def test_predict_pins_problem_type_from_registry(model_id, expected_problem_type
     """The checkpoint's task is enforced via problem_type, not inferred from the label — otherwise a
     continuous label would silently route mitra-classifier to the default regressor."""
     fm = _make_fm(model_id=model_id, result=REGRESSION_FRAME)
-    fm.predict(train_data="t.csv", test_data="s.csv", label="y")
+    fm.predict(
+        train_data=pd.DataFrame({"feature": [1, 2], "y": [0, 1]}),
+        test_data=TEST_DATA,
+        label="y",
+    )
     init_args = fm._backend.fit.call_args.kwargs["predictor_init_args"]
     assert init_args["problem_type"] == expected_problem_type
 
@@ -89,7 +98,11 @@ def test_predict_proba_include_predict_false_returns_only_proba():
 
 def test_regression_proba_equals_pred():
     fm = _make_fm(model_id="mitra-regressor", result=REGRESSION_FRAME)
-    pred, proba = fm.predict_proba(train_data="t.csv", test_data="s.csv", label="target")
+    pred, proba = fm.predict_proba(
+        train_data=pd.DataFrame({"feature": [1, 2], "target": [1.0, 2.0]}),
+        test_data=TEST_DATA,
+        label="target",
+    )
     assert pred.tolist() == [1.5, 2.5]
     pd.testing.assert_series_equal(pred, proba)
 
@@ -126,9 +139,10 @@ def test_fm_predict_matches_tcp_fit_predict(frame):
     """TabularFoundationModel.predict_proba and TabularCloudPredictor.fit_predict_proba must return the
     same (pred, proba) off the same backend frame — they wrap one shared result-loading mechanism."""
     label = "class" if frame is CLASSIFICATION_FRAME else "target"
+    train_data = pd.DataFrame({"feature": [1, 2], label: [0, 1]})
 
     fm = _make_fm(model_id="mitra-classifier", result=frame)
-    fm_pred, fm_proba = fm.predict_proba(train_data="t.csv", test_data="s.csv", label=label)
+    fm_pred, fm_proba = fm.predict_proba(train_data=train_data, test_data=TEST_DATA, label=label)
 
     tcp = _make_tcp(result=frame)
     tcp_pred, tcp_proba = tcp.fit_predict_proba(
