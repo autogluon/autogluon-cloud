@@ -1410,7 +1410,7 @@ class SagemakerBackend(Backend):
         self.sagemaker_session = setup_sagemaker_session()
         self._region = self.sagemaker_session.boto_region_name
         if hasattr(self, "_endpoint_saved") and self._endpoint_saved is not None:
-            self.endpoiont = self.attach_endpoint(self._endpoint_saved)
+            self.attach_endpoint(self._endpoint_saved)
             self._endpoint_saved = None
         self._fit_job.session = self.sagemaker_session
         for job in self._batch_transform_jobs:
