@@ -76,14 +76,21 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
             ]
             test_helper.assert_ag_cloud_tags(endpoint_arn, module="tabular", model_id="mitra-classifier")
 
-            pred, pred_proba = endpoint.predict_proba(
+            pred_proba = endpoint.predict_proba(
+                data=test_data,
+                train_data=train_data,
+                label="class",
+                include_predict=False,
+            )
+            assert isinstance(pred_proba, pd.DataFrame)
+            assert len(pred_proba) == n_test_rows
+
+            pred = endpoint.predict(
                 data=test_data,
                 train_data=train_data,
                 label="class",
             )
             assert isinstance(pred, pd.Series)
             assert len(pred) == n_test_rows
-            assert isinstance(pred_proba, pd.DataFrame)
-            assert len(pred_proba) == n_test_rows
         finally:
             endpoint.delete_endpoint()
