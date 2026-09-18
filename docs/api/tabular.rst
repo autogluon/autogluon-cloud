@@ -8,3 +8,5 @@ Tabular
     :template: custom_class.rst
 
     TabularCloudPredictor
+    TabularFoundationModel
+    TabularEndpoint

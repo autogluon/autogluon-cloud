@@ -16,6 +16,20 @@ API
     :template: custom_class.rst
     :methods:
 
+    TabularFoundationModel
+
+.. autosummary::
+    :toctree: api
+    :template: custom_class.rst
+    :methods:
+
+    TabularEndpoint
+
+.. autosummary::
+    :toctree: api
+    :template: custom_class.rst
+    :methods:
+
     TimeSeriesCloudPredictor
 
 .. autosummary::

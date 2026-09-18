@@ -79,12 +79,22 @@ def test_when_all_fields_provided_then_payload_contains_version_and_data(df, sta
     pd.testing.assert_frame_equal(known_covariates, _decode_parquet(payload["known_covariates"]))
 
 
+def test_when_train_data_provided_then_payload_contains_train_data(df):
+    train_data = pd.DataFrame({"a": [10, 20], "b": ["train-x", "train-y"], "label": [0, 1]})
+    wrapper = AutoGluonSerializationWrapper(data=df, train_data=train_data, inference_kwargs={"label": "label"})
+    payload = json.loads(AutoGluonSerializer().serialize(wrapper))
+
+    pd.testing.assert_frame_equal(df, _decode_parquet(payload["data"]))
+    pd.testing.assert_frame_equal(train_data, _decode_parquet(payload["train_data"]))
+
+
 def test_when_no_optional_fields_then_payload_omits_them(df):
     wrapper = AutoGluonSerializationWrapper(data=df, inference_kwargs={})
     payload = json.loads(AutoGluonSerializer().serialize(wrapper))
 
     assert "static_features" not in payload
     assert "known_covariates" not in payload
+    assert "train_data" not in payload
     pd.testing.assert_frame_equal(df, _decode_parquet(payload["data"]))
 
 

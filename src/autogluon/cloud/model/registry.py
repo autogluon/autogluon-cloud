@@ -60,6 +60,7 @@ FOUNDATION_MODEL_REGISTRY: Dict[str, FoundationModelConfig] = {
         model_source_hyperparameter="hf_cls_model",
         inference_hyperparameters={"fine_tune": False},
         predict_instance_type="ml.m5.4xlarge",
+        deploy_instance_type="ml.m5.4xlarge",
     ),
     "mitra-regressor": FoundationModelConfig(
         problem_type="regression",
@@ -68,6 +69,7 @@ FOUNDATION_MODEL_REGISTRY: Dict[str, FoundationModelConfig] = {
         model_source_hyperparameter="hf_reg_model",
         inference_hyperparameters={"fine_tune": False},
         predict_instance_type="ml.m5.4xlarge",
+        deploy_instance_type="ml.m5.4xlarge",
     ),
 }
 

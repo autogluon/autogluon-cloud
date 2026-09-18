@@ -11,6 +11,7 @@ class ScriptManager:
     RAY_SCRIPTS_PATH = os.path.join(SCRIPTS_PATH, "ray_scripts")
     SAGEMAKER_TRAIN_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "train.py")
     SAGEMAKER_TABULAR_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "tabular_serve.py")
+    SAGEMAKER_TABULAR_FM_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "tabular_fm_serve.py")
     SAGEMAKER_MULTIMODAL_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "multimodal_serve.py")
     SAGEMAKER_TIMESERIES_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "timeseries_serve.py")
     SAGEMAKER_TIMESERIES_FM_SERVE_SCRIPT_PATH = os.path.join(SAGEMAKER_SCRIPTS_PATH, "timeseries_fm_serve.py")
