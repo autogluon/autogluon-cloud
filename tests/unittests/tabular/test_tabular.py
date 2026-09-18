@@ -70,14 +70,17 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
             cloud_output_path=(f"s3://autogluon-cloud-ci/test-tabular-fm-deploy/{framework_version}/{timestamp}"),
         )
         endpoint = model.deploy(custom_image_uri=inference_custom_image_uri)
-        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)["EndpointArn"]
-        test_helper.assert_ag_cloud_tags(endpoint_arn, module="tabular", model_id="mitra-classifier")
-
         try:
+            endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
+                "EndpointArn"
+            ]
+            test_helper.assert_ag_cloud_tags(endpoint_arn, module="tabular", model_id="mitra-classifier")
+
             pred, pred_proba = endpoint.predict_proba(
                 data=test_data,
                 train_data=train_data,
                 label="class",
+                decision_threshold=0.4,
             )
             assert isinstance(pred, pd.Series)
             assert len(pred) == n_test_rows

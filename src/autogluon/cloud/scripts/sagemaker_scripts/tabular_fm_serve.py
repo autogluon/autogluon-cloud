@@ -79,6 +79,9 @@ def transform_fn(model_config, request_body, input_content_type, output_content_
     data, train_data, inference_kwargs = _parse_payload(request_body, input_content_type)
     inference_kwargs = dict(inference_kwargs)
     label = inference_kwargs.pop("label", None)
+    prediction_only_kwargs = {
+        key: inference_kwargs.pop(key) for key in ("decision_threshold",) if key in inference_kwargs
+    }
     if label is None:
         raise ValueError("`inference_kwargs` must contain the training label column name under `label`.")
     if label not in train_data.columns:
@@ -99,13 +102,13 @@ def transform_fn(model_config, request_body, input_content_type, output_content_
             fit_weighted_ensemble=False,
         )
 
-        pred = predictor.predict(data, as_pandas=True, **inference_kwargs)
         if predictor.can_predict_proba:
             pred_proba = predictor.predict_proba(data, as_pandas=True, **inference_kwargs)
+            pred = predictor.predict_from_proba(pred_proba, **prediction_only_kwargs)
             pred_proba.columns = [f"{column}_proba" for column in pred_proba.columns]
             pred.name = predictor.label
             prediction = pd.concat([pred, pred_proba], axis=1)
         else:
-            prediction = pred
+            prediction = predictor.predict(data, as_pandas=True, **inference_kwargs, **prediction_only_kwargs)
 
     return _render_response(prediction, output_content_type)
