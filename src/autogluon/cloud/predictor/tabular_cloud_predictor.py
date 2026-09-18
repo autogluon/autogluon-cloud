@@ -80,7 +80,7 @@ class TabularCloudPredictor(CloudPredictor):
             Training container version of autogluon. If `latest`, will use the latest available container version.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
-            Name of the launched training job. If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+            Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
@@ -169,7 +169,7 @@ class TabularCloudPredictor(CloudPredictor):
         framework_version: str, default = `latest`
             Training container version of autogluon. If `custom_image_uri` is set, this argument is ignored.
         job_name: str, default = None
-            Name of the launched training job. If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+            Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1

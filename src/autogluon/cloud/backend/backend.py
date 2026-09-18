@@ -55,12 +55,18 @@ class Backend(ABC):
         return self._cloud_output_path
 
     def initialize(
-        self, local_output_path: str, predictor_type: str, cloud_output_path: Optional[str] = None, **kwargs
+        self,
+        local_output_path: str,
+        predictor_type: str,
+        cloud_output_path: Optional[str] = None,
+        resource_prefix: Optional[str] = None,
+        **kwargs,
     ) -> None:
         """Initialize the backend."""
         self.local_output_path = local_output_path
         self._cloud_output_path = cloud_output_path
         self.predictor_type = predictor_type
+        self.resource_prefix = resource_prefix or f"ag-cloud-{predictor_type}"
         self.original_features = None
         self.endpoint: Optional[Endpoint] = None
 

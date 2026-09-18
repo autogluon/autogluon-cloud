@@ -17,7 +17,6 @@ from ..data import FormatConverterFactory
 from ..endpoint.endpoint import Endpoint
 from ..job.ray_job import RayFitJob
 from ..scripts import ScriptManager
-from ..utils.constants import CLOUD_RESOURCE_PREFIX
 from ..utils.dlc_utils import parse_framework_version, retrieve_image_uri
 from ..utils.ec2 import get_latest_ami
 from ..utils.iam import get_instance_profile_arn
@@ -143,7 +142,7 @@ class RayBackend(Backend):
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor
+            If None, AutoGluon Cloud creates one with a predictor-specific prefix.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
         instance_count: Union[int, str], default = "auto",
@@ -257,7 +256,7 @@ class RayBackend(Backend):
             cluster_manager.setup_connection()
             time.sleep(10)  # waiting for connection to setup
             if job_name is None:
-                job_name = CLOUD_RESOURCE_PREFIX + "-" + get_utc_timestamp_now()
+                job_name = self.resource_prefix + "-" + get_utc_timestamp_now()
             job = RayFitJob(output_path=self.cloud_output_path + "/model")
             self._fit_job = job
 

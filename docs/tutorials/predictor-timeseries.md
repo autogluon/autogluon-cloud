@@ -57,7 +57,7 @@ forecasts = cloud_predictor.fit_predict(
 By default predictions land at `{cloud_output_path}/{job_name}/predictions.csv`; pass `predictions_path` to choose a destination.
 
 ### Reattach to a training job
-If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (`INFO:sagemaker:Creating training-job with name: ag-cloudpredictor-...`) and also visible in the SageMaker console.
+If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (`INFO:sagemaker:Creating training-job with name: ag-cloud-timeseries-...`) and also visible in the SageMaker console.
 
 ```python
 another_cloud_predictor = TimeSeriesCloudPredictor()
@@ -250,18 +250,18 @@ It will output a dict similar to this:
     'local_output_path': '/home/ubuntu/XXX/demo/AutogluonCloudPredictor/ag-20221111_174928',
     'cloud_output_path': 's3://XXX/timeseries-demo',
     'fit_job': {
-        'name': 'ag-cloudpredictor-1668188968-e5c3',
+        'name': 'ag-cloud-timeseries-1668188968-e5c3',
         'status': 'Completed',
         'framework_version': '0.6.1',
-        'artifact_path': 's3://XXX/timeseries-demo/model/ag-cloudpredictor-1668188968-e5c3/output/model.tar.gz'
+        'artifact_path': 's3://XXX/timeseries-demo/model/ag-cloud-timeseries-1668188968-e5c3/output/model.tar.gz'
     },
     'recent_transform_job': {
-        'name': 'ag-cloudpredictor-1668189393-e95c',
+        'name': 'ag-cloud-timeseries-1668189393-e95c',
         'status': 'Completed',
         'result_path': 's3://XXX/timeseries-demo/batch_transform/2022-11-11-17-56-33-991/results/test.parquet.out'
     },
-    'transform_jobs': ['ag-cloudpredictor-1668189393-e95c'],
-    'endpoint': 'ag-cloudpredictor-1668189208-d23b'
+    'transform_jobs': ['ag-cloud-timeseries-1668189393-e95c'],
+    'endpoint': 'ag-cloud-timeseries-1668189208-d23b'
 }
 ```
 
