@@ -16,8 +16,8 @@ on:
   pull_request:
 
 concurrency:
-  # Per-ref so a tag/branch push never cancels a build for a different ref
-  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  # Cancel superseded commits for the same PR without mixing PRs, refs, or trigger types.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -112,33 +112,6 @@ jobs:
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: tabular
-          ag_version: '${{ matrix.AG_VERSION }}'
-  test_multimodal_cloud:
-    if: false
-    strategy:
-      fail-fast: false
-      matrix:
-        AG_VERSION: ["source", "1.2.0"]
-    needs: cloud_lint_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Check if changes beside docs
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            other_than_docs:
-              - '!(docs/**)**'
-      - name: Test Multimodal Cloud
-        if: steps.changes.outputs.other_than_docs == 'true'
-        uses: ./.github/actions/test-cloud
-        with:
-          submodule-to-test: multimodal
           ag_version: '${{ matrix.AG_VERSION }}'
   test_timeseries_cloud:
     # Fork PRs cannot assume the CI role, so skip instead of failing.

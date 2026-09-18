@@ -53,60 +53,155 @@ def retail_sales_dataset():
     }
 
 
-def test_timeseries(test_helper, framework_version, retail_sales_dataset):
+def _deploy_kwargs(test_helper, framework_version: str) -> dict:
+    return {
+        "framework_version": framework_version,
+        "custom_image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+    }
+
+
+def _predict_kwargs(test_helper, framework_version: str, ds: dict) -> dict:
+    return {
+        "static_features": ds["static_features"],
+        "known_covariates": ds["known_covariates"],
+        "framework_version": framework_version,
+        "custom_image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+    }
+
+
+def _predict_real_time_kwargs(ds: dict) -> dict:
+    return {
+        "static_features": ds["static_features"],
+        "known_covariates": ds["known_covariates"],
+    }
+
+
+def test_timeseries_train(test_helper, framework_version, shared_training_job_name, retail_sales_dataset):
+    """Train the predictor once; follow-up tests attach to this completed SageMaker job."""
     ds = retail_sales_dataset
-    timestamp = test_helper.get_utc_timestamp_now()
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-
-        predictor_init_args = dict(
-            target=ds["target"],
-            prediction_length=ds["prediction_length"],
-            known_covariates_names=ds["known_covariates_names"],
+        predictor = TimeSeriesCloudPredictor(
+            cloud_output_path=test_helper.shared_training_output_path(
+                "timeseries", framework_version, shared_training_job_name
+            ),
+            local_output_path="test_timeseries_training",
         )
-        predictor_fit_args = dict(
-            presets="medium_quality",
-            time_limit=60,
+        predictor.fit(
+            train_data=ds["train_data"],
+            predictor_init_args={
+                "target": ds["target"],
+                "prediction_length": ds["prediction_length"],
+                "known_covariates_names": ds["known_covariates_names"],
+            },
+            predictor_fit_args={"presets": "medium_quality", "time_limit": 60},
+            id_column=ds["id_column"],
+            timestamp_column=ds["timestamp_column"],
+            static_features=ds["static_features"],
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+            job_name=shared_training_job_name,
         )
+        info = predictor.info()
+        assert info["fit_job"]["name"] == shared_training_job_name
+        assert info["fit_job"]["status"] == "Completed"
+        job_arn = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
+            "TrainingJobArn"
+        ]
+        test_helper.assert_ag_cloud_tags(job_arn, module="timeseries")
 
-        cloud_predictor = TimeSeriesCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries/{framework_version}/{timestamp}",
-            local_output_path="test_timeseries_cloud_predictor",
+
+def test_timeseries_endpoint_lifecycle(test_helper, framework_version, shared_training_job_name, retail_sales_dataset):
+    """Deploy the shared predictor and exercise detach, attach, save, and load."""
+    ds = retail_sales_dataset
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        predictor = test_helper.attach_shared_training_job(
+            TimeSeriesCloudPredictor,
+            module="timeseries",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="endpoint-lifecycle",
         )
-        cloud_predictor_no_train = TimeSeriesCloudPredictor(
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries-no-train/{framework_version}/{timestamp}",
-            local_output_path="test_timeseries_cloud_predictor_no_train",
-        )
-
-        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
-
-        test_helper.test_functionality(
-            cloud_predictor,
+        predictor.deploy(**_deploy_kwargs(test_helper, framework_version))
+        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=predictor.endpoint_name)["EndpointArn"]
+        test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries")
+        test_helper.test_timeseries_endpoint(
+            predictor,
             ds["train_data"],
-            predictor_init_args,
-            predictor_fit_args,
-            cloud_predictor_no_train,
-            ds["train_data"],
-            fit_kwargs=dict(
-                id_column=ds["id_column"],
-                timestamp_column=ds["timestamp_column"],
-                static_features=ds["static_features"],
-                framework_version=framework_version,
-                custom_image_uri=training_custom_image_uri,
-            ),
-            deploy_kwargs=dict(framework_version=framework_version, custom_image_uri=inference_custom_image_uri),
-            predict_kwargs=dict(
-                static_features=ds["static_features"],
-                known_covariates=ds["known_covariates"],
-                framework_version=framework_version,
-                custom_image_uri=inference_custom_image_uri,
-            ),
-            predict_real_time_kwargs=dict(
-                static_features=ds["static_features"],
-                known_covariates=ds["known_covariates"],
-            ),
+            **_predict_real_time_kwargs(ds),
         )
+
+        detached_endpoint = predictor.detach_endpoint()
+        predictor.attach_endpoint(detached_endpoint)
+        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
+
+        predictor.save()
+        predictor = TimeSeriesCloudPredictor.load(predictor.local_output_path)
+        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
+        predictor.cleanup_deployment()
+
+
+def test_timeseries_batch_predict(test_helper, framework_version, shared_training_job_name, retail_sales_dataset):
+    """Run batch prediction from a predictor attached to the shared training job."""
+    ds = retail_sales_dataset
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        predictor = test_helper.attach_shared_training_job(
+            TimeSeriesCloudPredictor,
+            module="timeseries",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="batch-predict",
+        )
+        predictions = predictor.predict(
+            ds["train_data"],
+            **_predict_kwargs(test_helper, framework_version, ds),
+        )
+        assert isinstance(predictions, pd.DataFrame)
+        assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
+
+
+def test_timeseries_redeploy_attached_job(
+    test_helper, framework_version, shared_training_job_name, retail_sales_dataset
+):
+    """Deploy the shared training job from a fresh CloudPredictor."""
+    ds = retail_sales_dataset
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        predictor = test_helper.attach_shared_training_job(
+            TimeSeriesCloudPredictor,
+            module="timeseries",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="redeploy-attached-job",
+        )
+        predictor.deploy(**_deploy_kwargs(test_helper, framework_version))
+        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
+        predictor.cleanup_deployment()
+
+
+def test_timeseries_predict_attached_job(
+    test_helper, framework_version, shared_training_job_name, retail_sales_dataset
+):
+    """Run batch prediction with an explicit artifact path from the shared training job."""
+    ds = retail_sales_dataset
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        predictor = test_helper.attach_shared_training_job(
+            TimeSeriesCloudPredictor,
+            module="timeseries",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="predict-attached-job",
+        )
+        predictions = predictor.predict(
+            ds["train_data"],
+            predictor_path=predictor.get_fit_job_output_path(),
+            **_predict_kwargs(test_helper, framework_version, ds),
+        )
+        assert isinstance(predictions, pd.DataFrame)
+        assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
 
 
 @pytest.mark.parametrize(

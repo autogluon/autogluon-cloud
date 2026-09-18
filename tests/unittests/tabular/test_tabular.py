@@ -1,41 +1,187 @@
 import os
 import tempfile
 
+import boto3
 import pandas as pd
+import pytest
+
+from autogluon.cloud import TabularCloudPredictor
+from autogluon.cloud.model import TabularFoundationModel
+
+_TRAIN_DATA = "tabular_train.csv"
+_TUNE_DATA = "tabular_tune.csv"
+_TEST_DATA = "tabular_test.csv"
+
+
+def _prepare_data(test_helper) -> None:
+    test_helper.prepare_data(_TRAIN_DATA, _TUNE_DATA, _TEST_DATA)
+
+
+def test_tabular_train(test_helper, framework_version, shared_training_job_name):
+    """Train the predictor once; follow-up tests attach to this completed SageMaker job."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        _prepare_data(test_helper)
+
+        predictor_init_args = dict(label="class", eval_metric="roc_auc")
+        predictor_fit_args = dict(time_limit=60)
+        with pytest.raises(ValueError, match="No `cloud_output_path` was provided"):
+            TabularCloudPredictor().fit(
+                train_data=_TRAIN_DATA,
+                predictor_init_args=predictor_init_args,
+                predictor_fit_args=predictor_fit_args,
+            )
+
+        predictor = TabularCloudPredictor(
+            cloud_output_path=test_helper.shared_training_output_path(
+                "tabular", framework_version, shared_training_job_name
+            ),
+            local_output_path="test_tabular_training",
+        )
+        predictor.fit(
+            train_data=_TRAIN_DATA,
+            tuning_data=_TUNE_DATA,
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+            job_name=shared_training_job_name,
+        )
+        info = predictor.info()
+        assert info["fit_job"]["name"] == shared_training_job_name
+        assert info["fit_job"]["status"] == "Completed"
+        job_arn = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
+            "TrainingJobArn"
+        ]
+        test_helper.assert_ag_cloud_tags(job_arn, module="tabular")
+
+
+def test_tabular_endpoint_lifecycle(test_helper, framework_version, shared_training_job_name):
+    """Deploy the shared predictor and exercise detach, attach, save, and load."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        _prepare_data(test_helper)
+        predictor = test_helper.attach_shared_training_job(
+            TabularCloudPredictor,
+            module="tabular",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="endpoint-lifecycle",
+        )
+
+        predictor.deploy(
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+        )
+        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=predictor.endpoint_name)["EndpointArn"]
+        test_helper.assert_ag_cloud_tags(endpoint_arn, module="tabular")
+        test_helper.test_endpoint(predictor, _TEST_DATA, inference_kwargs=dict(model="LightGBM"))
+
+        detached_endpoint = predictor.detach_endpoint()
+        predictor.attach_endpoint(detached_endpoint)
+        test_helper.test_endpoint(predictor, _TEST_DATA)
+
+        predictor.save()
+        predictor = TabularCloudPredictor.load(predictor.local_output_path)
+        test_helper.test_endpoint(predictor, _TEST_DATA)
+        predictor.cleanup_deployment()
+
+
+def test_tabular_batch_predict(test_helper, framework_version, shared_training_job_name):
+    """Run batch prediction from a predictor attached to the shared training job."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        _prepare_data(test_helper)
+        predictor = test_helper.attach_shared_training_job(
+            TabularCloudPredictor,
+            module="tabular",
+            framework_version=framework_version,
+            job_name=shared_training_job_name,
+            test_name="batch-predict",
+        )
+
+        pred, pred_proba = predictor.predict_proba(
+            _TEST_DATA,
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+        )
+        assert isinstance(pred, pd.Series)
+        assert isinstance(pred_proba, pd.DataFrame)
+        assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
+
+
+def test_tabular_deploy_trained_artifact(test_helper, framework_version, shared_training_job_name):
+    """Deploy the shared model artifact from a fresh CloudPredictor."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        _prepare_data(test_helper)
+        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
+            "ModelArtifacts"
+        ]["S3ModelArtifacts"]
+        predictor = TabularCloudPredictor(
+            cloud_output_path=test_helper.shared_followup_output_path(
+                "tabular", framework_version, shared_training_job_name, "deploy-trained-artifact"
+            ),
+            local_output_path="test_tabular_deploy_trained_artifact",
+        )
+
+        predictor.deploy(
+            predictor_path=artifact_path,
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+        )
+        test_helper.test_endpoint(predictor, _TEST_DATA)
+        predictor.cleanup_deployment()
+
+
+def test_tabular_predict_trained_artifact(test_helper, framework_version, shared_training_job_name):
+    """Run batch prediction from the shared model artifact with a fresh CloudPredictor."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        _prepare_data(test_helper)
+        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
+            "ModelArtifacts"
+        ]["S3ModelArtifacts"]
+        predictor = TabularCloudPredictor(
+            cloud_output_path=test_helper.shared_followup_output_path(
+                "tabular", framework_version, shared_training_job_name, "predict-trained-artifact"
+            ),
+            local_output_path="test_tabular_predict_trained_artifact",
+        )
+
+        pred, pred_proba = predictor.predict_proba(
+            _TEST_DATA,
+            predictor_path=artifact_path,
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+        )
+        assert isinstance(pred, pd.Series)
+        assert isinstance(pred_proba, pd.DataFrame)
+        assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
 
 
 def test_tabular_foundation_model_predict(test_helper, framework_version):
-    import boto3
-
-    from autogluon.cloud.model import TabularFoundationModel
-
-    train_data = "tabular_train.csv"
-    test_data = "tabular_test.csv"
     timestamp = test_helper.get_utc_timestamp_now()
-
     bucket = "autogluon-cloud-ci"
     predictions_key = f"test-tabular-fm-predict/{framework_version}/{timestamp}/custom_predictions.csv"
     predictions_path = f"s3://{bucket}/{predictions_key}"
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        test_helper.prepare_data(train_data, test_data)
-        n_test_rows = len(pd.read_csv(test_data))
-
-        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
+        test_helper.prepare_data(_TRAIN_DATA, _TEST_DATA)
+        n_test_rows = len(pd.read_csv(_TEST_DATA))
 
         model = TabularFoundationModel(
             "mitra-classifier",
             cloud_output_path=f"s3://{bucket}/test-tabular-fm-predict/{framework_version}/{timestamp}",
         )
-
         pred, pred_proba = model.predict_proba(
-            train_data=train_data,
-            test_data=test_data,
+            train_data=_TRAIN_DATA,
+            test_data=_TEST_DATA,
             label="class",
             include_predict=True,
             framework_version=framework_version,
-            custom_image_uri=training_custom_image_uri,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
             predictions_path=predictions_path,
         )
 

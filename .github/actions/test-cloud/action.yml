@@ -15,7 +15,29 @@ runs:
         role-to-assume: arn:aws:iam::369469875935:role/AutoGluonCloudCIRole
         role-duration-seconds: 7200
         aws-region: us-east-1
+    - name: Install Cloud Test Dependencies
+      shell: bash
+      run: |
+        source ./.github/workflow_scripts/env_setup.sh
+        install_cloud_test
+    - name: Train Shared Cloud Predictor
+      if: inputs.submodule-to-test == 'tabular' || inputs.submodule-to-test == 'timeseries'
+      shell: bash
+      run: |
+        module='${{ inputs.submodule-to-test }}'
+        version='${{ inputs.ag_version }}'
+        export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
+        setup_test="tests/unittests/${module}/test_${module}.py::test_${module}_train"
+        python3 -m pytest "$setup_test" --framework_version "$version"
     - name: Test Cloud Submodule
       shell: bash
       run: |
-        chmod +x ./.github/workflow_scripts/test_cloud.sh && ./.github/workflow_scripts/test_cloud.sh '${{ inputs.submodule-to-test }}' '${{ inputs.ag_version }}'
+        module='${{ inputs.submodule-to-test }}'
+        version='${{ inputs.ag_version }}'
+        extra_args=()
+        if [[ "$module" == "tabular" || "$module" == "timeseries" ]]; then
+          export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
+          extra_args+=(--deselect "tests/unittests/${module}/test_${module}.py::test_${module}_train")
+        fi
+        python3 -m pytest -n 4 --junitxml=results.xml "tests/unittests/$module/" \
+          --framework_version "$version" "${extra_args[@]}"
