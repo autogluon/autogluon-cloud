@@ -16,8 +16,8 @@ on:
   pull_request:
 
 concurrency:
-  # Per-ref so a tag/branch push never cancels a build for a different ref
-  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  # Cancel superseded commits for the same PR without mixing PRs, refs, or trigger types.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
