@@ -21,14 +21,14 @@ runs:
         source ./.github/workflow_scripts/env_setup.sh
         install_cloud_test
     - name: Train Shared Cloud Predictor
-      if: inputs.submodule-to-test == 'general' || inputs.submodule-to-test == 'timeseries'
+      if: inputs.submodule-to-test == 'tabular' || inputs.submodule-to-test == 'timeseries'
       shell: bash
       run: |
         module='${{ inputs.submodule-to-test }}'
         version='${{ inputs.ag_version }}'
         export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
-        if [[ "$module" == "general" ]]; then
-          setup_test="tests/unittests/general/test_full_functionality.py::test_full_functionality_train"
+        if [[ "$module" == "tabular" ]]; then
+          setup_test="tests/unittests/tabular/test_tabular.py::test_tabular_train"
         else
           setup_test="tests/unittests/timeseries/test_timeseries.py::test_timeseries_train"
         fi
@@ -39,9 +39,9 @@ runs:
         module='${{ inputs.submodule-to-test }}'
         version='${{ inputs.ag_version }}'
         extra_args=()
-        if [[ "$module" == "general" ]]; then
+        if [[ "$module" == "tabular" ]]; then
           export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
-          extra_args+=(--deselect "tests/unittests/general/test_full_functionality.py::test_full_functionality_train")
+          extra_args+=(--deselect "tests/unittests/tabular/test_tabular.py::test_tabular_train")
         elif [[ "$module" == "timeseries" ]]; then
           export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
           extra_args+=(--deselect "tests/unittests/timeseries/test_timeseries.py::test_timeseries_train")
