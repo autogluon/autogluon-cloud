@@ -113,33 +113,6 @@ jobs:
         with:
           submodule-to-test: tabular
           ag_version: '${{ matrix.AG_VERSION }}'
-  test_multimodal_cloud:
-    if: false
-    strategy:
-      fail-fast: false
-      matrix:
-        AG_VERSION: ["source", "1.2.0"]
-    needs: cloud_lint_check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Check if changes beside docs
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            other_than_docs:
-              - '!(docs/**)**'
-      - name: Test Multimodal Cloud
-        if: steps.changes.outputs.other_than_docs == 'true'
-        uses: ./.github/actions/test-cloud
-        with:
-          submodule-to-test: multimodal
-          ag_version: '${{ matrix.AG_VERSION }}'
   test_timeseries_cloud:
     # Fork PRs cannot assume the CI role, so skip instead of failing.
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
