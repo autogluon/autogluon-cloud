@@ -10,13 +10,7 @@ import pandas as pd
 from autogluon.cloud.utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 
 SERVE_SCRIPT = (
-    Path(__file__).parents[3]
-    / "src"
-    / "autogluon"
-    / "cloud"
-    / "scripts"
-    / "sagemaker_scripts"
-    / "tabular_fm_serve.py"
+    Path(__file__).parents[3] / "src" / "autogluon" / "cloud" / "scripts" / "sagemaker_scripts" / "tabular_fm_serve.py"
 )
 
 
@@ -124,9 +118,7 @@ def test_transform_fits_request_train_data_before_predicting(monkeypatch):
     pd.testing.assert_frame_equal(predictor.predict_data, data)
     assert predictor.problem_type == "multiclass"
     assert predictor.fit_kwargs == {
-        "hyperparameters": {
-            "MITRA": {"fine_tune": False, "hf_cls_model": "autogluon/mitra-classifier"}
-        },
+        "hyperparameters": {"MITRA": {"fine_tune": False, "hf_cls_model": "autogluon/mitra-classifier"}},
         "fit_weighted_ensemble": False,
     }
     assert content_type == "application/x-parquet"
