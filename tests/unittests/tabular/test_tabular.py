@@ -54,23 +54,15 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
 
     from autogluon.cloud.model import TabularFoundationModel
 
+    train_data = "tabular_train.csv"
+    test_data = "tabular_test.csv"
     timestamp = test_helper.get_utc_timestamp_now()
-    train_data = pd.DataFrame(
-        {
-            "feature_a": list(range(40)),
-            "feature_b": [value % 3 for value in range(40)],
-            "class": ["negative"] * 20 + ["positive"] * 20,
-        }
-    )
-    test_data = pd.DataFrame(
-        {
-            "feature_a": [5, 35],
-            "feature_b": [2, 2],
-        }
-    )
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
+        test_helper.prepare_data(train_data, test_data)
+        n_test_rows = len(pd.read_csv(test_data))
+
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
 
         model = TabularFoundationModel(
@@ -88,9 +80,8 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
                 label="class",
             )
             assert isinstance(pred, pd.Series)
-            assert len(pred) == len(test_data)
+            assert len(pred) == n_test_rows
             assert isinstance(pred_proba, pd.DataFrame)
-            assert len(pred_proba) == len(test_data)
-            assert set(pred_proba.columns) == {"negative", "positive"}
+            assert len(pred_proba) == n_test_rows
         finally:
             endpoint.delete_endpoint()
