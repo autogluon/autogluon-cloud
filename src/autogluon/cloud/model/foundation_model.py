@@ -576,7 +576,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             "static_features": static_features,
         }
 
-        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True}
+        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True, "skip_predictor_upload": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
 
@@ -828,7 +828,7 @@ class TabularFoundationModel(FoundationModel):
         # Duplicate one tuning row so AutoGluon/Mitra do not hold out any rows from the prediction context.
         tuning_data = train_data.iloc[[0]].copy()
 
-        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True}
+        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True, "skip_predictor_upload": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
 

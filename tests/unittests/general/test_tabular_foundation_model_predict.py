@@ -1,7 +1,8 @@
 """Pure-unit tests for TabularFoundationModel.predict / predict_proba (no AWS).
 
 The batch path reuses the exact mechanism as ``TabularCloudPredictor.fit_predict_proba``:
-``backend.fit(extra_ag_args={"predict_after_fit": True})`` -> ``backend.get_fit_predict_results()``
+``backend.fit(extra_ag_args={"predict_after_fit": True, "skip_predictor_upload": True})``
+-> ``backend.get_fit_predict_results()``
 -> ``split_pred_and_pred_proba``. The equivalence test pins that the two entry points return the
 same thing off the same backend frame; the remaining tests cover the branches unique to the FM path.
 """
@@ -57,6 +58,7 @@ def test_predict_launches_predict_after_fit_job():
     fit_kwargs = fm._backend.fit.call_args.kwargs
     extra_ag_args = fit_kwargs["extra_ag_args"]
     assert extra_ag_args["predict_after_fit"] is True
+    assert extra_ag_args["skip_predictor_upload"] is True
     assert "predictions_path" not in extra_ag_args  # not passed -> backend fills in a default
     pd.testing.assert_frame_equal(fit_kwargs["data_channels"]["train_data"], TRAIN_DATA)
     pd.testing.assert_frame_equal(fit_kwargs["data_channels"]["tuning_data"], TRAIN_DATA.iloc[[0]])

@@ -3,6 +3,7 @@ import io
 import itertools
 import json
 import os
+import tarfile
 import tempfile
 
 import boto3
@@ -12,6 +13,7 @@ import pytest
 
 from autogluon.cloud import TimeSeriesCloudPredictor
 from autogluon.cloud.model import FoundationModel
+from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 
 def _assert_timeseries_predictions(predictions: pd.DataFrame, expected_item_ids: list, prediction_length: int) -> None:
@@ -210,8 +212,16 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
         assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
 
         sm = boto3.client("sagemaker")
-        job_arn = sm.describe_training_job(TrainingJobName=model._backend._fit_job.job_name)["TrainingJobArn"]
-        test_helper.assert_ag_cloud_tags(job_arn, module="timeseries", model_id="chronos-2")
+        job = sm.describe_training_job(TrainingJobName=model._backend._fit_job.job_name)
+        test_helper.assert_ag_cloud_tags(job["TrainingJobArn"], module="timeseries", model_id="chronos-2")
+
+        model_artifact_uri = job["ModelArtifacts"]["S3ModelArtifacts"]
+        model_bucket, model_key = s3_path_to_bucket_prefix(model_artifact_uri)
+        model_artifact_path = os.path.join(temp_dir, "model.tar.gz")
+        boto3.client("s3").download_file(model_bucket, model_key, model_artifact_path)
+        with tarfile.open(model_artifact_path, "r:gz") as model_archive:
+            archived_files = [member.name for member in model_archive.getmembers() if member.isfile()]
+        assert archived_files == [], f"predict job unexpectedly uploaded predictor files: {archived_files}"
 
 
 def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, framework_version, retail_sales_dataset):

@@ -405,7 +405,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             backend_kwargs = {}
         else:
             backend_kwargs = dict(backend_kwargs)
-        extra_ag_args = {"predict_after_fit": True}
+        extra_ag_args = dict(backend_kwargs.get("extra_ag_args") or {})
+        extra_ag_args["predict_after_fit"] = True
+        extra_ag_args["skip_predictor_upload"] = True
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
         backend_kwargs["extra_ag_args"] = extra_ag_args
