@@ -1,4 +1,5 @@
 import logging
+import warnings
 
 from ..backend.constant import MULTIMODL_SAGEMAKER, SAGEMAKER
 from .cloud_predictor import CloudPredictor
@@ -15,6 +16,15 @@ class MultiModalCloudPredictor(CloudPredictor):
 
     predictor_file_name = "MultiModalCloudPredictor.pkl"
     backend_map = {SAGEMAKER: MULTIMODL_SAGEMAKER}
+
+    def __init__(self, *args, **kwargs) -> None:
+        warnings.warn(
+            "AutoGluon Multimodal is on a deprecation path. "
+            "MultiModalCloudPredictor will be removed in autogluon.cloud v0.7.0.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
     @property
     def predictor_type(self) -> str:
