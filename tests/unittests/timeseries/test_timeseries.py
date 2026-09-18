@@ -387,8 +387,9 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
         inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
 
         cloud_predictor.fit(
+            train_data=plain_dataset,
             predictor_init_args=dict(target="target", prediction_length=_PLAIN_PREDICTION_LENGTH),
-            predictor_fit_args=dict(train_data=plain_dataset, presets="medium_quality", time_limit=60),
+            predictor_fit_args=dict(presets="medium_quality", time_limit=60),
             framework_version=framework_version,
             custom_image_uri=training_custom_image_uri,
         )
