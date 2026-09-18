@@ -834,7 +834,6 @@ class TabularFoundationModel(FoundationModel):
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            use_full_train_data=True,
             extra_ag_args=extra_ag_args,
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
             **backend_kwargs,

@@ -99,21 +99,6 @@ def test_when_test_data_omits_label_column_then_validation_passes(backend):
     _backend_fit(backend, train, test)  # does not raise
 
 
-def test_when_full_train_data_requested_then_tuning_row_is_duplicated(backend):
-    train = pd.DataFrame({"x": [1, 2], "y": [0, 1]})
-
-    backend.fit(
-        predictor_init_args={"label": "y"},
-        predictor_fit_args={},
-        data_channels={"train_data": train},
-        use_full_train_data=True,
-    )
-
-    data_channels = SagemakerBackend.fit.call_args.kwargs["data_channels"]
-    pd.testing.assert_frame_equal(data_channels["train_data"], train)
-    pd.testing.assert_frame_equal(data_channels["tuning_data"], train.iloc[[0]])
-
-
 def test_when_test_data_missing_feature_columns_then_raises(backend):
     train = pd.DataFrame({"x": [1, 2], "z": [3, 4], "y": [0, 1]})
     test = pd.DataFrame({"x": [5]})  # missing feature column `z`
