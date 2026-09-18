@@ -7,6 +7,17 @@ from packaging.version import Version
 
 _CONFIG_PATH = Path(__file__).parent / "autogluon_dlc.json"
 _GPU_INSTANCE_PREFIXES = ("ml.p", "ml.g")
+_INFERENCE_AMI_INSTANCE_PREFIXES = (
+    "ml.g4dn.",
+    "ml.g5.",
+    "ml.g6.",
+    "ml.g6e.",
+    "ml.p4d.",
+    "ml.p4de.",
+    "ml.p5.",
+    "ml.p5e.",
+    "ml.p5en.",
+)
 _BATCH_AMI_INSTANCE_PREFIXES = ("ml.g4dn.", "ml.g5.", "ml.g6.")
 _CUDA_13_AMI_VERSIONS = {
     "inference": "al2023-ami-sagemaker-inference-gpu-4-1",
@@ -26,9 +37,10 @@ def _is_gpu_instance(instance_type):
 def infer_sagemaker_ami_version(image_uri, instance_type, image_scope):
     """Infer the SageMaker host AMI required by a custom GPU image."""
     assert image_scope in _CUDA_13_AMI_VERSIONS
-    if not image_uri or not instance_type.startswith(_GPU_INSTANCE_PREFIXES):
-        return None
-    if image_scope == "transform" and not instance_type.startswith(_BATCH_AMI_INSTANCE_PREFIXES):
+    instance_prefixes = (
+        _INFERENCE_AMI_INSTANCE_PREFIXES if image_scope == "inference" else _BATCH_AMI_INSTANCE_PREFIXES
+    )
+    if not image_uri or not instance_type.startswith(instance_prefixes):
         return None
 
     image_tag = image_uri.rsplit(":", 1)[-1]

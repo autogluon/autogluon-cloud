@@ -40,6 +40,11 @@ def test_infer_batch_ami_ignores_unsupported_instance_family():
     assert infer_sagemaker_ami_version(GPU_IMAGE_URI, "ml.p5.xlarge", "transform") is None
 
 
+@pytest.mark.parametrize("instance_type", ["ml.p3.2xlarge", "ml.p6-b200.48xlarge", "ml.g7e.48xlarge"])
+def test_infer_realtime_ami_ignores_unsupported_or_already_compatible_instance_family(instance_type):
+    assert infer_sagemaker_ami_version(GPU_IMAGE_URI, instance_type, "inference") is None
+
+
 def test_transform_ami_session_injects_ami_without_mutating_input():
     session = mock.MagicMock()
     wrapper = _TransformAmiVersionSession(session, "al2-ami-sagemaker-batch-gpu-535")
