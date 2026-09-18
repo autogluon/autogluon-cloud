@@ -39,11 +39,12 @@ runs:
         module='${{ inputs.submodule-to-test }}'
         version='${{ inputs.ag_version }}'
         extra_args=()
-        if [[ "$module" == "tabular" ]]; then
+        if [[ "$module" == "tabular" || "$module" == "timeseries" ]]; then
           export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
+        fi
+        if [[ "$module" == "tabular" ]]; then
           extra_args+=(--deselect "tests/unittests/tabular/test_tabular.py::test_tabular_train")
         elif [[ "$module" == "timeseries" ]]; then
-          export AG_CLOUD_SHARED_TRAINING_JOB_NAME="ag-cloud-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${module}-${version//./-}"
           extra_args+=(--deselect "tests/unittests/timeseries/test_timeseries.py::test_timeseries_train")
         fi
         python3 -m pytest -n 4 --junitxml=results.xml "tests/unittests/$module/" \
