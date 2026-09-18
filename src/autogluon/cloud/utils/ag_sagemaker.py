@@ -13,6 +13,8 @@ from .dlc_utils import retrieve_image_uri, retrieve_latest_framework_version
 from .serializers import AutoGluonSerializer, MultiModalSerializer
 
 
+# SageMaker SDK v2 does not expose TransformAmiVersion through its public Transformer API.
+# Remove this proxy when AG Cloud migrates Batch Transform to the SDK v3 resource API.
 class _TransformAmiVersionSession:
     """Delegate to a SageMaker session while adding a Batch Transform AMI."""
 
