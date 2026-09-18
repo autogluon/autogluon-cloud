@@ -203,7 +203,7 @@ class CloudPredictor(ABC):
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor
+            If None, CloudPredictor creates one with a predictor-specific prefix.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
         instance_count: Union[int, str], default = "auto"
@@ -405,7 +405,7 @@ class CloudPredictor(ABC):
             If None, will deploy the most recent trained predictor trained with `fit()`.
         endpoint_name: str
             The endpoint name to use for the deployment.
-            If None, CloudPredictor will create one with prefix `ag-cloudpredictor`
+            If None, CloudPredictor creates one with a predictor-specific prefix.
         framework_version: str, default = `latest`
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
@@ -594,7 +594,7 @@ class CloudPredictor(ABC):
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+            If None, CloudPredictor creates one with a predictor-specific prefix.
         instance_count: int, default = 1,
             Number of instances used to do batch transform.
         instance_type: str, default = 'ml.m5.2xlarge'
@@ -689,7 +689,7 @@ class CloudPredictor(ABC):
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+            If None, CloudPredictor creates one with a predictor-specific prefix.
         instance_count: int, default = 1,
             Number of instances used to do batch transform.
         instance_type: str, default = 'ml.m5.2xlarge'

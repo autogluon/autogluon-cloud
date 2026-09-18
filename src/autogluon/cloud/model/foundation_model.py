@@ -129,6 +129,7 @@ class FoundationModel:
             local_output_path=self._tmpdir.name,
             cloud_output_path=self.cloud_output_path,
             predictor_type=self._predictor_type,
+            resource_prefix=f"ag-{self.model_id}",
             role=role,
         )
 

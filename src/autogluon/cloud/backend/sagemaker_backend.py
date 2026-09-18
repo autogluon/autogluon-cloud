@@ -27,7 +27,7 @@ from ..utils.ag_sagemaker import (
     AutoGluonRepackInferenceModel,
 )
 from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
-from ..utils.constants import CLOUD_RESOURCE_PREFIX, VALID_ACCEPT
+from ..utils.constants import VALID_ACCEPT
 from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version
 from ..utils.misc import MostRecentInsertedOrderedDict
 from ..utils.serializers import AutoGluonSerializationWrapper
@@ -207,7 +207,7 @@ class SagemakerBackend(Backend):
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor
+            If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
@@ -250,7 +250,7 @@ class SagemakerBackend(Backend):
             logger.log(20, f"Training with framework_version=={framework_version}")
 
         if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
+            job_name = sagemaker.utils.unique_name_from_base(self.resource_prefix)
 
         if instance_count == "auto":
             instance_count = 1
@@ -337,7 +337,7 @@ class SagemakerBackend(Backend):
             volume_size=volume_size,
             framework_version=framework_version,
             py_version=py_version,
-            base_job_name="autogluon-cloudpredictor-train",
+            base_job_name=f"{self.resource_prefix}-train",
             output_path=output_path,
             code_location=code_location,
             inputs=inputs,
@@ -386,7 +386,7 @@ class SagemakerBackend(Backend):
             If None, will deploy the most recent trained predictor trained with `fit()`.
         endpoint_name: str
             The endpoint name to use for the deployment.
-            If None, CloudPredictor will create one with prefix `ag-cloudpredictor`
+            If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
         framework_version: str, default = `latest`
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
@@ -433,7 +433,7 @@ class SagemakerBackend(Backend):
             # Needed to infer the container image (CPU vs GPU) downstream — serverless is CPU-only.
             instance_type = "ml.m5.2xlarge"
         if not endpoint_name:
-            endpoint_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
+            endpoint_name = sagemaker.utils.unique_name_from_base(self.resource_prefix)
 
         # Resolve container image
         if custom_image_uri:
@@ -799,7 +799,7 @@ class SagemakerBackend(Backend):
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+            If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
         instance_count: int, default = 1,
             Number of instances used to do batch transform.
         instance_type: str, default = 'ml.m5.2xlarge'
@@ -904,7 +904,7 @@ class SagemakerBackend(Backend):
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
-            If None, CloudPredictor will create one with prefix ag-cloudpredictor.
+            If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
         instance_count: int, default = 1,
             Number of instances used to do batch transform.
         instance_type: str, default = 'ml.m5.2xlarge'
@@ -1257,7 +1257,7 @@ class SagemakerBackend(Backend):
         predictor_path = self._upload_predictor(predictor_path, cloud_key_prefix + "/predictor")
 
         if not job_name:
-            job_name = sagemaker.utils.unique_name_from_base(CLOUD_RESOURCE_PREFIX)
+            job_name = sagemaker.utils.unique_name_from_base(self.resource_prefix)
 
         if test_data_image_column is not None:
             logger.warning("Batch inference with image modality could be slow because of some technical details.")
