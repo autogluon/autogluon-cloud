@@ -92,12 +92,16 @@ def transform_fn(model_config, request_body, input_content_type, output_content_
     problem_type = model_config["problem_type"]
 
     with tempfile.TemporaryDirectory(prefix="ag_tabular_fm_") as temp_dir:
+        # Explicit tuning data prevents AutoGluon and Mitra from holding out context rows internally.
+        # Duplicate one row so every row in train_data remains available to Mitra during prediction.
+        tuning_data = train_data.iloc[[0]].copy()
         predictor = TabularPredictor(
             label=label,
             problem_type=problem_type,
             path=os.path.join(temp_dir, "predictor"),
         ).fit(
             train_data,
+            tuning_data=tuning_data,
             hyperparameters={ag_model_key: hyperparameters},
             fit_weighted_ensemble=False,
         )

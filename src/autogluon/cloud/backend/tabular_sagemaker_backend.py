@@ -18,12 +18,17 @@ class TabularSagemakerBackend(SagemakerBackend):
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Dict[str, Any],
         data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
+        use_full_train_data: bool = False,
         **kwargs,
     ) -> None:
         data_channels = self._validate_data_channels(
             data_channels=data_channels,
             predictor_init_args=predictor_init_args,
         )
+        if use_full_train_data:
+            # An explicit tuning row prevents AutoGluon from removing a holdout from train_data.
+            # Keep the row in train_data as well so foundation models receive the full context.
+            data_channels["tuning_data"] = data_channels["train_data"].iloc[[0]].copy()
         super().fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,

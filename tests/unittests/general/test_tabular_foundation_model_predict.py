@@ -52,9 +52,11 @@ def test_predict_returns_prediction_series():
 def test_predict_launches_predict_after_fit_job():
     fm = _make_fm()
     fm.predict(**PREDICT_ARGS)
-    extra_ag_args = fm._backend.fit.call_args.kwargs["extra_ag_args"]
+    fit_kwargs = fm._backend.fit.call_args.kwargs
+    extra_ag_args = fit_kwargs["extra_ag_args"]
     assert extra_ag_args["predict_after_fit"] is True
     assert "predictions_path" not in extra_ag_args  # not passed -> backend fills in a default
+    assert fit_kwargs["use_full_train_data"] is True
 
 
 @pytest.mark.parametrize(
