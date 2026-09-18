@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import pandas as pd
 from typing_extensions import Self
 
+from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 from ..backend.backend_factory import BackendFactory
@@ -822,6 +823,11 @@ class TabularFoundationModel(FoundationModel):
         if instance_type is None:
             instance_type = self._config.predict_instance_type
 
+        if isinstance(train_data, (str, Path)):
+            train_data = load_pd.load(str(train_data))
+        # Duplicate one tuning row so AutoGluon/Mitra do not hold out any rows from the prediction context.
+        tuning_data = train_data.iloc[[0]].copy()
+
         extra_ag_args: Dict[str, Any] = {"predict_after_fit": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
@@ -829,7 +835,7 @@ class TabularFoundationModel(FoundationModel):
         self._backend.fit(
             predictor_init_args=self._build_predictor_init_args(label=label),
             predictor_fit_args=self._build_predictor_fit_args(hyperparameters),
-            data_channels={"train_data": train_data, "test_data": test_data},
+            data_channels={"train_data": train_data, "tuning_data": tuning_data, "test_data": test_data},
             framework_version=framework_version,
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,
