@@ -7,9 +7,11 @@ from autogluon.cloud.utils.ag_sagemaker import _TransformAmiVersionSession
 from autogluon.cloud.utils.dlc_utils import infer_sagemaker_ami_version
 
 GPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cu133-amzn2023"
+GPU_UBUNTU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cu133-ubuntu24.04"
 CPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cpu-amzn2023"
 
 
+@pytest.mark.parametrize("image_uri", [GPU_IMAGE_URI, GPU_UBUNTU_IMAGE_URI])
 @pytest.mark.parametrize(
     ("image_scope", "expected"),
     [
@@ -17,8 +19,8 @@ CPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cpu-
         ("transform", "al2-ami-sagemaker-batch-gpu-535"),
     ],
 )
-def test_infer_sagemaker_ami_version_for_cuda_13_image(image_scope, expected):
-    assert infer_sagemaker_ami_version(GPU_IMAGE_URI, "ml.g4dn.xlarge", image_scope) == expected
+def test_infer_sagemaker_ami_version_for_cuda_13_image(image_uri, image_scope, expected):
+    assert infer_sagemaker_ami_version(image_uri, "ml.g4dn.xlarge", image_scope) == expected
 
 
 @pytest.mark.parametrize(

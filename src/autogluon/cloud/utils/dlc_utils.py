@@ -32,7 +32,7 @@ def infer_sagemaker_ami_version(image_uri, instance_type, image_scope):
         return None
 
     image_tag = image_uri.rsplit(":", 1)[-1]
-    if re.search(r"-cu13\d*-amzn2023$", image_tag):
+    if re.search(r"(?:^|-)cu13\d*(?:-|$)", image_tag):
         return _CUDA_13_AMI_VERSIONS[image_scope]
     return None
 
