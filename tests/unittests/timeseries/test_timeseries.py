@@ -3,13 +3,13 @@ import io
 import itertools
 import json
 import os
-import tarfile
 import tempfile
 
 import boto3
 import numpy as np
 import pandas as pd
 import pytest
+from botocore.exceptions import ClientError
 
 from autogluon.cloud import TimeSeriesCloudPredictor
 from autogluon.cloud.model import FoundationModel
@@ -217,11 +217,9 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
 
         model_artifact_uri = job["ModelArtifacts"]["S3ModelArtifacts"]
         model_bucket, model_key = s3_path_to_bucket_prefix(model_artifact_uri)
-        model_artifact_path = os.path.join(temp_dir, "model.tar.gz")
-        boto3.client("s3").download_file(model_bucket, model_key, model_artifact_path)
-        with tarfile.open(model_artifact_path, "r:gz") as model_archive:
-            archived_files = [member.name for member in model_archive.getmembers() if member.isfile()]
-        assert archived_files == [], f"predict job unexpectedly uploaded predictor files: {archived_files}"
+        with pytest.raises(ClientError) as error:
+            boto3.client("s3").head_object(Bucket=model_bucket, Key=model_key)
+        assert error.value.response["Error"]["Code"] in {"404", "NoSuchKey"}
 
 
 def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, framework_version, retail_sales_dataset):

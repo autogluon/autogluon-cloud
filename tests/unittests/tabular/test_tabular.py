@@ -1,8 +1,9 @@
 import os
-import tarfile
 import tempfile
 
 import pandas as pd
+import pytest
+from botocore.exceptions import ClientError
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
@@ -53,11 +54,9 @@ def test_tabular_foundation_model_predict(test_helper, framework_version):
         job = boto3.client("sagemaker").describe_training_job(TrainingJobName=model._backend._fit_job.job_name)
         model_artifact_uri = job["ModelArtifacts"]["S3ModelArtifacts"]
         model_bucket, model_key = s3_path_to_bucket_prefix(model_artifact_uri)
-        model_artifact_path = os.path.join(temp_dir, "model.tar.gz")
-        boto3.client("s3").download_file(model_bucket, model_key, model_artifact_path)
-        with tarfile.open(model_artifact_path, "r:gz") as model_archive:
-            archived_files = [member.name for member in model_archive.getmembers() if member.isfile()]
-        assert archived_files == [], f"predict job unexpectedly uploaded predictor files: {archived_files}"
+        with pytest.raises(ClientError) as error:
+            boto3.client("s3").head_object(Bucket=model_bucket, Key=model_key)
+        assert error.value.response["Error"]["Code"] in {"404", "NoSuchKey"}
 
 
 def test_tabular_foundation_model_deploy(test_helper, framework_version):
