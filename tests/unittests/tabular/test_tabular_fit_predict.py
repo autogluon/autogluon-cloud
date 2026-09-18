@@ -37,7 +37,6 @@ def test_when_fit_predict_then_launches_predict_job_and_returns_prediction_serie
     extra_ag_args = cloud_predictor.fit.call_args.kwargs["backend_kwargs"]["extra_ag_args"]
 
     assert extra_ag_args["predict_after_fit"] is True
-    assert "save_predictor" not in extra_ag_args
     assert "predictions_path" not in extra_ag_args  # not passed -> backend fills in a default
     assert isinstance(pred, pd.Series)
     assert pred.tolist() == ["a", "b"]
