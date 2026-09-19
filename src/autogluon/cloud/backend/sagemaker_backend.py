@@ -400,7 +400,7 @@ class SagemakerBackend(Backend):
         custom_image_uri: Optional[str], default = None,
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
-            https://aws.github.io/deep-learning-containers/reference/available_images/
+            https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon
         volume_size: int, default = None
            The size, in GB, of the ML storage volume attached to individual inference instance associated with the production variant.
            Currenly only Amazon EBS gp2 storage volumes are supported.
