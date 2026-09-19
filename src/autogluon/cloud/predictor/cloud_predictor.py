@@ -4,7 +4,6 @@ import io
 import logging
 import os
 import tarfile
-import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -245,19 +244,10 @@ class CloudPredictor(ABC):
         data_channels = {"train_data": train_data, "tuning_data": tuning_data, "test_data": test_data}
         for key in ("train_data", "tuning_data"):
             if key in predictor_fit_args:
-                warnings.warn(
-                    f"Passing `{key}` via `predictor_fit_args` is deprecated and will be removed in autogluon.cloud 0.6.0. "
-                    f"Pass `{key}` as an explicit argument to `fit()` instead.",
-                    FutureWarning,
-                    stacklevel=2,
+                raise TypeError(
+                    f"`{key}` can no longer be passed via `predictor_fit_args`. "
+                    f"Pass `{key}` as an explicit argument to `fit()` instead."
                 )
-                if data_channels[key] is None:
-                    data_channels[key] = predictor_fit_args.pop(key)
-                else:
-                    raise TypeError(
-                        f"`{key}` was passed both as an explicit argument and via `predictor_fit_args`. "
-                        f"Pass it only as an explicit argument."
-                    )
         if data_channels["train_data"] is None:
             raise TypeError("fit() missing required argument: 'train_data'")
         if image_column is not None and self.predictor_type == "tabular":

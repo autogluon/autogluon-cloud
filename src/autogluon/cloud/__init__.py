@@ -1,5 +1,7 @@
 import logging
+import os
 
+os.environ.setdefault("SAGEMAKER_SUPPRESS_V2_WARNING", "1")
 import sagemaker
 from packaging.version import Version
 

@@ -38,7 +38,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     # common module provides utils with stable api across minor version
-    "autogluon.common>=0.7,<1.6",
+    "autogluon.common>=0.7,<1.7",
     # <2 because unlikely to introduce breaking changes in minor releases.
     # TransformAmiVersion was added to the SageMaker service model in botocore 1.37.23.
     "boto3>=1.37.23,<2",
@@ -56,9 +56,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ray = ["ray[default]>=2.10.0,<2.56"]
+ray = ["ray[default]>=2.10.0,<2.59"]
 all = [  # To allow user to pass ag objects
-    "autogluon>=0.7,<1.6",
+    "autogluon>=0.7,<1.7",
     "autogluon.cloud[ray]",
 ]
 tests = [
