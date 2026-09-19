@@ -4,6 +4,7 @@ model_artifact_uri / model_path."""
 from pathlib import Path
 from unittest import mock
 
+import pandas as pd
 import pytest
 
 from autogluon.cloud.model import FoundationModel
@@ -98,6 +99,27 @@ def test_user_hyperparameter_override_wins_over_default_model_path():
     )
     hp = fm._get_hyperparameters("inference")
     assert hp["model_path"] == "my-org/my-finetune"
+
+
+def test_timeseries_predict_does_not_save_predictor():
+    fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
+    fm._backend.get_fit_predict_results.return_value = pd.DataFrame({"mean": [1.0]})
+
+    fm.predict(
+        data=pd.DataFrame(
+            {
+                "item_id": ["A", "A"],
+                "timestamp": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                "target": [1.0, 2.0],
+            }
+        ),
+        target="target",
+        prediction_length=1,
+    )
+
+    extra_ag_args = fm._backend.fit.call_args.kwargs["extra_ag_args"]
+    assert extra_ag_args["predict_after_fit"] is True
+    assert extra_ag_args["save_predictor"] is False
 
 
 def test_deploy_passes_artifact_uri_and_overrides_model_path_to_container_dir():

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import shutil
+import tempfile
 from pprint import pprint
 
 import boto3
@@ -100,6 +101,7 @@ if __name__ == "__main__":
     predictor_init_args["path"] = save_path
     predictor_fit_args = ag_args["predictor_fit_args"]
     predict_after_fit = ag_args.get("predict_after_fit", False)
+    save_predictor = ag_args.get("save_predictor", True)
     valid_predictor_types = ["tabular", "multimodal", "timeseries"]
     assert predictor_type in valid_predictor_types, (
         f"predictor_type {predictor_type} not supported. Valid options are {valid_predictor_types}"
@@ -169,7 +171,7 @@ if __name__ == "__main__":
     if predictor_type == "multimodal":
         predictor.save(path=save_path, standalone=True)
 
-    if predictor_type == "timeseries":
+    if predictor_type == "timeseries" and save_predictor:
         # Persisted so the serve script can rebuild a TimeSeriesDataFrame from the test data
         # passed to predict / predict_real_time without the user having to re-specify the column names.
         with open(os.path.join(save_path, "predictor_metadata.json"), "w") as f:
@@ -200,11 +202,21 @@ if __name__ == "__main__":
             raise NotImplementedError(f"`fit_predict` is not supported for predictor_type='{predictor_type}'.")
         predictions_path = ag_args["predictions_path"]
         # Save locally then upload via boto3: s3fs/fsspec are not available in the training container.
-        local_path = os.path.join(args.output_data_dir, os.path.basename(predictions_path))
-        save_pd.save(path=local_path, df=predictions)
-        bucket, key = s3_path_to_bucket_prefix(predictions_path)
-        boto3.client("s3").upload_file(local_path, bucket, key)
+        with tempfile.TemporaryDirectory(prefix="ag_predictions_") as temp_dir:
+            local_path = os.path.join(temp_dir, os.path.basename(predictions_path))
+            save_pd.save(path=local_path, df=predictions)
+            bucket, key = s3_path_to_bucket_prefix(predictions_path)
+            boto3.client("s3").upload_file(local_path, bucket, key)
         print(f"Uploaded predictions to {predictions_path}")
 
-    print("Saving serving artifacts")
-    shutil.copytree(args.serving_script, os.path.join(save_path, "code"))
+    if not save_predictor:
+        print("Removing predictor artifacts before SageMaker model upload")
+        with os.scandir(save_path) as entries:
+            for entry in entries:
+                if entry.is_dir(follow_symlinks=False):
+                    shutil.rmtree(entry.path)
+                else:
+                    os.unlink(entry.path)
+    else:
+        print("Saving serving artifacts")
+        shutil.copytree(args.serving_script, os.path.join(save_path, "code"))
