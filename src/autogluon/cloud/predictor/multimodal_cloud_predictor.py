@@ -20,7 +20,7 @@ class MultiModalCloudPredictor(CloudPredictor):
     def __init__(self, *args, **kwargs) -> None:
         warnings.warn(
             "AutoGluon Multimodal is on a deprecation path. "
-            "MultiModalCloudPredictor will be removed in autogluon.cloud v0.7.0.",
+            "MultiModalCloudPredictor will be removed in a future release.",
             FutureWarning,
             stacklevel=2,
         )
