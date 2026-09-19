@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
     print(f"Args: {args}")
 
-    # See SageMaker-specific environment variables: https://sagemaker.readthedocs.io/en/stable/overview.html#prepare-a-training-script
+    # See SageMaker-specific environment variables: https://sagemaker.readthedocs.io/en/v2/overview.html#prepare-a-training-script
     os.makedirs(args.output_data_dir, mode=0o777, exist_ok=True)
 
     ag_args_file = get_input_path(args.ag_args)
