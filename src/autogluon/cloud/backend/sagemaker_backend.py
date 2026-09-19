@@ -223,10 +223,10 @@ class SagemakerBackend(Backend):
             Use `get_fit_job_status` to get job status.
         autogluon_sagemaker_estimator_kwargs: dict, default = dict()
             Any extra arguments needed to initialize AutoGluonSagemakerEstimator
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework for all options
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator for all options
         fit_kwargs:
             Any extra arguments needed to pass to fit.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#sagemaker.estimator.Framework.fit for all options
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
         extra_ag_args: Optional[Dict[str, Any]], default = None
             Additional entries to merge into ``ag_args.json``. Use this to ship caller-specific metadata to the
             train script (e.g. ``predict_after_fit``, ``save_predictor``, or ``id_column`` /
@@ -400,7 +400,7 @@ class SagemakerBackend(Backend):
         custom_image_uri: Optional[str], default = None,
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
-            https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
+            https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon
         volume_size: int, default = None
            The size, in GB, of the ML storage volume attached to individual inference instance associated with the production variant.
            Currenly only Amazon EBS gp2 storage volumes are supported.
@@ -409,10 +409,10 @@ class SagemakerBackend(Backend):
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
         model_kwargs: dict, default = dict()
             Any extra arguments needed to initialize Sagemaker Model
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
         deploy_kwargs:
             Any extra arguments needed to pass to deploy.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#sagemaker.model.Model.deploy for all options
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#sagemaker.model.Model.deploy for all options
         fm_serve_config: Optional[Dict[str, Any]], default = None
             Configuration dict passed to the FM serve script via the AG_FM_SERVE_CONFIG env var.
         inference_mode: {"realtime", "serverless"}, default = "realtime"
@@ -821,14 +821,14 @@ class SagemakerBackend(Backend):
             If `persist` is `False`, file would first be downloaded to this path and then removed.
         model_kwargs: dict, default = dict()
             Any extra arguments needed to initialize Sagemaker Model
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
         transformer_kwargs: dict
             Any extra arguments needed to pass to transformer.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
         transform_kwargs:
             Any extra arguments needed to pass to transform.
             Please refer to
-            https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+            https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
 
         Returns
         -------
@@ -926,14 +926,14 @@ class SagemakerBackend(Backend):
             If `persist` is `False`, file would first be downloaded to this path and then removed.
         model_kwargs: dict, default = dict()
             Any extra arguments needed to initialize Sagemaker Model
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model for all options
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
         transformer_kwargs: dict
             Any extra arguments needed to pass to transformer.
-            Please refer to https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
+            Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
         transform_kwargs:
             Any extra arguments needed to pass to transform.
             Please refer to
-            https://sagemaker.readthedocs.io/en/stable/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+            https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
 
 
         Returns

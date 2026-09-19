@@ -31,7 +31,7 @@ class _TransformAmiVersionSession:
         return self._session.transform(**kwargs)
 
 
-# Estimator documentation: https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html#estimators
+# Estimator documentation: https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#estimators
 class AutoGluonSagemakerEstimator(Estimator):
     def __init__(
         self,
@@ -132,7 +132,7 @@ class AutoGluonSagemakerEstimator(Estimator):
         return init_params
 
 
-# Documentation for Model: https://sagemaker.readthedocs.io/en/stable/api/inference/model.html#model
+# Documentation for Model: https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model
 class AutoGluonSagemakerInferenceModel(Model):
     def __init__(
         self,
@@ -253,7 +253,7 @@ class AutoGluonNonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
         )
 
 
-# Predictor documentation: https://sagemaker.readthedocs.io/en/stable/api/inference/predictors.html
+# Predictor documentation: https://sagemaker.readthedocs.io/en/v2/api/inference/predictors.html
 class AutoGluonRealtimePredictor(Predictor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, serializer=AutoGluonSerializer(), deserializer=PandasDeserializer(), **kwargs)
@@ -264,7 +264,7 @@ class AutoGluonMultiModalRealtimePredictor(Predictor):
         super().__init__(*args, serializer=MultiModalSerializer(), deserializer=PandasDeserializer(), **kwargs)
 
 
-# Predictor documentation: https://sagemaker.readthedocs.io/en/stable/api/inference/predictors.html
+# Predictor documentation: https://sagemaker.readthedocs.io/en/v2/api/inference/predictors.html
 # SageMaker can only take in csv format for batch transformation because files need to be easily splitable to be batch processed.
 class AutoGluonBatchPredictor(Predictor):
     def __init__(self, *args, **kwargs):
