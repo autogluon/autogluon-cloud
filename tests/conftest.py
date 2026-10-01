@@ -57,6 +57,11 @@ class CloudTestHelper:
         return f"s3://autogluon-cloud-ci/test-{module}-followups/{framework_version}/{job_name}/{test_name}"
 
     @staticmethod
+    def shared_training_artifact_path(job_name: str) -> str:
+        job = boto3.client("sagemaker").describe_training_job(TrainingJobName=job_name)
+        return job["ModelArtifacts"]["S3ModelArtifacts"]
+
+    @staticmethod
     def attach_shared_training_job(predictor_cls, module, framework_version, job_name, test_name):
         predictor = predictor_cls(
             cloud_output_path=CloudTestHelper.shared_followup_output_path(

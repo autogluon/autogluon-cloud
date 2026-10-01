@@ -165,6 +165,50 @@ def test_timeseries_batch_predict(test_helper, framework_version, shared_trainin
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
 
 
+def test_timeseries_deploy_trained_artifact(
+    test_helper, framework_version, shared_training_job_name, retail_sales_dataset
+):
+    """Deploy the shared model artifact from a fresh CloudPredictor."""
+    ds = retail_sales_dataset
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        artifact_path = test_helper.shared_training_artifact_path(shared_training_job_name)
+        predictor = TimeSeriesCloudPredictor(
+            cloud_output_path=test_helper.shared_followup_output_path(
+                "timeseries", framework_version, shared_training_job_name, "deploy-trained-artifact"
+            ),
+            local_output_path="test_timeseries_deploy_trained_artifact",
+        )
+
+        predictor.deploy(predictor_path=artifact_path, **_deploy_kwargs(test_helper, framework_version))
+        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
+        predictor.cleanup_deployment()
+
+
+def test_timeseries_predict_trained_artifact(
+    test_helper, framework_version, shared_training_job_name, retail_sales_dataset
+):
+    """Run batch prediction from the shared model artifact with a fresh CloudPredictor."""
+    ds = retail_sales_dataset
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        artifact_path = test_helper.shared_training_artifact_path(shared_training_job_name)
+        predictor = TimeSeriesCloudPredictor(
+            cloud_output_path=test_helper.shared_followup_output_path(
+                "timeseries", framework_version, shared_training_job_name, "predict-trained-artifact"
+            ),
+            local_output_path="test_timeseries_predict_trained_artifact",
+        )
+
+        predictions = predictor.predict(
+            ds["train_data"],
+            predictor_path=artifact_path,
+            **_predict_kwargs(test_helper, framework_version, ds),
+        )
+        assert isinstance(predictions, pd.DataFrame)
+        assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
+
+
 @pytest.mark.parametrize(
     "model_name, hyperparameters, with_covariates",
     [

@@ -118,9 +118,7 @@ def test_tabular_deploy_trained_artifact(test_helper, framework_version, shared_
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
-        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
-            "ModelArtifacts"
-        ]["S3ModelArtifacts"]
+        artifact_path = test_helper.shared_training_artifact_path(shared_training_job_name)
         predictor = TabularCloudPredictor(
             cloud_output_path=test_helper.shared_followup_output_path(
                 "tabular", framework_version, shared_training_job_name, "deploy-trained-artifact"
@@ -142,9 +140,7 @@ def test_tabular_predict_trained_artifact(test_helper, framework_version, shared
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
-        artifact_path = boto3.client("sagemaker").describe_training_job(TrainingJobName=shared_training_job_name)[
-            "ModelArtifacts"
-        ]["S3ModelArtifacts"]
+        artifact_path = test_helper.shared_training_artifact_path(shared_training_job_name)
         predictor = TabularCloudPredictor(
             cloud_output_path=test_helper.shared_followup_output_path(
                 "tabular", framework_version, shared_training_job_name, "predict-trained-artifact"
