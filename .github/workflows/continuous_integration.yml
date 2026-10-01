@@ -141,6 +141,28 @@ jobs:
         with:
           submodule-to-test: timeseries
           ag_version: '${{ matrix.AG_VERSION }}'
+  cleanup_cloud_endpoints:
+    # Tests delete their own endpoints, but a failed or cancelled job can leak one that bills forever.
+    # always() also runs this when the run is cancelled by a newer push.
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [test_tabular_cloud, test_timeseries_cloud]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::369469875935:role/AutoGluonCloudCIRole
+          role-duration-seconds: 3600
+          aws-region: us-east-1
+      - name: Delete Leaked Endpoints
+        run: |
+          python3 -m pip install boto3
+          python3 ./.github/workflow_scripts/cleanup_endpoints.py '${{ github.run_id }}'
   test_cluster:
     if: false
     strategy:
