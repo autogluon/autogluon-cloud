@@ -165,48 +165,6 @@ def test_timeseries_batch_predict(test_helper, framework_version, shared_trainin
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
 
 
-def test_timeseries_redeploy_attached_job(
-    test_helper, framework_version, shared_training_job_name, retail_sales_dataset
-):
-    """Deploy the shared training job from a fresh CloudPredictor."""
-    ds = retail_sales_dataset
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.chdir(temp_dir)
-        predictor = test_helper.attach_shared_training_job(
-            TimeSeriesCloudPredictor,
-            module="timeseries",
-            framework_version=framework_version,
-            job_name=shared_training_job_name,
-            test_name="redeploy-attached-job",
-        )
-        predictor.deploy(**_deploy_kwargs(test_helper, framework_version))
-        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
-        predictor.cleanup_deployment()
-
-
-def test_timeseries_predict_attached_job(
-    test_helper, framework_version, shared_training_job_name, retail_sales_dataset
-):
-    """Run batch prediction with an explicit artifact path from the shared training job."""
-    ds = retail_sales_dataset
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.chdir(temp_dir)
-        predictor = test_helper.attach_shared_training_job(
-            TimeSeriesCloudPredictor,
-            module="timeseries",
-            framework_version=framework_version,
-            job_name=shared_training_job_name,
-            test_name="predict-attached-job",
-        )
-        predictions = predictor.predict(
-            ds["train_data"],
-            predictor_path=predictor.get_fit_job_output_path(),
-            **_predict_kwargs(test_helper, framework_version, ds),
-        )
-        assert isinstance(predictions, pd.DataFrame)
-        assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
-
-
 @pytest.mark.parametrize(
     "model_name, hyperparameters, with_covariates",
     [

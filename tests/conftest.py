@@ -175,7 +175,13 @@ def framework_version(pytestconfig):
 
 @pytest.fixture(scope="session")
 def shared_training_job_name():
-    return os.environ["AG_CLOUD_SHARED_TRAINING_JOB_NAME"]
+    job_name = os.environ.get("AG_CLOUD_SHARED_TRAINING_JOB_NAME")
+    if not job_name:
+        pytest.fail(
+            "AG_CLOUD_SHARED_TRAINING_JOB_NAME is not set. Tabular and timeseries cloud tests run in two phases "
+            "(train once, then follow-ups attach to that job); see .github/workflow_scripts/test_cloud.sh."
+        )
+    return job_name
 
 
 @pytest.fixture
