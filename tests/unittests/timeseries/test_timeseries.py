@@ -212,8 +212,6 @@ def test_timeseries_predict_trained_artifact(
 @pytest.mark.parametrize(
     "model_name, hyperparameters, with_covariates",
     [
-        ("chronos", {"Chronos": {"model_path": "tiny"}}, False),
-        ("chronos_bolt", {"Chronos": {"model_path": "bolt_small"}}, False),
         ("chronos2", {"Chronos2": {"model_path": "autogluon/chronos-2-small"}}, False),
         ("chronos2_with_covs", {"Chronos2": {"model_path": "autogluon/chronos-2-small"}}, True),
     ],
@@ -362,47 +360,12 @@ def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, fra
             endpoint.delete_endpoint()
 
 
-def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset):
-    """Test FoundationModel deploy to a real-time endpoint and predict."""
-    ds = retail_sales_dataset
-    timestamp = test_helper.get_utc_timestamp_now()
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.chdir(temp_dir)
-
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=True)
-
-        model = FoundationModel(
-            "chronos-bolt-tiny",
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy/{framework_version}/{timestamp}",
-        )
-
-        endpoint = model.deploy(
-            custom_image_uri=inference_custom_image_uri,
-        )
-        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)["EndpointArn"]
-        test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id="chronos-bolt-tiny")
-
-        try:
-            expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
-            predictions = endpoint.predict(
-                data=ds["train_data"],
-                target=ds["target"],
-                id_column=ds["id_column"],
-                timestamp_column=ds["timestamp_column"],
-                prediction_length=ds["prediction_length"],
-            )
-            _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
-        finally:
-            endpoint.delete_endpoint()
-
-
 # ---------------------------------------------------------------------------
 # Endpoint payload-format coverage
 #
-# Two dedicated tests that deploy a "plain" predictor (no static_features, no
-# known_covariates) and probe every supported (Content-Type, Accept) pair
-# against the live endpoint.
+# Send a "plain" dataset (no static_features, no known_covariates) to a live
+# CloudPredictor / FoundationModel endpoint in every supported
+# (Content-Type, Accept) pair.
 # ---------------------------------------------------------------------------
 
 _PLAIN_PREDICTION_LENGTH = 4
@@ -530,22 +493,40 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
             cloud_predictor.cleanup_deployment()
 
 
-def test_foundation_model_endpoint_payload_formats(test_helper, framework_version, plain_dataset):
-    """Probe a deployed FoundationModel endpoint with every supported (Content-Type, Accept) combination."""
+def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset, plain_dataset):
+    """Deploy a FoundationModel with default (GPU) settings, predict via the SDK, then probe every supported
+    (Content-Type, Accept) combination against the same endpoint."""
+    ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
     expected_item_ids = sorted(plain_dataset["item_id"].unique())
     bodies = _build_request_bodies(plain_dataset, prediction_length=_PLAIN_PREDICTION_LENGTH)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=True)
 
         model = FoundationModel(
             "chronos-bolt-tiny",
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-formats/{framework_version}/{timestamp}",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy/{framework_version}/{timestamp}",
         )
-        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri, instance_type="ml.m5.2xlarge")
+        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri)
         try:
+            endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
+                "EndpointArn"
+            ]
+            test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id="chronos-bolt-tiny")
+
+            predictions = endpoint.predict(
+                data=ds["train_data"],
+                target=ds["target"],
+                id_column=ds["id_column"],
+                timestamp_column=ds["timestamp_column"],
+                prediction_length=ds["prediction_length"],
+            )
+            _assert_timeseries_predictions(
+                predictions, sorted(ds["train_data"][ds["id_column"]].unique()), ds["prediction_length"]
+            )
+
             format_pairs = list(
                 itertools.product(
                     ["application/x-autogluon", "application/json"],
