@@ -16,7 +16,7 @@ CI_RUN_TAG = "autogluon-cloud-ci-run"
 # DeleteEndpoint is rejected while an endpoint is in one of these states, so wait for it to settle first.
 TRANSITIONAL_STATUSES = {"Creating", "Updating", "SystemUpdating", "RollingBack"}
 POLL_SECONDS = 30
-TIMEOUT_SECONDS = 45 * 60
+TIMEOUT_SECONDS = 15 * 60
 
 
 def find_run_endpoints(sm, run_id: str) -> list:
