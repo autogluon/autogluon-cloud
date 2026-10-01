@@ -493,9 +493,10 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
             cloud_predictor.cleanup_deployment()
 
 
-def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset, plain_dataset):
-    """Deploy a FoundationModel with default (GPU) settings, predict via the SDK, then probe every supported
-    (Content-Type, Accept) combination against the same endpoint."""
+@pytest.mark.parametrize("gpu", [True, False], ids=["gpu", "cpu"])
+def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset, plain_dataset, gpu):
+    """Deploy a FoundationModel to a real-time endpoint (default GPU instance, or CPU), predict via the SDK, then
+    probe every supported (Content-Type, Accept) combination against the same endpoint."""
     ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
     expected_item_ids = sorted(plain_dataset["item_id"].unique())
@@ -503,13 +504,15 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=True)
+        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=gpu)
+        deploy_kwargs = {} if gpu else {"instance_type": "ml.m5.2xlarge"}
+        device = "gpu" if gpu else "cpu"
 
         model = FoundationModel(
             "chronos-bolt-tiny",
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy/{framework_version}/{timestamp}",
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy-{device}/{framework_version}/{timestamp}",
         )
-        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri)
+        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri, **deploy_kwargs)
         try:
             endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
                 "EndpointArn"
