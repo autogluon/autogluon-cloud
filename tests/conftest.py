@@ -5,6 +5,11 @@ import boto3
 import pandas as pd
 import pytest
 
+from autogluon.cloud.backend import sagemaker_backend
+
+# Must match .github/workflow_scripts/cleanup_endpoints.py
+CI_RUN_TAG = "autogluon-cloud-ci-run"
+
 
 class CloudTestHelper:
     cpu_training_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-training:cpu-latest"
@@ -115,6 +120,23 @@ def pytest_addoption(parser):
 @pytest.fixture(scope="session")
 def framework_version(pytestconfig):
     return pytestconfig.getoption("framework_version")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def tag_resources_with_ci_run():
+    """Tag every SageMaker resource created in CI with the run id, so the cleanup job can find leaked endpoints."""
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if not run_id:
+        yield
+        return
+    build_tags = sagemaker_backend.build_tags
+
+    def build_tags_with_ci_run(*args, **kwargs):
+        return build_tags(*args, **kwargs) + [{"Key": CI_RUN_TAG, "Value": run_id}]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(sagemaker_backend, "build_tags", build_tags_with_ci_run)
+        yield
 
 
 @pytest.fixture(scope="session")
