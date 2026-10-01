@@ -128,7 +128,7 @@ def test_deploy_passes_artifact_uri_and_overrides_model_path_to_container_dir():
         cloud_output_path="s3://b",
         model_artifact_uri="s3://b/cache/chronos-2/model.tar.gz",
     )
-    fm._backend.endpoint = mock.MagicMock()  # _deploy_backend asserts this is set after the call
+    fm._backend.endpoint_name = "ep"  # _deploy_backend asserts this is set after the call
     fm._deploy_backend()
 
     call = fm._backend.deploy.call_args
@@ -141,7 +141,7 @@ def test_deploy_passes_artifact_uri_and_overrides_model_path_to_container_dir():
 
 def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
     fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
-    fm._backend.endpoint = mock.MagicMock()
+    fm._backend.endpoint_name = "ep"
     fm._deploy_backend()
 
     call = fm._backend.deploy.call_args
@@ -154,7 +154,7 @@ def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
 
 def test_tabular_deploy_uses_tabular_fm_handler_and_returns_tabular_endpoint():
     fm = FoundationModel("mitra-classifier", cloud_output_path="s3://b")
-    fm._backend.endpoint = mock.MagicMock(endpoint_name="mitra-endpoint")
+    fm._backend.endpoint_name = "mitra-endpoint"
     fm._backend.sagemaker_session.boto_session = mock.sentinel.boto_session
 
     with mock.patch("autogluon.cloud.model.foundation_model.TabularEndpoint") as endpoint_cls:
@@ -162,7 +162,7 @@ def test_tabular_deploy_uses_tabular_fm_handler_and_returns_tabular_endpoint():
 
     call = fm._backend.deploy.call_args
     assert call.kwargs["instance_type"] == "ml.m5.4xlarge"
-    assert call.kwargs["model_kwargs"]["entry_point"].endswith("tabular_fm_serve.py")
+    assert call.kwargs["entry_point"].endswith("tabular_fm_serve.py")
     assert call.kwargs["fm_serve_config"] == {
         "ag_model_key": "MITRA",
         "hyperparameters": {
@@ -198,7 +198,7 @@ def test_deploy_rejects_user_model_path_when_artifact_uri_set():
         cloud_output_path="s3://b",
         model_artifact_uri="s3://b/cache/chronos-2/model.tar.gz",
     )
-    fm._backend.endpoint = mock.MagicMock()
+    fm._backend.endpoint_name = "ep"
     with pytest.raises(ValueError, match="model_artifact_uri"):
         fm._deploy_backend(hyperparameters={"model_path": "my-org/something-else"})
 
@@ -243,16 +243,19 @@ def test_cache_model_artifact_raises_on_stale_version_without_overwrite():
         fm.cache_model_artifact("s3://b/cache")
 
 
-def test_sagemaker_backend_uses_nonrepack_when_repack_is_false():
-    """A pre-bundled cached artifact should bypass the SDK's download/repack/re-upload path."""
+def test_sagemaker_backend_skips_repack_when_repack_is_false():
+    """A pre-bundled cached artifact should bypass the download/repack/re-upload path."""
     from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend
 
     sb = "autogluon.cloud.backend.sagemaker_backend"
     with (
         mock.patch(f"{sb}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{sb}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/t"),
-        mock.patch(f"{sb}.AutoGluonNonRepackInferenceModel") as nonrepack_cls,
-        mock.patch(f"{sb}.AutoGluonRepackInferenceModel") as repack_cls,
+        mock.patch(f"{sb}.bind_core_session"),
+        mock.patch(f"{sb}.repack_model_with_serving_code") as repack,
+        mock.patch(f"{sb}.Model") as model_cls,
+        mock.patch(f"{sb}.EndpointConfig"),
+        mock.patch(f"{sb}.Endpoint"),
         mock.patch.object(SagemakerBackend, "_upload_predictor", side_effect=lambda p, _: p),
     ):
         backend = SagemakerBackend(
@@ -264,9 +267,10 @@ def test_sagemaker_backend_uses_nonrepack_when_repack_is_false():
         backend.deploy(
             predictor_path="s3://bucket/cache/chronos-2/model.tar.gz",
             endpoint_name="ep",
-            model_kwargs={"entry_point": "stub.py"},
+            entry_point="stub.py",
             repack=False,
         )
 
-        nonrepack_cls.assert_called_once()
-        repack_cls.assert_not_called()
+        repack.assert_not_called()
+        container = model_cls.create.call_args.kwargs["primary_container"]
+        assert container["model_data_url"] == "s3://bucket/cache/chronos-2/model.tar.gz"

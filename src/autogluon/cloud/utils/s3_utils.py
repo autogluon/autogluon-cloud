@@ -2,7 +2,7 @@ import os
 from typing import Optional
 
 import boto3
-import sagemaker
+from sagemaker.core.helper.session_helper import Session
 
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
@@ -42,7 +42,7 @@ def is_s3_folder(path, session=None):
     """
     assert is_s3_url(path)
     if session is None:
-        session = sagemaker.session.Session()
+        session = Session()
     bucket, prefix = s3_path_to_bucket_prefix(path)
     contents = session.list_s3_files(bucket, prefix)
     if len(contents) > 1:

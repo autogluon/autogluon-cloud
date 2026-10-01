@@ -1,271 +1,125 @@
-import copy
+"""Packaging helpers for AutoGluon training and serving code on SageMaker.
+
+These replace the SageMaker SDK v2 ``Estimator`` / ``Model`` script-mode machinery: the AutoGluon DLCs still run
+the SageMaker training and inference toolkits, which locate user code through the ``sagemaker_program`` /
+``sagemaker_submit_directory`` hyperparameters (training) and the ``SAGEMAKER_PROGRAM`` /
+``SAGEMAKER_SUBMIT_DIRECTORY`` environment variables (inference).
+"""
+
+import json
 import os
+import shutil
+import tarfile
+import tempfile
+from contextlib import contextmanager
+from typing import Dict, Iterator, Optional
 
-import sagemaker
-from sagemaker import fw_utils, vpc_utils
-from sagemaker.estimator import Estimator
-from sagemaker.model import DIR_PARAM_NAME, SCRIPT_PARAM_NAME, Model
-from sagemaker.predictor import Predictor
-from sagemaker.serializers import CSVSerializer
+from sagemaker.core.common_utils import repack_model
 
-from .deserializers import PandasDeserializer
-from .dlc_utils import retrieve_image_uri, retrieve_latest_framework_version
-from .serializers import AutoGluonSerializer, MultiModalSerializer
+from .dlc_utils import retrieve_image_uri
 
-
-# SageMaker SDK v2 does not expose TransformAmiVersion through its public Transformer API.
-# Remove this proxy when AG Cloud migrates Batch Transform to the SDK v3 resource API.
-class _TransformAmiVersionSession:
-    """Delegate to a SageMaker session while adding a Batch Transform AMI."""
-
-    def __init__(self, session, transform_ami_version):
-        self._session = session
-        self._transform_ami_version = transform_ami_version
-
-    def __getattr__(self, name):
-        return getattr(self._session, name)
-
-    def transform(self, **kwargs):
-        kwargs["resource_config"] = copy.deepcopy(kwargs["resource_config"])
-        kwargs["resource_config"]["TransformAmiVersion"] = self._transform_ami_version
-        return self._session.transform(**kwargs)
+SOURCE_DIR_TARBALL_NAME = "sourcedir.tar.gz"
 
 
-# Estimator documentation: https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#estimators
-class AutoGluonSagemakerEstimator(Estimator):
-    def __init__(
-        self,
-        region,
-        framework_version,
-        py_version,
-        instance_type,
-        entry_point=None,
-        source_dir=None,
-        hyperparameters=None,
-        image_uri=None,
-        **kwargs,
-    ):
-        self.framework_version = framework_version
-        self.py_version = py_version
-        self.image_uri = image_uri
-        if self.image_uri is None:
-            self.image_uri = retrieve_image_uri(
-                framework_version=framework_version,
-                region=region,
-                image_scope="training",
-                instance_type=instance_type,
-                py_version=py_version,
-            )
-        super().__init__(
-            entry_point=entry_point,
-            source_dir=source_dir,
-            hyperparameters=hyperparameters,
-            instance_type=instance_type,
-            image_uri=self.image_uri,
-            **kwargs,
-        )
-
-    def _configure_distribution(self, distributions):
-        return
-
-    def create_model(
-        self,
-        region,
-        framework_version,
-        py_version,
-        instance_type,
-        source_dir=None,
-        entry_point=None,
-        role=None,
-        image_uri=None,
-        predictor_cls=None,
-        vpc_config_override=vpc_utils.VPC_CONFIG_DEFAULT,
-        repack=False,
-        **kwargs,
-    ):
-        image_uri = retrieve_image_uri(
-            framework_version=framework_version,
-            region=region,
-            image_scope="inference",
-            instance_type=instance_type,
-            py_version=py_version,
-        )
-        if predictor_cls is None:
-
-            def predict_wrapper(endpoint, session):
-                return Predictor(endpoint, session)
-
-            predictor_cls = predict_wrapper
-
-        role = role or self.role
-
-        if "enable_network_isolation" not in kwargs:
-            kwargs["enable_network_isolation"] = self.enable_network_isolation()
-
-        if repack:
-            model_cls = AutoGluonRepackInferenceModel
-        else:
-            model_cls = AutoGluonNonRepackInferenceModel
-        return model_cls(
-            image_uri=image_uri,
-            source_dir=source_dir,
-            entry_point=entry_point,
-            model_data=self.model_data,
-            role=role,
-            vpc_config=self.get_vpc_config(vpc_config_override),
-            sagemaker_session=self.sagemaker_session,
-            predictor_cls=predictor_cls,
-            **kwargs,
-        )
-
-    @classmethod
-    def _prepare_init_params_from_job_description(cls, job_details, model_channel_name=None):
-        init_params = super()._prepare_init_params_from_job_description(
-            job_details, model_channel_name=model_channel_name
-        )
-        # These parameters will not be used, but is required to reattach the job
-        init_params["region"] = "us-east-1"
-        framework_version, py_version = retrieve_latest_framework_version()
-        py_version = py_version[0]
-        init_params["framework_version"] = framework_version
-        init_params["py_version"] = py_version
-        return init_params
+def resolve_image_uri(
+    image_uri: Optional[str],
+    framework_version: Optional[str],
+    py_version: Optional[str],
+    region: str,
+    image_scope: str,
+    instance_type: str,
+) -> str:
+    """Return ``image_uri`` if set, otherwise the official AutoGluon DLC for the given version and instance."""
+    if image_uri:
+        return image_uri
+    return retrieve_image_uri(
+        framework_version=framework_version,
+        region=region,
+        image_scope=image_scope,
+        instance_type=instance_type,
+        py_version=py_version,
+    )
 
 
-# Documentation for Model: https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model
-class AutoGluonSagemakerInferenceModel(Model):
-    def __init__(
-        self,
-        model_data,
-        role,
-        entry_point,
-        region,
-        framework_version,
-        py_version,
-        instance_type,
-        custom_image_uri=None,
-        env=None,
-        **kwargs,
-    ):
-        image_uri = custom_image_uri
-        if image_uri is None:
-            image_uri = retrieve_image_uri(
-                framework_version=framework_version,
-                region=region,
-                image_scope="inference",
-                instance_type=instance_type,
-                py_version=py_version,
-            )
-        # setting PYTHONUNBUFFERED to disable output buffering for endpoints logging
-        if env is None:
-            env = {}
-        if "PYTHONUNBUFFERED" not in env:
-            env["PYTHONUNBUFFERED"] = "1"
-        super().__init__(
-            model_data=model_data,
-            role=role,
-            entry_point=entry_point,
-            image_uri=image_uri,
-            env=env,
-            **kwargs,
-        )
+def upload_training_code(entry_point: str, source_dir: Optional[str], sagemaker_session, s3_uri_prefix: str) -> str:
+    """Bundle the training entry point (or ``source_dir`` containing it) as ``sourcedir.tar.gz`` and upload it.
 
-    def transformer(
-        self,
-        instance_count,
-        instance_type,
-        strategy="MultiRecord",
-        # Maximum size of the payload in a single HTTP request to the container in MB. Will split into multiple batches if a request is more than max_payload
-        max_payload=6,
-        max_concurrent_transforms=1,  # The maximum number of HTTP requests to be made to each individual transform container at one time.
-        accept="application/json",
-        assemble_with="Line",
-        transform_ami_version=None,
-        **kwargs,
-    ):
-        transformer = super().transformer(
-            instance_count=instance_count,
-            instance_type=instance_type,
-            strategy=strategy,
-            max_payload=max_payload,
-            max_concurrent_transforms=max_concurrent_transforms,
-            accept=accept,
-            assemble_with=assemble_with,
-            **kwargs,
-        )
-        if transform_ami_version is not None:
-            transformer.sagemaker_session = _TransformAmiVersionSession(
-                transformer.sagemaker_session,
-                transform_ami_version,
-            )
-        return transformer
-
-
-class AutoGluonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
+    Returns the S3 URI of the uploaded tarball.
     """
-    Custom implementation to force repack of inference code into model artifacts
-    """
+    from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
-    def prepare_container_def(
-        self,
-        instance_type=None,
-        accelerator_type=None,
-        serverless_inference_config=None,
-        accept_eula=None,
-        model_reference_arn=None,
-    ):  # pylint: disable=unused-argument
-        deploy_key_prefix = fw_utils.model_code_key_prefix(self.key_prefix, self.name, self.image_uri)
-        deploy_env = copy.deepcopy(self.env)
-        self._upload_code(deploy_key_prefix, repack=True)
-        deploy_env.update(self._script_mode_env_vars())
-        return sagemaker.container_def(
-            self.image_uri,
-            self.repacked_model_data or self.model_data,
-            deploy_env,
-            image_config=self.image_config,
+    with tempfile.TemporaryDirectory(prefix="ag_train_code_") as tmpdir:
+        tarball_path = os.path.join(tmpdir, SOURCE_DIR_TARBALL_NAME)
+        with tarfile.open(tarball_path, "w:gz") as tar:
+            if source_dir:
+                for name in os.listdir(source_dir):
+                    tar.add(os.path.join(source_dir, name), arcname=name)
+            else:
+                tar.add(entry_point, arcname=os.path.basename(entry_point))
+        bucket, key_prefix = s3_path_to_bucket_prefix(s3_uri_prefix)
+        return sagemaker_session.upload_data(path=tarball_path, bucket=bucket, key_prefix=key_prefix)
+
+
+def training_script_hyperparameters(
+    entry_point: str, submit_directory: str, job_name: str, region: str
+) -> Dict[str, str]:
+    """Hyperparameters the SageMaker training toolkit uses to download and run the entry point.
+
+    Values are JSON-encoded, matching what SageMaker SDK v2 sent; the toolkit JSON-decodes them.
+    """
+    return {
+        "sagemaker_program": json.dumps(os.path.basename(entry_point)),
+        "sagemaker_submit_directory": json.dumps(submit_directory),
+        "sagemaker_container_log_level": json.dumps(20),
+        "sagemaker_job_name": json.dumps(job_name),
+        "sagemaker_region": json.dumps(region),
+    }
+
+
+@contextmanager
+def staged_serving_code(entry_point: str) -> Iterator[str]:
+    """Yield a temporary directory holding ``entry_point`` and ``serving_utils/``, i.e. the model's ``code/`` dir."""
+    from ..scripts import ScriptManager  # deferred: importing scripts pulls in the backend package
+
+    staging_dir = tempfile.mkdtemp(prefix="ag_serving_")
+    try:
+        shutil.copy(entry_point, os.path.join(staging_dir, os.path.basename(entry_point)))
+        shutil.copytree(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, os.path.join(staging_dir, "serving_utils"))
+        yield staging_dir
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+def repack_model_with_serving_code(
+    model_data: str,
+    entry_point: str,
+    repacked_model_uri: str,
+    sagemaker_session,
+    kms_key: Optional[str] = None,
+) -> str:
+    """Replace ``code/`` inside the ``model_data`` tarball with ``entry_point`` + ``serving_utils/`` and upload it.
+
+    Returns ``repacked_model_uri``.
+    """
+    with staged_serving_code(entry_point) as code_dir:
+        repack_model(
+            inference_script=entry_point,
+            source_directory=code_dir,
+            dependencies=[],
+            model_uri=model_data,
+            repacked_model_uri=repacked_model_uri,
+            sagemaker_session=sagemaker_session,
+            kms_key=kms_key,
         )
+    return repacked_model_uri
 
 
-class AutoGluonNonRepackInferenceModel(AutoGluonSagemakerInferenceModel):
-    """
-    Custom implementation to force no repack of inference code into model artifacts.
-    This requires inference code already present in the trained artifacts, which is created during CloudPredictor training.
-    """
+def create_serve_script_tarball(entry_point: str, output_dir: str) -> str:
+    """Create a minimal ``model.tar.gz`` that only contains the serving code under ``code/``."""
+    from ..scripts import ScriptManager  # deferred: importing scripts pulls in the backend package
 
-    def prepare_container_def(
-        self,
-        instance_type=None,
-        accelerator_type=None,
-        serverless_inference_config=None,
-        accept_eula=None,
-        model_reference_arn=None,
-    ):  # pylint: disable=unused-argument
-        deploy_env = copy.deepcopy(self.env)
-        deploy_env.update(self._script_mode_env_vars())
-        deploy_env[SCRIPT_PARAM_NAME.upper()] = os.path.basename(deploy_env[SCRIPT_PARAM_NAME.upper()])
-        deploy_env[DIR_PARAM_NAME.upper()] = "/opt/ml/model/code"
-
-        return sagemaker.container_def(
-            self.image_uri,
-            self.model_data,
-            deploy_env,
-            image_config=self.image_config,
-        )
-
-
-# Predictor documentation: https://sagemaker.readthedocs.io/en/v2/api/inference/predictors.html
-class AutoGluonRealtimePredictor(Predictor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, serializer=AutoGluonSerializer(), deserializer=PandasDeserializer(), **kwargs)
-
-
-class AutoGluonMultiModalRealtimePredictor(Predictor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, serializer=MultiModalSerializer(), deserializer=PandasDeserializer(), **kwargs)
-
-
-# Predictor documentation: https://sagemaker.readthedocs.io/en/v2/api/inference/predictors.html
-# SageMaker can only take in csv format for batch transformation because files need to be easily splitable to be batch processed.
-class AutoGluonBatchPredictor(Predictor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, serializer=CSVSerializer(), **kwargs)
+    tarball_path = os.path.join(output_dir, "model.tar.gz")
+    with tarfile.open(tarball_path, "w:gz") as tar:
+        tar.add(entry_point, arcname=f"code/{os.path.basename(entry_point)}")
+        tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
+    return tarball_path

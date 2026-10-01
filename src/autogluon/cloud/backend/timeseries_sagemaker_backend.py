@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
@@ -24,23 +24,15 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         id_column: str,
         timestamp_column: str,
-        framework_version: str = "latest",
-        job_name: Optional[str] = None,
-        instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
         volume_size: int = 100,
-        custom_image_uri: Optional[str] = None,
-        wait: bool = True,
-        autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
-        fit_kwargs: Optional[Dict] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
-        extra_tags: Optional[List[Dict[str, str]]] = None,
+        **kwargs,
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
         ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.json``.
         ``known_covariates`` (if present in ``data_channels``) is only honored when
-        ``extra_ag_args["predict_after_fit"]`` is True.
+        ``extra_ag_args["predict_after_fit"]`` is True. Other arguments are forwarded to ``SagemakerBackend.fit()``.
         """
         extra_ag_args = {**(extra_ag_args or {}), "id_column": id_column, "timestamp_column": timestamp_column}
         if data_channels.get("known_covariates") is not None and not extra_ag_args.get("predict_after_fit", False):
@@ -56,17 +48,9 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             data_channels=data_channels,
-            framework_version=framework_version,
-            job_name=job_name,
-            instance_type=instance_type,
-            instance_count=instance_count,
             volume_size=volume_size,
-            custom_image_uri=custom_image_uri,
-            wait=wait,
-            autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
-            fit_kwargs=fit_kwargs,
             extra_ag_args=extra_ag_args,
-            extra_tags=extra_tags,
+            **kwargs,
         )
 
     def predict_real_time(
@@ -138,8 +122,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        then create a transformer with it, and call transform in the end.
 
         Parameters
         ----------
@@ -176,20 +158,15 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         payload_path = os.path.join(payload_dir, "predict_payload.json")
         with open(payload_path, "wb") as f:
             f.write(AutoGluonSerializer().serialize(wrapper))
-        transform_kwargs = kwargs.pop("transform_kwargs", None) or {}
-        transform_kwargs["content_type"] = "application/x-autogluon"
-        transform_kwargs["split_type"] = "None"
-        # Parquet output (JSON can exceed TorchServe's 6.5MB cap); assemble_with=None preserves
-        # parquet footer (default "Line" appends a newline that corrupts it).
-        transformer_kwargs = kwargs.pop("transformer_kwargs", None) or {}
-        transformer_kwargs.setdefault("accept", "application/x-parquet")
-        transformer_kwargs.setdefault("assemble_with", None)
-
+        # Parquet output (JSON can exceed TorchServe's 6.5MB cap); assemble_with="None" preserves
+        # parquet footer ("Line" appends a newline that corrupts it).
         pred, _ = super()._predict(
             test_data=payload_path,
             split_pred_proba=False,
-            transform_kwargs=transform_kwargs,
-            transformer_kwargs=transformer_kwargs,
+            content_type="application/x-autogluon",
+            split_type="None",
+            accept="application/x-parquet",
+            assemble_with="None",
             **kwargs,
         )
         return pred

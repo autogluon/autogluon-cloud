@@ -1,16 +1,13 @@
 import logging
 from abc import abstractmethod
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
-import sagemaker
+from sagemaker.core.resources import Model, TrainingJob, TransformJob
+from sagemaker.core.utils.exceptions import FailedStatusError
 
-from ..utils.ag_sagemaker import (
-    AutoGluonNonRepackInferenceModel,
-    AutoGluonRepackInferenceModel,
-    AutoGluonSagemakerEstimator,
-)
-from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, MODEL_ARTIFACT_NAME
-from ..utils.dlc_utils import infer_sagemaker_ami_version
+from ..utils.aws_utils import setup_sagemaker_session
+from ..utils.constants import MODEL_ARTIFACT_NAME
+from ..utils.sagemaker_api import bind_core_session
 from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
@@ -18,15 +15,13 @@ logger = logging.getLogger(__name__)
 
 class SageMakerJob(RemoteJob):
     def __init__(self, session=None):
-        self.session = session or sagemaker.session.Session()
+        self.session = session or setup_sagemaker_session()
         self._job_name = None
-        self._local_mode = False
-        self._output_path = ""  # only used in local mode
         self._output_filename = ""
 
     @classmethod
     @abstractmethod
-    def attach(cls, job_name):
+    def attach(cls, job_name, session=None):
         """
         Reattach to a job given its name.
 
@@ -55,6 +50,11 @@ class SageMakerJob(RemoteJob):
         raise NotImplementedError
 
     @abstractmethod
+    def _describe(self):
+        """Return the sagemaker-core resource describing the job."""
+        raise NotImplementedError
+
+    @abstractmethod
     def _get_job_status(self):
         raise NotImplementedError
 
@@ -67,13 +67,17 @@ class SageMakerJob(RemoteJob):
         raise NotImplementedError
 
     @property
+    def _boto_session(self):
+        boto_session = self.session.boto_session
+        bind_core_session(boto_session)
+        return boto_session
+
+    @property
     def job_name(self):
         return self._job_name
 
     @property
     def completed(self):
-        if self._local_mode:
-            return True  # We just return True here to unblock local mode. User should know if the job is done or not easily from the log.
         if not self.job_name:
             return False
         return self.get_job_status() == "Completed"
@@ -89,10 +93,7 @@ class SageMakerJob(RemoteJob):
         """
         if not self.job_name:
             return "NotCreated"
-        if not self._local_mode:
-            return self._get_job_status()
-        logger.warning("Job status not available in local mode. Please check the local log.")
-        return None
+        return self._get_job_status()
 
     def get_output_path(self) -> Optional[str]:
         """
@@ -119,6 +120,17 @@ class SageMakerJob(RemoteJob):
         """
         return self._get_hyperparameters()
 
+    def wait(self, logs: bool = True) -> None:
+        """Block until the job reaches a terminal state, streaming its CloudWatch logs if ``logs`` is True.
+
+        Does not raise if the job fails; check :meth:`get_job_status` afterwards.
+        """
+        assert self.job_name, "The job has not been started"
+        try:
+            self._describe().wait(logs=logs)
+        except FailedStatusError as e:
+            logger.error(f"SageMaker job {self.job_name} did not complete successfully: {e}")
+
     def __getstate__(self):
         state_dict = self.__dict__.copy()
         state_dict["session"] = None
@@ -135,15 +147,14 @@ class SageMakerFitJob(SageMakerJob):
         self._output_filename = MODEL_ARTIFACT_NAME
 
     @classmethod
-    def attach(cls, job_name):
+    def attach(cls, job_name, session=None):
         # FIXME: find a way to recover framework version
         logger.warning(
             "Reattach to a job does not support real-time logging. Logs will be printed once the training job completes"
         )
-        obj = cls()
+        obj = cls(session=session)
         obj._job_name = job_name
-        sagemaker_estimator = AutoGluonSagemakerEstimator.attach(job_name)
-        sagemaker_estimator.logs()
+        obj.wait(logs=True)
         return obj
 
     @property
@@ -160,69 +171,50 @@ class SageMakerFitJob(SageMakerJob):
         )
         return info
 
+    def _describe(self) -> TrainingJob:
+        return TrainingJob.get(
+            training_job_name=self.job_name,
+            session=self._boto_session,
+            region=self.session.boto_region_name,
+        )
+
     def _get_job_status(self):
-        return self.session.describe_training_job(self.job_name)["TrainingJobStatus"]
+        return self._describe().training_job_status
 
     def _get_output_path(self):
-        if not self._local_mode:
-            return self.session.describe_training_job(self.job_name)["ModelArtifacts"]["S3ModelArtifacts"]
-        assert self._output_path is not None
-        return self._output_path + "/" + self._output_filename
+        return self._describe().model_artifacts.s3_model_artifacts
 
     def _get_hyperparameters(self):
         if self.job_name:
-            return self.session.describe_training_job(self.job_name)["HyperParameters"]
+            return self._describe().hyper_parameters
         return None
+
+    def get_input_channels(self) -> Dict[str, str]:
+        """Map each input channel name of the training job to its S3 URI."""
+        return {
+            channel.channel_name: channel.data_source.s3_data_source.s3_uri
+            for channel in self._describe().input_data_config
+        }
 
     def run(
         self,
-        role,
-        entry_point,
-        region,
-        instance_type,
-        instance_count,
-        volume_size,
-        framework_version,
-        py_version,
-        base_job_name,
-        output_path,
-        code_location,
-        inputs,
-        custom_image_uri,
-        wait,
-        job_name,
-        autogluon_sagemaker_estimator_kwargs,
-        **kwargs,
+        training_job_request: Dict[str, Any],
+        framework_version: Optional[str],
+        wait: bool,
     ):
-        self._local_mode = instance_type in (LOCAL_MODE, LOCAL_MODE_GPU)
-        sagemaker_estimator = AutoGluonSagemakerEstimator(
-            role=role,
-            entry_point=entry_point,
-            region=region,
-            instance_type=instance_type,
-            instance_count=instance_count,
-            volume_size=volume_size,
-            framework_version=framework_version,
-            py_version=py_version,
-            base_job_name=base_job_name,
-            output_path=output_path,
-            code_location=code_location,
-            image_uri=custom_image_uri,
-            **autogluon_sagemaker_estimator_kwargs,
-        )
+        """Create the training job from a ``TrainingJob.create`` request and optionally wait for it to finish."""
+        job_name = training_job_request["training_job_name"]
         logger.log(20, f"Start sagemaker training job `{job_name}`")
         try:
-            sagemaker_estimator.fit(inputs=inputs, wait=wait, job_name=job_name, **kwargs)
+            training_job = TrainingJob.create(
+                **training_job_request,
+                session=self._boto_session,
+                region=self.session.boto_region_name,
+            )
             self._job_name = job_name
             self._framework_version = framework_version
-
-            assert sagemaker_estimator.output_path is not None
-            latest_training_job = sagemaker_estimator.latest_training_job
-            assert latest_training_job is not None
-            latest_training_job_name = latest_training_job.name
-            assert latest_training_job_name is not None
-
-            self._output_path = sagemaker_estimator.output_path + "/" + latest_training_job_name
+            if wait:
+                training_job.wait(logs=True)
         except Exception as e:
             logger.error(f"Training failed. Please check sagemaker console training jobs {job_name} for details.")
             raise e
@@ -234,7 +226,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         self._output_filename = ""
 
     @classmethod
-    def attach(cls, job_name):
+    def attach(cls, job_name, session=None):
         raise NotImplementedError
 
     def info(self):
@@ -246,105 +238,55 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         )
         return info
 
+    def _describe(self) -> TransformJob:
+        return TransformJob.get(
+            transform_job_name=self.job_name,
+            session=self._boto_session,
+            region=self.session.boto_region_name,
+        )
+
     def _get_job_status(self):
-        return self.session.describe_transform_job(self.job_name)["TransformJobStatus"]
+        return self._describe().transform_job_status
 
     def _get_output_path(self):
-        if not self._local_mode:
-            return (
-                self.session.describe_transform_job(self.job_name)["TransformOutput"]["S3OutputPath"]
-                + "/"
-                + self._output_filename
-            )
-        assert self._output_path is not None
-        return self._output_path + "/" + self._output_filename
+        return self._describe().transform_output.s3_output_path + "/" + self._output_filename
+
+    def _delete_model(self, model_name: str) -> None:
+        bind_core_session(self.session.boto_session)
+        Model(model_name=model_name).delete()
 
     def run(
         self,
-        model_data,
-        role,
-        region,
-        framework_version,
-        py_version,
-        instance_count,
-        instance_type,
-        entry_point,
-        predictor_cls,
-        output_path,
-        test_input,
-        job_name,
-        split_type,
-        content_type,
-        custom_image_uri,
-        wait,
-        model_kwargs,
-        transformer_kwargs,
-        repack_model=False,
-        **kwargs,
+        transform_job_request: Dict[str, Any],
+        wait: bool,
     ):
-        self._local_mode = instance_type in (LOCAL_MODE, LOCAL_MODE_GPU)
-        if repack_model:
-            model_cls = AutoGluonRepackInferenceModel
-        else:
-            model_cls = AutoGluonNonRepackInferenceModel
-        logger.log(20, "Creating inference model...")
-        model = model_cls(
-            model_data=model_data,
-            role=role,
-            region=region,
-            framework_version=framework_version,
-            py_version=py_version,
-            instance_type=instance_type,
-            custom_image_uri=custom_image_uri,
-            entry_point=entry_point,
-            predictor_cls=predictor_cls,
-            **model_kwargs,
-        )
-        logger.log(20, "Inference model created successfully")
-        logger.log(20, "Creating transformer...")
-        transform_ami_version = infer_sagemaker_ami_version(
-            custom_image_uri,
-            instance_type,
-            image_scope="transform",
-        )
-        if transform_ami_version is not None:
-            transformer_kwargs.setdefault("transform_ami_version", transform_ami_version)
-        transformer = model.transformer(
-            instance_count=instance_count,
-            instance_type=instance_type,
-            output_path=output_path,
-            **transformer_kwargs,
-        )
-        logger.log(20, "Transformer created successfully")
+        """Create the transform job from a ``TransformJob.create`` request.
 
+        The SageMaker model referenced by the request is deleted once the job finishes (``wait=True``) or fails to
+        start. With ``wait=False`` the model is kept, since the job still needs it.
+        """
+        job_name = transform_job_request["transform_job_name"]
+        model_name = transform_job_request["model_name"]
         try:
             logger.log(20, "Transforming")
-            transformer.transform(
-                test_input,
-                job_name=job_name,
-                split_type=split_type,
-                content_type=content_type,
-                wait=wait,
-                **kwargs,
+            transform_job = TransformJob.create(
+                **transform_job_request,
+                session=self._boto_session,
+                region=self.session.boto_region_name,
             )
             self._job_name = job_name
-
-            assert transformer.output_path is not None
-            latest_transform_job = transformer.latest_transform_job
-            assert latest_transform_job is not None
-            latest_transform_job_name = latest_transform_job.name
-            assert latest_transform_job_name is not None
-
-            self._output_path = transformer.output_path + "/" + latest_transform_job_name
+            if wait:
+                transform_job.wait(logs=True)
             logger.log(20, "Transform done")
         except Exception as e:
-            transformer.delete_model()
+            self._delete_model(model_name)
             raise e
 
-        self._output_filename = test_input.split("/")[-1] + ".out"
+        input_uri = transform_job_request["transform_input"]["data_source"]["s3_data_source"]["s3_uri"]
+        self._output_filename = input_uri.split("/")[-1] + ".out"
 
         if wait:
-            transformer.delete_model()
+            self._delete_model(model_name)
             logger.log(20, f"Predict results have been saved to {self.get_output_path()}")
         else:
             logger.log(

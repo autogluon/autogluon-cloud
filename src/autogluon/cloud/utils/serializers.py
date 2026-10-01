@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-from sagemaker.serializers import SimpleBaseSerializer
+from sagemaker.core.serializers import SimpleBaseSerializer
 
 AUTOGLUON_SERDE_VERSION = 1
 

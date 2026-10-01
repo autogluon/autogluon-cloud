@@ -1,15 +1,4 @@
 import logging
-import os
-
-os.environ.setdefault("SAGEMAKER_SUPPRESS_V2_WARNING", "1")
-import sagemaker
-from packaging.version import Version
-
-if Version(sagemaker.__version__) >= Version("3.0"):
-    raise ImportError(
-        f"SageMaker SDK >= 3.0 is currently not supported (found {sagemaker.__version__}). "
-        "Please downgrade: pip install -U 'sagemaker<3'"
-    )
 
 from autogluon.common.utils.log_utils import _add_stream_handler
 

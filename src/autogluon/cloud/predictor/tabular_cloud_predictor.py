@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER
+from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from .cloud_predictor import CloudPredictor
 
@@ -36,6 +37,7 @@ class TabularCloudPredictor(CloudPredictor):
         predictor_cls = TabularPredictor
         return predictor_cls
 
+    @reject_legacy_kwargs
     def fit_predict(
         self,
         train_data: Union[str, Path, pd.DataFrame],
@@ -49,10 +51,13 @@ class TabularCloudPredictor(CloudPredictor):
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 256,
-        custom_image_uri: Optional[str] = None,
+        image_uri: Optional[str] = None,
         wait: bool = True,
         predictions_path: Optional[str] = None,
-        backend_kwargs: Optional[Dict] = None,
+        environment: Optional[Dict[str, str]] = None,
+        use_spot_instances: bool = False,
+        max_wait: Optional[int] = None,
+        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
         Fit and predict in a single SageMaker training job.
@@ -78,7 +83,7 @@ class TabularCloudPredictor(CloudPredictor):
             Whether to include the leaderboard in the output artifact.
         framework_version: str, default = `latest`
             Training container version of autogluon. If `latest`, will use the latest available container version.
-            If `custom_image_uri` is set, this argument will be ignored.
+            If `image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
         instance_type: str, default = 'ml.m5.2xlarge'
@@ -87,7 +92,7 @@ class TabularCloudPredictor(CloudPredictor):
             Number of instances used to fit the predictor.
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training.
-        custom_image_uri: Optional[str], default = None
+        image_uri: Optional[str], default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
@@ -95,8 +100,8 @@ class TabularCloudPredictor(CloudPredictor):
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        backend_kwargs: Optional[dict], default = None
-            Backend-specific arguments. Same keys as ``fit()``.
+        environment, use_spot_instances, max_wait, sagemaker_overrides:
+            Same as in :meth:`fit`.
 
         Returns
         -------
@@ -116,16 +121,20 @@ class TabularCloudPredictor(CloudPredictor):
             instance_type=instance_type,
             instance_count=instance_count,
             volume_size=volume_size,
-            custom_image_uri=custom_image_uri,
+            image_uri=image_uri,
             wait=wait,
             predictions_path=predictions_path,
-            backend_kwargs=backend_kwargs,
+            environment=environment,
+            use_spot_instances=use_spot_instances,
+            max_wait=max_wait,
+            sagemaker_overrides=sagemaker_overrides,
         )
         if result is None:  # wait=False
             return None
         pred, _ = result
         return pred
 
+    @reject_legacy_kwargs
     def fit_predict_proba(
         self,
         train_data: Union[str, Path, pd.DataFrame],
@@ -140,10 +149,13 @@ class TabularCloudPredictor(CloudPredictor):
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 256,
-        custom_image_uri: Optional[str] = None,
+        image_uri: Optional[str] = None,
         wait: bool = True,
         predictions_path: Optional[str] = None,
-        backend_kwargs: Optional[Dict] = None,
+        environment: Optional[Dict[str, str]] = None,
+        use_spot_instances: bool = False,
+        max_wait: Optional[int] = None,
+        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Fit and predict probabilities in a single SageMaker training job.
@@ -167,7 +179,7 @@ class TabularCloudPredictor(CloudPredictor):
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact.
         framework_version: str, default = `latest`
-            Training container version of autogluon. If `custom_image_uri` is set, this argument is ignored.
+            Training container version of autogluon. If `image_uri` is set, this argument is ignored.
         job_name: str, default = None
             Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
         instance_type: str, default = 'ml.m5.2xlarge'
@@ -176,15 +188,15 @@ class TabularCloudPredictor(CloudPredictor):
             Number of instances used to fit the predictor.
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training.
-        custom_image_uri: Optional[str], default = None
+        image_uri: Optional[str], default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
         predictions_path: Optional[str]
             S3 URL where predictions will be written by the training container. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        backend_kwargs: Optional[dict], default = None
-            Backend-specific arguments. Same keys as ``fit()``.
+        environment, use_spot_instances, max_wait, sagemaker_overrides:
+            Same as in :meth:`fit`.
 
         Returns
         -------
@@ -193,12 +205,9 @@ class TabularCloudPredictor(CloudPredictor):
             ``predict_probability``. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_proba_results()``.
         """
-        backend_kwargs = {} if backend_kwargs is None else dict(backend_kwargs)
-        extra_ag_args = dict(backend_kwargs.get("extra_ag_args") or {})
-        extra_ag_args["predict_after_fit"] = True
+        extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
-        backend_kwargs["extra_ag_args"] = extra_ag_args
 
         self.fit(
             train_data=train_data,
@@ -211,9 +220,13 @@ class TabularCloudPredictor(CloudPredictor):
             instance_type=instance_type,
             instance_count=instance_count,
             volume_size=volume_size,
-            custom_image_uri=custom_image_uri,
+            image_uri=image_uri,
             wait=wait,
-            backend_kwargs=backend_kwargs,
+            environment=environment,
+            use_spot_instances=use_spot_instances,
+            max_wait=max_wait,
+            sagemaker_overrides=sagemaker_overrides,
+            extra_ag_args=extra_ag_args,
         )
 
         if not wait:

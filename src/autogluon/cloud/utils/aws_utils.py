@@ -2,8 +2,9 @@ import logging
 from typing import Optional
 
 import boto3
-import sagemaker
 from botocore.config import Config
+from sagemaker.core.common_utils import sagemaker_timestamp
+from sagemaker.core.helper.session_helper import Session, get_execution_role
 
 from autogluon.common.utils.s3_utils import is_s3_url
 
@@ -35,7 +36,7 @@ def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
 
     1. ``role`` argument if provided.
     2. ``role_arn`` from ``~/.autogluon/cloud.yaml`` under the matching backend slot.
-    3. ``sagemaker.get_execution_role()``.
+    3. ``sagemaker.core.helper.session_helper.get_execution_role()`` (the caller's own role, e.g. on SageMaker).
     """
     if role:
         return role
@@ -45,7 +46,7 @@ def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
         if entry is not None and entry.role_arn:
             logger.info(f"Using execution role from ~/.autogluon/cloud.yaml: {entry.role_arn}")
             return entry.role_arn
-    return sagemaker.get_execution_role()
+    return get_execution_role()
 
 
 def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optional[str]:
@@ -81,7 +82,7 @@ def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optiona
     body = path[len("s3://") :]
     bucket, _, prefix = body.partition("/")
     if not prefix:
-        path = f"s3://{bucket}/ag-{sagemaker.utils.sagemaker_timestamp()}"
+        path = f"s3://{bucket}/ag-{sagemaker_timestamp()}"
         logger.info(f"cloud_output_path set to {path} (timestamped subfolder under bucket).")
     else:
         logger.info(f"cloud_output_path set to {path}.")
@@ -181,4 +182,4 @@ def setup_sagemaker_session(
             "or configure a default region in `~/.aws/config`."
         )
     sm_boto = boto_session.client("sagemaker", config=config)
-    return sagemaker.Session(boto_session=boto_session, sagemaker_client=sm_boto)
+    return Session(boto_session=boto_session, sagemaker_client=sm_boto)

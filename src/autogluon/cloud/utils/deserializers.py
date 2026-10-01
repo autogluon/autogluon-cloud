@@ -2,7 +2,7 @@ import io
 from abc import ABC, abstractmethod
 
 import pandas as pd
-from sagemaker.deserializers import SimpleBaseDeserializer
+from sagemaker.core.deserializers import SimpleBaseDeserializer
 
 
 class PandasDeserializeStrategy(ABC):

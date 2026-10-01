@@ -47,7 +47,7 @@ def test_tabular_train(test_helper, framework_version, shared_training_job_name)
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+            image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
             job_name=shared_training_job_name,
         )
         info = predictor.info()
@@ -74,7 +74,7 @@ def test_tabular_endpoint_lifecycle(test_helper, framework_version, shared_train
 
         predictor.deploy(
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+            image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
         )
         endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=predictor.endpoint_name)["EndpointArn"]
         test_helper.assert_ag_cloud_tags(endpoint_arn, module="tabular")
@@ -106,7 +106,7 @@ def test_tabular_batch_predict(test_helper, framework_version, shared_training_j
         pred, pred_proba = predictor.predict_proba(
             _TEST_DATA,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+            image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
         )
         assert isinstance(pred, pd.Series)
         assert isinstance(pred_proba, pd.DataFrame)
@@ -129,7 +129,7 @@ def test_tabular_deploy_trained_artifact(test_helper, framework_version, shared_
         predictor.deploy(
             predictor_path=artifact_path,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+            image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
         )
         test_helper.test_endpoint(predictor, _TEST_DATA)
         predictor.cleanup_deployment()
@@ -152,7 +152,7 @@ def test_tabular_predict_trained_artifact(test_helper, framework_version, shared
             _TEST_DATA,
             predictor_path=artifact_path,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+            image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
         )
         assert isinstance(pred, pd.Series)
         assert isinstance(pred_proba, pd.DataFrame)
@@ -180,7 +180,7 @@ def test_tabular_foundation_model_predict(test_helper, framework_version):
             label="class",
             include_predict=True,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+            image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
             predictions_path=predictions_path,
         )
 
@@ -227,7 +227,7 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
             "mitra-classifier",
             cloud_output_path=(f"s3://autogluon-cloud-ci/test-tabular-fm-deploy/{framework_version}/{timestamp}"),
         )
-        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri)
+        endpoint = model.deploy(image_uri=inference_custom_image_uri)
         try:
             endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
                 "EndpointArn"

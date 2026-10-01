@@ -1,13 +1,11 @@
-import copy
 import os
 from typing import Any, Dict, Optional, Tuple, Union
 
 import pandas as pd
-from sagemaker import Predictor
 
 from autogluon.common.loaders import load_pd
 
-from ..utils.ag_sagemaker import AutoGluonMultiModalRealtimePredictor
+from ..utils.serializers import MultiModalSerializer
 from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, is_image_file, read_image_bytes_and_encode
 from .constant import MULTIMODL_SAGEMAKER
 from .sagemaker_backend import SagemakerBackend
@@ -15,11 +13,12 @@ from .sagemaker_backend import SagemakerBackend
 
 class MultiModalSagemakerBackend(SagemakerBackend):
     name = MULTIMODL_SAGEMAKER
+    # Images are sent one file per request.
+    _IMAGE_BATCH_ARGS = dict(content_type="application/x-image", split_type=None, batch_strategy="SingleRecord")
 
-    @property
-    def _realtime_predictor_cls(self) -> Predictor:
-        """Class used for realtime endpoint"""
-        return AutoGluonMultiModalRealtimePredictor
+    def _realtime_serializer(self):
+        """Serializer used for realtime endpoint requests"""
+        return MultiModalSerializer()
 
     def _load_predict_real_time_test_data(
         self, test_data: Union[str, pd.DataFrame], test_data_image_column: str
@@ -87,10 +86,9 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         test_data, content_type = self._load_predict_real_time_test_data(
             test_data=test_data, test_data_image_column=test_data_image_column
         )
-        # Providing content type here because sagemaker serializer doesn't support change content type dynamically.
-        # Pass to `endpoint.predict()` call as `initial_args` instead
+        # The serializer's content type is fixed, so the per-request content type is passed explicitly.
         pred, _ = self._predict_real_time(
-            test_data=test_data, accept=accept, inference_kwargs=inference_kwargs, ContentType=content_type
+            test_data=test_data, accept=accept, inference_kwargs=inference_kwargs, content_type=content_type
         )
 
         return pred
@@ -139,10 +137,9 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         test_data, content_type = self._load_predict_real_time_test_data(
             test_data=test_data, test_data_image_column=test_data_image_column
         )
-        # Providing content type here because sagemaker serializer doesn't support change content type dynamically.
-        # Pass to `endpoint.predict()` call as `initial_args` instead
+        # The serializer's content type is fixed, so the per-request content type is passed explicitly.
         pred, proba = self._predict_real_time(
-            test_data=test_data, accept=accept, inference_kwargs=inference_kwargs, ContentType=content_type
+            test_data=test_data, accept=accept, inference_kwargs=inference_kwargs, content_type=content_type
         )
 
         if proba is None:
@@ -161,8 +158,6 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        then create a transformer with it, and call transform in the end.
 
         Parameters
         ----------
@@ -182,10 +177,10 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         image_modality_only = self._check_image_modality_only(test_data)
 
         if image_modality_only:
-            processed_args = self._prepare_image_predict_args(**kwargs)
-            kwargs["transformer_kwargs"] = processed_args["transformer_kwargs"]
-            kwargs["transform_kwargs"] = processed_args["transform_kwargs"]
-            return super().predict(test_data, test_data_image_column=None, **kwargs)
+            pred, _ = self._predict(
+                test_data, original_features=self.original_features, **kwargs, **self._IMAGE_BATCH_ARGS
+            )
+            return pred
         else:
             return super().predict(
                 test_data,
@@ -204,8 +199,6 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        then create a transformer with it, and call transform in the end.
 
         Parameters
         ----------
@@ -225,32 +218,17 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         image_modality_only = self._check_image_modality_only(test_data)
 
         if image_modality_only:
-            processed_args = self._prepare_image_predict_args(**kwargs)
-            kwargs["transformer_kwargs"] = processed_args["transformer_kwargs"]
-            kwargs["transform_kwargs"] = processed_args["transform_kwargs"]
-            return super().predict_proba(test_data, test_data_image_column=None, **kwargs)
+            include_predict = kwargs.pop("include_predict", True)
+            pred, pred_proba = self._predict(
+                test_data, original_features=self.original_features, **kwargs, **self._IMAGE_BATCH_ARGS
+            )
+            return (pred, pred_proba) if include_predict else pred_proba
         else:
             return super().predict_proba(
                 test_data,
                 test_data_image_column=test_data_image_column,
                 **kwargs,
             )
-
-    def _prepare_image_predict_args(self, **predict_kwargs):
-        split_type = None
-        content_type = "application/x-image"
-        predict_kwargs = copy.deepcopy(predict_kwargs)
-        transformer_kwargs = predict_kwargs.pop("transformer_kwargs", {})
-        if transformer_kwargs is None:
-            transformer_kwargs = {}
-        transformer_kwargs["strategy"] = "SingleRecord"
-        transform_kwargs = predict_kwargs.pop("transofrm_kwargs", {})
-        if transform_kwargs is None:
-            transform_kwargs = {}
-        transform_kwargs["split_type"] = split_type
-        transform_kwargs["content_type"] = content_type
-
-        return {"transformer_kwargs": transformer_kwargs, "transform_kwargs": transform_kwargs}
 
     def _check_image_modality_only(self, test_data):
         image_modality_only = False
