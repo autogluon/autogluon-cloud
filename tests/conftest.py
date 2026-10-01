@@ -1,5 +1,4 @@
 import os
-import zipfile
 from datetime import datetime, timezone
 
 import boto3
@@ -74,17 +73,6 @@ class CloudTestHelper:
         return predictor
 
     @staticmethod
-    def extract_images(image_zip_file):
-        with zipfile.ZipFile(image_zip_file, "r") as zip_ref:
-            zip_ref.extractall(".")
-
-    @staticmethod
-    def replace_image_abspath(data, image_column):
-        data = pd.read_csv(data)
-        data[image_column] = data[image_column].apply(os.path.abspath)
-        return data
-
-    @staticmethod
     def assert_ag_cloud_tags(arn: str, *, module: str, model_id: str = None):
         """Assert the resource at ``arn`` carries ``autogluon-cloud-module`` (and optionally ``autogluon-cloud-model-id``).
 
@@ -118,55 +106,6 @@ class CloudTestHelper:
         except Exception as e:
             cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
             raise e
-
-    @staticmethod
-    def test_basic_functionality(
-        cloud_predictor,
-        train_data,
-        predictor_init_args,
-        predictor_fit_args,
-        test_data,
-        tuning_data=None,
-        fit_kwargs=None,
-        deploy_kwargs=None,
-        predict_real_time_kwargs=None,
-        predict_kwargs=None,
-    ):
-        if fit_kwargs is None:
-            fit_kwargs = dict(instance_type="ml.m5.2xlarge")
-        cloud_predictor.fit(
-            train_data=train_data,
-            tuning_data=tuning_data,
-            predictor_init_args=predictor_init_args,
-            predictor_fit_args=predictor_fit_args,
-            **fit_kwargs,
-        )
-        info = cloud_predictor.info()
-        assert info["local_output_path"] is not None
-        assert info["cloud_output_path"] is not None
-        assert info["fit_job"]["name"] is not None
-        assert info["fit_job"]["status"] == "Completed"
-
-        if deploy_kwargs is None:
-            deploy_kwargs = dict()
-        if predict_real_time_kwargs is None:
-            predict_real_time_kwargs = dict()
-        cloud_predictor.deploy(**deploy_kwargs)
-        CloudTestHelper.test_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs)
-        cloud_predictor.cleanup_deployment()
-
-        info = cloud_predictor.info()
-        assert info["local_output_path"] is not None
-        assert info["cloud_output_path"] is not None
-        assert info["fit_job"]["name"] is not None
-        assert info["fit_job"]["status"] == "Completed"
-
-        if predict_kwargs is None:
-            predict_kwargs = dict()
-        pred, pred_proba = cloud_predictor.predict_proba(test_data, **predict_kwargs)
-        assert isinstance(pred, pd.Series) and isinstance(pred_proba, pd.DataFrame)
-        info = cloud_predictor.info()
-        assert info["recent_batch_inference_job"]["status"] == "Completed"
 
 
 def pytest_addoption(parser):
