@@ -73,7 +73,7 @@ def test_falls_back_to_env_when_no_config_or_explicit():
 
 
 def test_falls_back_to_env_when_backend_missing_in_config():
-    _save_role_in_config("ray_aws", "arn:aws:iam::111111111111:role/ray")
+    _save_role_in_config("other_backend", "arn:aws:iam::111111111111:role/other")
     env_role = "arn:aws:iam::333333333333:role/from-env"
     with mock.patch(
         "autogluon.cloud.utils.aws_utils.sagemaker.get_execution_role",
@@ -139,7 +139,7 @@ def test_resolve_path_returns_none_when_path_none_and_no_config(no_s3_check):
 
 
 def test_resolve_path_returns_none_when_backend_not_in_config(no_s3_check):
-    _save_bucket_in_config("ray_aws", "config-bucket")
+    _save_bucket_in_config("other_backend", "config-bucket")
     assert resolve_cloud_output_path(None, backend_name="sagemaker") is None
 
 

@@ -45,7 +45,7 @@ class StatusReport:
 
 
 # Keep these values in sync with SUPPORTED_BACKENDS in backend/constant.py.
-BackendName = Literal["sagemaker", "ray_aws"]
+BackendName = Literal["sagemaker"]
 
 
 def bootstrap(
@@ -59,9 +59,6 @@ def bootstrap(
     On completion the IAM role and S3 bucket created by the stack are saved to ``~/.autogluon/cloud.yaml`` via
     :func:`register`. If you already have an IAM role and bucket in place, call :func:`register` directly and
     skip this function entirely.
-
-    Each backend has its own slot in the config file, so calling :func:`bootstrap` for ``sagemaker`` and again
-    for ``ray_aws`` keeps both in the config.
 
     Parameters
     ----------
@@ -119,7 +116,7 @@ def register(
     Parameters
     ----------
     role
-        ARN of an IAM role suitable for SageMaker / Ray to assume. Named ``role`` for consistency with the SageMaker
+        ARN of an IAM role suitable for SageMaker to assume. Named ``role`` for consistency with the SageMaker
         Python SDK (which uses ``role`` as the parameter name).
     bucket
         S3 bucket name where AutoGluon-Cloud will read/write artifacts.

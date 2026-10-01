@@ -77,9 +77,11 @@ class CloudPredictor(ABC):
         cloud_logger = logging.getLogger("autogluon.cloud")
         set_logger_verbosity(self.verbosity, logger=cloud_logger)
         self.local_output_path = self._setup_local_output_path(local_output_path)
-        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
+        if backend in ("ray", "ray_aws"):
+            raise ValueError("The Ray backend was removed in AutoGluon-Cloud v0.7.0. Use backend='sagemaker' instead.")
         if backend not in self.backend_map:
             raise ValueError(f"Unsupported backend {backend!r}. Supported backends: {sorted(self.backend_map)}.")
+        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
         self.backend: Backend = BackendFactory.get_backend(
             backend=self.backend_map[backend],
             local_output_path=self.local_output_path,

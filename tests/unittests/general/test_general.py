@@ -19,3 +19,11 @@ def test_dlc_image_exists(ag_version, instance_type, scope):
         imageIds=[{"imageTag": tag}],
     )
     assert len(response["imageDetails"]) == 1, f"Image not found in ECR: {uri}"
+
+
+@pytest.mark.parametrize("backend", ["ray", "ray_aws"])
+def test_ray_backend_raises_removed_error(backend, tmp_path):
+    from autogluon.cloud import TabularCloudPredictor
+
+    with pytest.raises(ValueError, match="removed in AutoGluon-Cloud v0.7.0"):
+        TabularCloudPredictor(backend=backend, local_output_path=str(tmp_path))

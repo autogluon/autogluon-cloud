@@ -51,15 +51,15 @@ def test_save_supports_multiple_backends():
     config = CloudConfig(
         backends={
             "sagemaker": _make_backend_config(bucket="sage-bucket"),
-            "ray_aws": _make_backend_config(bucket="ray-bucket", stack_name="ag-cloud-ray"),
+            "other_backend": _make_backend_config(bucket="other-bucket", stack_name="ag-cloud-other"),
         }
     )
     save_config(config)
 
     loaded = load_config()
-    assert set(loaded.backends) == {"sagemaker", "ray_aws"}
+    assert set(loaded.backends) == {"sagemaker", "other_backend"}
     assert loaded.backends["sagemaker"].bucket == "sage-bucket"
-    assert loaded.backends["ray_aws"].bucket == "ray-bucket"
+    assert loaded.backends["other_backend"].bucket == "other-bucket"
 
 
 def test_saved_file_is_user_only_readable():
