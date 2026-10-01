@@ -69,21 +69,6 @@ def test_register_overwrites_same_backend():
     assert cfg.backends["sagemaker"].region == "us-west-2"
 
 
-def test_register_keeps_other_backends_untouched():
-    """Adding ray_aws shouldn't disturb sagemaker."""
-    _register_default(backend="sagemaker")
-    register(
-        role="arn:aws:iam::111122223333:role/r",
-        bucket="ray-bucket",
-        region="us-east-1",
-        backend="ray_aws",
-    )
-    cfg = load_config()
-    assert set(cfg.backends) == {"sagemaker", "ray_aws"}
-    assert cfg.backends["sagemaker"].bucket == "b1"
-    assert cfg.backends["ray_aws"].bucket == "ray-bucket"
-
-
 def test_register_rejects_unknown_backend():
     with pytest.raises(ValueError, match="Unsupported backend"):
         register(
@@ -260,8 +245,8 @@ def test_bootstrap_default_stack_name_uses_backend(monkeypatch):
     monkeypatch.setattr("autogluon.cloud.cloud_setup._provision_stack", fake_provision)
     monkeypatch.setattr("autogluon.cloud.cloud_setup._validate_bucket_region", lambda **kw: None)
 
-    bootstrap(backend="ray_aws")
-    assert captured["stack_name"] == "ag-cloud-ray-aws"
+    bootstrap(backend="sagemaker")
+    assert captured["stack_name"] == "ag-cloud-sagemaker"
 
 
 # ---------------------------------------------------------------------------
@@ -271,24 +256,6 @@ def test_bootstrap_default_stack_name_uses_backend(monkeypatch):
 
 def test_status_without_config_returns_empty_dict():
     assert status() == {}
-
-
-def test_status_returns_one_per_backend(monkeypatch):
-    _register_default(backend="sagemaker")
-    register(
-        role="arn:...",
-        bucket="ray-bucket",
-        region="us-east-1",
-        backend="ray_aws",
-    )
-    monkeypatch.setattr("autogluon.cloud.cloud_setup._check_bucket", lambda s, b: "ok")
-    monkeypatch.setattr("autogluon.cloud.cloud_setup._check_role", lambda s, r: "ok")
-
-    reports = status()
-    assert set(reports) == {"sagemaker", "ray_aws"}
-    assert isinstance(reports["sagemaker"].config, BackendConfig)
-    assert reports["sagemaker"].checks == {"bucket": "ok", "role": "ok"}
-    assert reports["ray_aws"].config.bucket == "ray-bucket"
 
 
 def test_status_includes_stack_check_when_stack_name_set(monkeypatch):
@@ -361,11 +328,11 @@ def test_teardown_with_stack_deletes_each_backend(monkeypatch):
                     bucket="b1",
                     stack_name="ag-cloud-sagemaker",
                 ),
-                "ray_aws": BackendConfig(
+                "other_backend": BackendConfig(
                     region="us-east-1",
                     role_arn="arn:...",
                     bucket="b2",
-                    stack_name="ag-cloud-ray-aws",
+                    stack_name="ag-cloud-other",
                 ),
             }
         )
@@ -397,25 +364,13 @@ def test_teardown_with_stack_deletes_each_backend(monkeypatch):
             raise AssertionError(f"unexpected client: {service}")
 
     teardown(session=FakeSession())
-    assert sorted(deleted) == ["ag-cloud-ray-aws", "ag-cloud-sagemaker"]
+    assert sorted(deleted) == ["ag-cloud-other", "ag-cloud-sagemaker"]
     assert load_config() is None
-
-
-def test_teardown_specific_backend_keeps_others():
-    """teardown(backend='sagemaker') removes only that entry; ray_aws stays."""
-    _register_default(backend="sagemaker")
-    register(role="arn:...", bucket="ray-bucket", region="us-east-1", backend="ray_aws")
-
-    teardown(backend="sagemaker")  # neither has a stack_name → no AWS calls
-
-    cfg = load_config()
-    assert cfg is not None
-    assert set(cfg.backends) == {"ray_aws"}
 
 
 def test_teardown_unknown_backend_is_friendly(caplog):
     _register_default(backend="sagemaker")
     with caplog.at_level("WARNING", logger="autogluon.cloud.cloud_setup"):
-        teardown(backend="ray_aws")  # not registered
+        teardown(backend="other_backend")  # not registered
     assert any("not in config" in r.message for r in caplog.records)
     assert load_config() is not None  # nothing was removed

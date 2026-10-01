@@ -5,19 +5,13 @@ Stores resource identifiers (region, stack name, bucket, IAM role ARN) at
 session. The file contains only non-secret identifiers — no AWS credentials
 are ever written to disk.
 
-The file is keyed by backend name so a user can have entries for multiple backends like
-``sagemaker`` and ``ray_aws`` configured at the same time::
+The file is keyed by backend name::
 
     sagemaker:
       region: us-east-1
       role_arn: arn:aws:iam::...:role/ag-cloud-sagemaker-execution-role
       bucket: ag-cloud-sagemaker-bucket-...
       stack_name: ag-cloud-sagemaker
-    ray_aws:
-      region: us-east-1
-      role_arn: arn:aws:iam::...:role/ag-cloud-ray-aws-execution-role
-      bucket: ag-cloud-ray-aws-bucket-...
-      stack_name: ag-cloud-ray-aws
 """
 
 from __future__ import annotations

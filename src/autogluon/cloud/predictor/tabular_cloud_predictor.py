@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import pandas as pd
 
-from ..backend.constant import RAY_AWS, SAGEMAKER, TABULAR_RAY_AWS, TABULAR_SAGEMAKER
+from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER
 from ..utils.utils import split_pred_and_pred_proba
 from .cloud_predictor import CloudPredictor
 
@@ -21,7 +21,7 @@ class TabularCloudPredictor(CloudPredictor):
     """
 
     predictor_file_name = "TabularCloudPredictor.pkl"
-    backend_map = {SAGEMAKER: TABULAR_SAGEMAKER, RAY_AWS: TABULAR_RAY_AWS}
+    backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
 
     @property
     def predictor_type(self):

@@ -56,10 +56,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ray = ["ray[default]>=2.10.0,<2.59"]
 all = [  # To allow user to pass ag objects
     "autogluon>=0.7,<1.7",
-    "autogluon.cloud[ray]",
 ]
 tests = [
     "pytest",
@@ -86,7 +84,6 @@ namespaces = true
 
 [tool.setuptools.package-data]
 "autogluon.cloud" = [
-    "default_cluster_configs/*.yaml",
     "utils/autogluon_dlc.json",
     "templates/*.yaml",
 ]

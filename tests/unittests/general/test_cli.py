@@ -282,7 +282,7 @@ def test_teardown_with_explicit_backend(runner, monkeypatch):
                     bucket="b1",
                     stack_name="s",
                 ),
-                "ray_aws": BackendConfig(
+                "other_backend": BackendConfig(
                     region="us-east-1",
                     role_arn="arn:...",
                     bucket="b2",
