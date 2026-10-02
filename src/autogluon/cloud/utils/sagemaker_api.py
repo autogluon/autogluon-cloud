@@ -48,6 +48,27 @@ _LEGACY_KWARG_HINTS = {
 }
 
 
+def _fix_core_field_name_serialization() -> None:
+    """Teach sagemaker-core the API names of fields whose acronyms its snake_case -> PascalCase conversion mangles.
+
+    sagemaker-core serializes nested request shapes with a naive conversion, e.g. ``memory_size_in_mb`` becomes
+    ``MemorySizeInMb`` instead of ``MemorySizeInMB``, which botocore rejects. The real member names are in its own
+    shape metadata, so register every name the naive conversion gets wrong.
+    """
+    from sagemaker.core.utils import utils as core_utils
+    from sagemaker.core.utils.code_injection.shape_dag import SHAPE_DAG
+
+    for shape in SHAPE_DAG.values():
+        for member in shape.get("members") or []:
+            name = member["name"]
+            snake = core_utils.pascal_to_snake(name)
+            if core_utils.snake_to_pascal(snake) != name:
+                core_utils.SPECIAL_SNAKE_TO_PASCAL_MAPPINGS.setdefault(snake, name)
+
+
+_fix_core_field_name_serialization()
+
+
 def reject_legacy_kwargs(func):
     """Turn removed v2-era kwargs into an actionable ``TypeError`` instead of Python's generic one."""
 

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from sagemaker.core.shapes import StoppingCondition
 
-from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend
+from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
 from autogluon.cloud.utils.sagemaker_api import (
     bind_core_session,
     deep_merge,
@@ -87,11 +87,13 @@ def fit_request(tmp_path):
         mock.patch(f"{SB}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{SB}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/test"),
         mock.patch(f"{SB}.upload_training_code", return_value="s3://bucket/run/code/job/source/sourcedir.tar.gz"),
-        mock.patch.object(SagemakerBackend, "_upload_fit_artifact", return_value={"train_data": "s3://b/train.csv"}),
+        mock.patch.object(
+            TabularSagemakerBackend, "_upload_fit_artifact", return_value={"train_data": "s3://b/train.csv"}
+        ),
     ):
 
         def run(backend_kwargs=None, **fit_kwargs):
-            backend = SagemakerBackend(
+            backend = TabularSagemakerBackend(
                 local_output_path=str(tmp_path),
                 cloud_output_path="s3://bucket/run",
                 predictor_type="tabular",
@@ -153,3 +155,19 @@ def test_fit_rejects_local_mode_and_max_wait_without_spot(fit_request):
         fit_request(instance_type="local")
     with pytest.raises(ValueError, match="use_spot_instances"):
         fit_request(max_wait=100)
+
+
+def test_core_serializes_acronym_field_names_with_api_casing():
+    from sagemaker.core.shapes import ProductionVariant
+    from sagemaker.core.utils.utils import serialize
+
+    variant = ProductionVariant(
+        variant_name="AllTraffic",
+        serverless_config={"memory_size_in_mb": 4096, "max_concurrency": 5},
+        enable_ssm_access=True,
+    )
+    assert serialize(variant) == {
+        "VariantName": "AllTraffic",
+        "ServerlessConfig": {"MemorySizeInMB": 4096, "MaxConcurrency": 5},
+        "EnableSSMAccess": True,
+    }

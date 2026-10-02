@@ -1,8 +1,9 @@
 from unittest import mock
 
+import pandas as pd
 import pytest
 
-from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend
+from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
 from autogluon.cloud.utils.dlc_utils import infer_sagemaker_ami_version
 
 GPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cu133-amzn2023"
@@ -59,19 +60,19 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(sag
         mock.patch(f"{SB}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{SB}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/test"),
         mock.patch(f"{SB}.SageMakerBatchTransformationJob") as job_cls,
-        mock.patch.object(SagemakerBackend, "_upload_predictor", side_effect=lambda path, _: path),
-        mock.patch.object(SagemakerBackend, "_upload_batch_predict_data", return_value="s3://input/data.csv"),
-        mock.patch.object(SagemakerBackend, "_prepare_model_data", return_value="s3://bucket/model.tar.gz"),
-        mock.patch.object(SagemakerBackend, "_create_model", return_value="job"),
+        mock.patch.object(TabularSagemakerBackend, "_upload_predictor", side_effect=lambda path, _: path),
+        mock.patch.object(TabularSagemakerBackend, "_upload_batch_predict_data", return_value="s3://input/data.csv"),
+        mock.patch.object(TabularSagemakerBackend, "_prepare_model_data", return_value="s3://bucket/model.tar.gz"),
+        mock.patch.object(TabularSagemakerBackend, "_create_model", return_value="job"),
     ):
-        backend = SagemakerBackend(
+        backend = TabularSagemakerBackend(
             local_output_path="/tmp/test",
             cloud_output_path="s3://bucket/run",
             predictor_type="tabular",
         )
         backend._fit_job = mock.MagicMock()
         backend._predict(
-            test_data="s3://input/data.csv",
+            test_data=pd.DataFrame({"x": [1]}),
             predictor_path="s3://bucket/model.tar.gz",
             job_name="job",
             instance_type="ml.g4dn.xlarge",
