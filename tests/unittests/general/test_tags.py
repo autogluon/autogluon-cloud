@@ -34,4 +34,4 @@ def test_when_disable_env_var_set_then_defaults_and_extras_are_skipped(monkeypat
 
 
 def test_to_request_tags_uses_api_field_names():
-    assert to_request_tags({"Owner": "team"}) == [{"key": "Owner", "value": "team"}]
+    assert to_request_tags({"Owner": "team"}) == [{"Key": "Owner", "Value": "team"}]

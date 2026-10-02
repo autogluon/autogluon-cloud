@@ -11,8 +11,6 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 import pandas as pd
 from botocore.exceptions import ClientError
 from sagemaker.core.common_utils import sagemaker_timestamp, unique_name_from_base
-from sagemaker.core.resources import Endpoint, EndpointConfig, Model
-from sagemaker.core.shapes import VpcConfig
 
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
@@ -45,7 +43,6 @@ from ..utils.sagemaker_api import (
     delete_endpoint,
     invoke_endpoint,
 )
-from ..utils.sagemaker_core_workarounds import bind_core_session
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 from ..utils.tag_utils import build_tags, to_request_tags
 from ..utils.utils import (
@@ -60,6 +57,12 @@ from .constant import SAGEMAKER
 logger = logging.getLogger(__name__)
 
 SAGEMAKER_MODEL_SERVER_WORKERS = "SAGEMAKER_MODEL_SERVER_WORKERS"
+_VPC_CONFIG_FIELDS = {"subnets": "Subnets", "security_group_ids": "SecurityGroupIds"}
+_SERVERLESS_CONFIG_FIELDS = {
+    "memory_size_in_mb": "MemorySizeInMB",
+    "max_concurrency": "MaxConcurrency",
+    "provisioned_concurrency": "ProvisionedConcurrency",
+}
 
 
 def _reject_local_mode(instance_type: Optional[str]) -> None:
@@ -72,15 +75,31 @@ def _reject_local_mode(instance_type: Optional[str]) -> None:
 
 def _s3_channel(channel_name: str, s3_uri: str) -> Dict[str, Any]:
     return {
-        "channel_name": channel_name,
-        "data_source": {
-            "s3_data_source": {
-                "s3_data_type": "S3Prefix",
-                "s3_uri": s3_uri,
-                "s3_data_distribution_type": "FullyReplicated",
+        "ChannelName": channel_name,
+        "DataSource": {
+            "S3DataSource": {
+                "S3DataType": "S3Prefix",
+                "S3Uri": s3_uri,
+                "S3DataDistributionType": "FullyReplicated",
             }
         },
     }
+
+
+def _to_request_fields(settings: Dict[str, Any], fields: Dict[str, str], arg_name: str) -> Dict[str, Any]:
+    """Rename the snake_case keys of a user-facing settings dict to the SageMaker API field names."""
+    unknown = sorted(set(settings) - set(fields))
+    if unknown:
+        raise ValueError(f"Unsupported `{arg_name}` key(s) {unknown}. Valid keys: {list(fields)}.")
+    return {fields[key]: value for key, value in settings.items()}
+
+
+def _vpc_request(vpc_config: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    """``SageMakerConfig.vpc_config`` in the ``VpcConfig`` request format."""
+    missing = sorted(set(_VPC_CONFIG_FIELDS) - set(vpc_config))
+    if missing:
+        raise ValueError(f"`vpc_config` is missing required key(s) {missing}.")
+    return _to_request_fields(vpc_config, _VPC_CONFIG_FIELDS, "vpc_config")
 
 
 class SagemakerBackend(Backend):
@@ -105,7 +124,7 @@ class SagemakerBackend(Backend):
             raise TypeError("`config` must be a SageMakerConfig.")
         config = copy.deepcopy(config or SageMakerConfig())
         if config.vpc_config is not None:
-            VpcConfig(**config.vpc_config)  # fail before creating a session or resolving the role
+            _vpc_request(config.vpc_config)  # fail before creating a session or resolving the role
         self.sagemaker_session = setup_sagemaker_session(region=config.region)
         try:
             self.role_arn = resolve_execution_role(
@@ -127,14 +146,8 @@ class SagemakerBackend(Backend):
         return AutoGluonSerializer()
 
     def _resolve_tags(self, extra_tags: Optional[Dict[str, str]] = None) -> List[Dict[str, str]]:
-        """Tags for a created SageMaker resource, in sagemaker-core request format: default + extra + user tags."""
+        """Tags for a created SageMaker resource, in SageMaker API request format: default + extra + user tags."""
         return to_request_tags(build_tags(self.predictor_type, extra_tags=extra_tags, user_tags=self.config.tags))
-
-    @property
-    def _boto_session(self):
-        boto_session = self.sagemaker_session.boto_session
-        bind_core_session(boto_session)
-        return boto_session
 
     def attach_job(self, job_name: str) -> None:
         """
@@ -261,7 +274,7 @@ class SagemakerBackend(Backend):
             Maximum seconds to wait for spot capacity plus training time. Defaults to ``timeout``. Requires
             ``use_spot_instances=True``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw ``CreateTrainingJob`` request fields (sagemaker-core snake_case names) under the
+            Raw ``CreateTrainingJob`` request fields (SageMaker API / boto3 PascalCase names) under the
             ``"create_training_job"`` key, deep-merged over the request built by AutoGluon-Cloud.
         extra_ag_args: Optional[Dict[str, Any]], default = None
             Additional entries to merge into ``ag_args.json``. Use this to ship caller-specific metadata to the
@@ -345,42 +358,42 @@ class SagemakerBackend(Backend):
             s3_uri_prefix=f"{self.cloud_output_path}/code/{job_name}/source",
         )
 
-        stopping_condition: Dict[str, Any] = {"max_runtime_in_seconds": timeout}
+        stopping_condition: Dict[str, Any] = {"MaxRuntimeInSeconds": timeout}
         if use_spot_instances:
-            stopping_condition["max_wait_time_in_seconds"] = max_wait or timeout
+            stopping_condition["MaxWaitTimeInSeconds"] = max_wait or timeout
         request: Dict[str, Any] = {
-            "training_job_name": job_name,
-            "role_arn": self.role_arn,
-            "algorithm_specification": {
-                "training_image": resolve_image_uri(
+            "TrainingJobName": job_name,
+            "RoleArn": self.role_arn,
+            "AlgorithmSpecification": {
+                "TrainingImage": resolve_image_uri(
                     image_uri, framework_version, py_version, self._region, "training", instance_type
                 ),
-                "training_input_mode": "File",
+                "TrainingInputMode": "File",
             },
-            "hyper_parameters": training_script_hyperparameters(
+            "HyperParameters": training_script_hyperparameters(
                 entry_point=entry_point, submit_directory=code_uri, job_name=job_name, region=self._region
             ),
-            "input_data_config": [_s3_channel(name, uri) for name, uri in inputs.items()],
-            "output_data_config": {"s3_output_path": self.cloud_output_path + "/model"},
-            "resource_config": {
-                "instance_type": instance_type,
-                "instance_count": instance_count,
-                "volume_size_in_gb": volume_size,
+            "InputDataConfig": [_s3_channel(name, uri) for name, uri in inputs.items()],
+            "OutputDataConfig": {"S3OutputPath": self.cloud_output_path + "/model"},
+            "ResourceConfig": {
+                "InstanceType": instance_type,
+                "InstanceCount": instance_count,
+                "VolumeSizeInGB": volume_size,
             },
-            "stopping_condition": stopping_condition,
-            "profiler_config": {"disable_profiler": True},
-            "tags": self._resolve_tags(extra_tags),
+            "StoppingCondition": stopping_condition,
+            "ProfilerConfig": {"DisableProfiler": True},
+            "Tags": self._resolve_tags(extra_tags),
         }
         if environment:
-            request["environment"] = dict(environment)
+            request["Environment"] = dict(environment)
         if use_spot_instances:
-            request["enable_managed_spot_training"] = True
+            request["EnableManagedSpotTraining"] = True
         if self.config.vpc_config is not None:
-            request["vpc_config"] = self.config.vpc_config
+            request["VpcConfig"] = _vpc_request(self.config.vpc_config)
         if self.config.output_kms_key is not None:
-            request["output_data_config"]["kms_key_id"] = self.config.output_kms_key
+            request["OutputDataConfig"]["KmsKeyId"] = self.config.output_kms_key
         if self.config.volume_kms_key is not None:
-            request["resource_config"]["volume_kms_key_id"] = self.config.volume_kms_key
+            request["ResourceConfig"]["VolumeKmsKeyId"] = self.config.volume_kms_key
         request = deep_merge(request, overrides.get("create_training_job", {}))
 
         self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
@@ -404,22 +417,22 @@ class SagemakerBackend(Backend):
             **script_mode_environment(entry_point, self._region),
         }
         request: Dict[str, Any] = {
-            "model_name": model_name,
-            "primary_container": {
-                "image": image_uri,
-                "model_data_url": model_data,
-                "environment": container_environment,
+            "ModelName": model_name,
+            "PrimaryContainer": {
+                "Image": image_uri,
+                "ModelDataUrl": model_data,
+                "Environment": container_environment,
             },
-            "execution_role_arn": self.role_arn,
-            "tags": tags,
+            "ExecutionRoleArn": self.role_arn,
+            "Tags": tags,
         }
         if self.config.vpc_config is not None:
-            request["vpc_config"] = self.config.vpc_config
+            request["VpcConfig"] = _vpc_request(self.config.vpc_config)
         request = deep_merge(request, overrides.get("create_model", {}))
         logger.log(20, "Creating inference model...")
-        Model.create(**request, session=self._boto_session, region=self._region)
+        self.sagemaker_session.sagemaker_client.create_model(**request)
         logger.log(20, "Inference model created successfully")
-        return request["model_name"]
+        return request["ModelName"]
 
     def _prepare_model_data(
         self,
@@ -505,7 +518,7 @@ class SagemakerBackend(Backend):
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (sagemaker-core snake_case names) deep-merged over the requests built by
+            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"production_variant"``,
             ``"create_endpoint_config"``, ``"create_endpoint"``.
         entry_point: Optional[str], default = None
@@ -516,7 +529,7 @@ class SagemakerBackend(Backend):
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero).
         inference_config: Optional[Dict[str, Any]], default = None
-            Serverless overrides forwarded to the production variant's ``serverless_config``
+            Serverless overrides forwarded to the production variant's ``ServerlessConfig``
             (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
         repack: bool, default = True
             Whether to download ``predictor_path``, inject the serve script, and re-upload it. Set to False when
@@ -528,6 +541,12 @@ class SagemakerBackend(Backend):
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
         overrides = check_override_keys(backend_overrides, DEPLOY_OVERRIDE_KEYS)
+        serverless_config = None
+        if inference_mode == "serverless":
+            preset = {"memory_size_in_mb": 4096, "max_concurrency": 5}
+            serverless_config = _to_request_fields(
+                {**preset, **(inference_config or {})}, _SERVERLESS_CONFIG_FIELDS, "inference_config"
+            )
         if inference_mode == "serverless" and instance_type is None:
             # Needed to infer the container image (CPU vs GPU) downstream — serverless is CPU-only.
             instance_type = "ml.m5.2xlarge"
@@ -606,46 +625,45 @@ class SagemakerBackend(Backend):
             overrides=overrides,
         )
 
-        variant: Dict[str, Any] = {"variant_name": "AllTraffic", "model_name": model_name}
+        variant: Dict[str, Any] = {"VariantName": "AllTraffic", "ModelName": model_name}
         if inference_mode == "realtime":
-            variant["instance_type"] = instance_type
-            variant["initial_instance_count"] = initial_instance_count
+            variant["InstanceType"] = instance_type
+            variant["InitialInstanceCount"] = initial_instance_count
             if volume_size:
-                variant["volume_size_in_gb"] = volume_size
+                variant["VolumeSizeInGB"] = volume_size
             inference_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="inference")
             if inference_ami_version is not None:
-                variant["inference_ami_version"] = inference_ami_version
+                variant["InferenceAmiVersion"] = inference_ami_version
         elif inference_mode == "serverless":
-            preset = {"memory_size_in_mb": 4096, "max_concurrency": 5}
-            variant["serverless_config"] = {**preset, **(inference_config or {})}
+            variant["ServerlessConfig"] = serverless_config
         else:
             raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
         variant = deep_merge(variant, overrides.get("production_variant", {}))
 
         endpoint_config_request: Dict[str, Any] = {
-            "endpoint_config_name": endpoint_name,
-            "production_variants": [variant],
-            "tags": tags,
+            "EndpointConfigName": endpoint_name,
+            "ProductionVariants": [variant],
+            "Tags": tags,
         }
         if self.config.volume_kms_key is not None and inference_mode == "realtime":
-            endpoint_config_request["kms_key_id"] = self.config.volume_kms_key
+            endpoint_config_request["KmsKeyId"] = self.config.volume_kms_key
         endpoint_config_request = deep_merge(endpoint_config_request, overrides.get("create_endpoint_config", {}))
         endpoint_request = deep_merge(
             {
-                "endpoint_name": endpoint_name,
-                "endpoint_config_name": endpoint_config_request["endpoint_config_name"],
-                "tags": tags,
+                "EndpointName": endpoint_name,
+                "EndpointConfigName": endpoint_config_request["EndpointConfigName"],
+                "Tags": tags,
             },
             overrides.get("create_endpoint", {}),
         )
 
         logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
-        boto_session = self._boto_session
-        EndpointConfig.create(**endpoint_config_request, session=boto_session, region=self._region)
-        endpoint = Endpoint.create(**endpoint_request, session=boto_session, region=self._region)
-        self.endpoint_name = endpoint_request["endpoint_name"]
+        client = self.sagemaker_session.sagemaker_client
+        client.create_endpoint_config(**endpoint_config_request)
+        client.create_endpoint(**endpoint_request)
+        self.endpoint_name = endpoint_request["EndpointName"]
         if wait:
-            endpoint.wait_for_status("InService")
+            client.get_waiter("endpoint_in_service").wait(EndpointName=self.endpoint_name)
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
         """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/ and upload it."""
@@ -659,7 +677,7 @@ class SagemakerBackend(Backend):
         Delete endpoint, endpoint configuration and deployed model
         """
         assert self.endpoint_name is not None, "No deployed endpoint detected"
-        delete_endpoint(self.endpoint_name, self._boto_session)
+        delete_endpoint(self.endpoint_name, self.sagemaker_session)
         self.endpoint_name = None
 
     def attach_endpoint(self, endpoint: str) -> None:
@@ -874,7 +892,7 @@ class SagemakerBackend(Backend):
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (sagemaker-core snake_case names) deep-merged over the requests built by
+            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
 
         Returns
@@ -1171,7 +1189,7 @@ class SagemakerBackend(Backend):
                 test_data = AutoGluonSerializationWrapper(data=test_data, inference_kwargs=inference_kwargs)
             prediction = invoke_endpoint(
                 self.endpoint_name,
-                self._boto_session,
+                self.sagemaker_session,
                 test_data,
                 serializer=self._realtime_serializer(),
                 deserializer=PandasDeserializer(),
@@ -1329,34 +1347,34 @@ class SagemakerBackend(Backend):
         )
 
         transform_input: Dict[str, Any] = {
-            "data_source": {"s3_data_source": {"s3_data_type": "S3Prefix", "s3_uri": test_input}},
-            "content_type": content_type,
+            "DataSource": {"S3DataSource": {"S3DataType": "S3Prefix", "S3Uri": test_input}},
+            "ContentType": content_type,
         }
         if split_type is not None:
-            transform_input["split_type"] = split_type
-        transform_output: Dict[str, Any] = {"s3_output_path": output_path + "/results", "accept": accept}
+            transform_input["SplitType"] = split_type
+        transform_output: Dict[str, Any] = {"S3OutputPath": output_path + "/results", "Accept": accept}
         if assemble_with is not None:
-            transform_output["assemble_with"] = assemble_with
-        transform_resources: Dict[str, Any] = {"instance_type": instance_type, "instance_count": instance_count}
+            transform_output["AssembleWith"] = assemble_with
+        transform_resources: Dict[str, Any] = {"InstanceType": instance_type, "InstanceCount": instance_count}
         transform_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="transform")
         if transform_ami_version is not None:
-            transform_resources["transform_ami_version"] = transform_ami_version
+            transform_resources["TransformAmiVersion"] = transform_ami_version
         if self.config.output_kms_key is not None:
-            transform_output["kms_key_id"] = self.config.output_kms_key
+            transform_output["KmsKeyId"] = self.config.output_kms_key
         if self.config.volume_kms_key is not None:
-            transform_resources["volume_kms_key_id"] = self.config.volume_kms_key
+            transform_resources["VolumeKmsKeyId"] = self.config.volume_kms_key
         request = {
-            "transform_job_name": job_name,
-            "model_name": model_name,
-            "transform_input": transform_input,
-            "transform_output": transform_output,
-            "transform_resources": transform_resources,
-            "batch_strategy": batch_strategy,
+            "TransformJobName": job_name,
+            "ModelName": model_name,
+            "TransformInput": transform_input,
+            "TransformOutput": transform_output,
+            "TransformResources": transform_resources,
+            "BatchStrategy": batch_strategy,
             # Maximum size in MB of a single request to the container; larger inputs are split into multiple batches.
-            "max_payload_in_mb": 6,
+            "MaxPayloadInMB": 6,
             # The maximum number of HTTP requests made to each individual transform container at one time.
-            "max_concurrent_transforms": 1,
-            "tags": tags,
+            "MaxConcurrentTransforms": 1,
+            "Tags": tags,
         }
         request = deep_merge(request, overrides.get("create_transform_job", {}))
 
@@ -1367,7 +1385,7 @@ class SagemakerBackend(Backend):
         pred, pred_proba = None, None
         if download:
             results_path = self.download_predict_results(save_path=save_path)
-            accept = request["transform_output"].get("accept")
+            accept = request["TransformOutput"].get("Accept")
             if accept == "application/x-parquet":
                 results = pd.read_parquet(results_path)
             elif accept == "text/csv":

@@ -25,4 +25,4 @@ def build_tags(
 
 def to_request_tags(tags: Dict[str, str]) -> List[Dict[str, str]]:
     """Convert ``{key: value}`` tags to the list format of SageMaker API requests."""
-    return [{"key": key, "value": value} for key, value in tags.items()]
+    return [{"Key": key, "Value": value} for key, value in tags.items()]

@@ -256,11 +256,7 @@ def test_sagemaker_backend_skips_repack_when_repack_is_false():
     with (
         mock.patch(f"{sb}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{sb}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/t"),
-        mock.patch(f"{sb}.bind_core_session"),
         mock.patch(f"{sb}.repack_model_with_serving_code") as repack,
-        mock.patch(f"{sb}.Model") as model_cls,
-        mock.patch(f"{sb}.EndpointConfig"),
-        mock.patch(f"{sb}.Endpoint"),
         mock.patch.object(SagemakerBackend, "_upload_predictor", side_effect=lambda p, _: p),
     ):
         backend = SagemakerBackend(
@@ -277,5 +273,5 @@ def test_sagemaker_backend_skips_repack_when_repack_is_false():
         )
 
         repack.assert_not_called()
-        container = model_cls.create.call_args.kwargs["primary_container"]
-        assert container["model_data_url"] == "s3://bucket/cache/chronos-2/model.tar.gz"
+        container = backend.sagemaker_session.sagemaker_client.create_model.call_args.kwargs["PrimaryContainer"]
+        assert container["ModelDataUrl"] == "s3://bucket/cache/chronos-2/model.tar.gz"

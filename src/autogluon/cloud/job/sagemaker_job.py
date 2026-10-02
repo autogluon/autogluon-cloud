@@ -2,12 +2,9 @@ import logging
 from abc import abstractmethod
 from typing import Any, Dict, Optional, Union
 
-from sagemaker.core.resources import Model, TrainingJob, TransformJob
-
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import MODEL_ARTIFACT_NAME
 from ..utils.job_logs import TRAINING_JOB_LOG_GROUP, TRANSFORM_JOB_LOG_GROUP, wait_for_job
-from ..utils.sagemaker_core_workarounds import bind_core_session
 from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
@@ -52,8 +49,8 @@ class SageMakerJob(RemoteJob):
         raise NotImplementedError
 
     @abstractmethod
-    def _describe(self):
-        """Return the sagemaker-core resource describing the job."""
+    def _describe(self) -> Dict[str, Any]:
+        """Return the ``Describe*Job`` response for the job."""
         raise NotImplementedError
 
     @abstractmethod
@@ -67,12 +64,6 @@ class SageMakerJob(RemoteJob):
     @abstractmethod
     def _get_hyperparameters(self):
         raise NotImplementedError
-
-    @property
-    def _boto_session(self):
-        boto_session = self.session.boto_session
-        bind_core_session(boto_session)
-        return boto_session
 
     @property
     def job_name(self):
@@ -136,7 +127,7 @@ class SageMakerJob(RemoteJob):
         )
         if status != "Completed":
             logger.error(
-                f"SageMaker job {self.job_name} finished with status {status}: {self._describe().failure_reason}"
+                f"SageMaker job {self.job_name} finished with status {status}: {self._describe().get('FailureReason')}"
             )
         return status
 
@@ -145,7 +136,7 @@ class SageMakerJob(RemoteJob):
         status = self.wait(logs=True)
         if status != "Completed":
             raise RuntimeError(
-                f"SageMaker job {self.job_name} finished with status {status}: {self._describe().failure_reason}"
+                f"SageMaker job {self.job_name} finished with status {status}: {self._describe().get('FailureReason')}"
             )
 
     def __getstate__(self):
@@ -187,29 +178,25 @@ class SageMakerFitJob(SageMakerJob):
         )
         return info
 
-    def _describe(self) -> TrainingJob:
-        return TrainingJob.get(
-            training_job_name=self.job_name,
-            session=self._boto_session,
-            region=self.session.boto_region_name,
-        )
+    def _describe(self) -> Dict[str, Any]:
+        return self.session.sagemaker_client.describe_training_job(TrainingJobName=self.job_name)
 
     def _get_job_status(self):
-        return self._describe().training_job_status
+        return self._describe()["TrainingJobStatus"]
 
     def _get_output_path(self):
-        return self._describe().model_artifacts.s3_model_artifacts
+        return self._describe()["ModelArtifacts"]["S3ModelArtifacts"]
 
     def _get_hyperparameters(self):
         if self.job_name:
-            return self._describe().hyper_parameters
+            return self._describe().get("HyperParameters")
         return None
 
     def get_input_channels(self) -> Dict[str, str]:
         """Map each input channel name of the training job to its S3 URI."""
         return {
-            channel.channel_name: channel.data_source.s3_data_source.s3_uri
-            for channel in self._describe().input_data_config
+            channel["ChannelName"]: channel["DataSource"]["S3DataSource"]["S3Uri"]
+            for channel in self._describe()["InputDataConfig"]
         }
 
     def run(
@@ -218,15 +205,11 @@ class SageMakerFitJob(SageMakerJob):
         framework_version: Optional[str],
         wait: bool,
     ):
-        """Create the training job from a ``TrainingJob.create`` request and optionally wait for it to finish."""
-        job_name = training_job_request["training_job_name"]
+        """Create the training job from a ``CreateTrainingJob`` request and optionally wait for it to finish."""
+        job_name = training_job_request["TrainingJobName"]
         logger.log(20, f"Start sagemaker training job `{job_name}`")
         try:
-            TrainingJob.create(
-                **training_job_request,
-                session=self._boto_session,
-                region=self.session.boto_region_name,
-            )
+            self.session.sagemaker_client.create_training_job(**training_job_request)
             self._job_name = job_name
             self._framework_version = framework_version
             if wait:
@@ -256,42 +239,33 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         )
         return info
 
-    def _describe(self) -> TransformJob:
-        return TransformJob.get(
-            transform_job_name=self.job_name,
-            session=self._boto_session,
-            region=self.session.boto_region_name,
-        )
+    def _describe(self) -> Dict[str, Any]:
+        return self.session.sagemaker_client.describe_transform_job(TransformJobName=self.job_name)
 
     def _get_job_status(self):
-        return self._describe().transform_job_status
+        return self._describe()["TransformJobStatus"]
 
     def _get_output_path(self):
-        return self._describe().transform_output.s3_output_path + "/" + self._output_filename
+        return self._describe()["TransformOutput"]["S3OutputPath"] + "/" + self._output_filename
 
     def _delete_model(self, model_name: str) -> None:
-        bind_core_session(self.session.boto_session)
-        Model(model_name=model_name).delete()
+        self.session.sagemaker_client.delete_model(ModelName=model_name)
 
     def run(
         self,
         transform_job_request: Dict[str, Any],
         wait: bool,
     ):
-        """Create the transform job from a ``TransformJob.create`` request.
+        """Create the transform job from a ``CreateTransformJob`` request.
 
         The SageMaker model referenced by the request is deleted once the job finishes (``wait=True``) or fails to
         start. With ``wait=False`` the model is kept, since the job still needs it.
         """
-        job_name = transform_job_request["transform_job_name"]
-        model_name = transform_job_request["model_name"]
+        job_name = transform_job_request["TransformJobName"]
+        model_name = transform_job_request["ModelName"]
         try:
             logger.log(20, "Transforming")
-            TransformJob.create(
-                **transform_job_request,
-                session=self._boto_session,
-                region=self.session.boto_region_name,
-            )
+            self.session.sagemaker_client.create_transform_job(**transform_job_request)
             self._job_name = job_name
             if wait:
                 self._wait_until_completed()
@@ -300,7 +274,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
             self._delete_model(model_name)
             raise e
 
-        input_uri = transform_job_request["transform_input"]["data_source"]["s3_data_source"]["s3_uri"]
+        input_uri = transform_job_request["TransformInput"]["DataSource"]["S3DataSource"]["S3Uri"]
         self._output_filename = input_uri.split("/")[-1] + ".out"
 
         if wait:

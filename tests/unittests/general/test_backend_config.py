@@ -112,7 +112,7 @@ def test_real_training_submissions_keep_job_objects_and_inputs_separate(tmp_path
         return uri
 
     def run(job, training_job_request, framework_version, wait):
-        job._job_name = training_job_request["training_job_name"]
+        job._job_name = training_job_request["TrainingJobName"]
         job.request = training_job_request
 
     backend.sagemaker_session.upload_data.side_effect = upload
@@ -137,8 +137,8 @@ def test_real_training_submissions_keep_job_objects_and_inputs_separate(tmp_path
     assert [future.result()["job"].iloc[0] for future in futures] == ["first", "second"]
     channels = [
         {
-            channel["channel_name"]: channel["data_source"]["s3_data_source"]["s3_uri"]
-            for channel in request["input_data_config"]
+            channel["ChannelName"]: channel["DataSource"]["S3DataSource"]["S3Uri"]
+            for channel in request["InputDataConfig"]
         }
         for request in requests
     ]
@@ -167,7 +167,7 @@ def test_async_model_results_stay_bound_to_the_submitted_job(monkeypatch, model_
     jobs = []
 
     def submit(self, **kwargs):
-        assert kwargs["backend_overrides"] == {"create_training_job": {"retry_strategy": {}}}
+        assert kwargs["backend_overrides"] == {"create_training_job": {"RetryStrategy": {}}}
         job = mock.Mock(job_name=f"job-{len(jobs)}", completed=True)
         job.frame = frames[len(jobs)]
         jobs.append(job)
@@ -176,7 +176,7 @@ def test_async_model_results_stay_bound_to_the_submitted_job(monkeypatch, model_
     monkeypatch.setattr(TabularSagemakerBackend, "fit", submit)
     monkeypatch.setattr(TimeSeriesSagemakerBackend, "fit", submit)
     monkeypatch.setattr(SagemakerBackend, "_load_fit_predict_results", lambda self, job: job.frame)
-    kwargs = {"wait": False, "backend_overrides": {"create_training_job": {"retry_strategy": {}}}}
+    kwargs = {"wait": False, "backend_overrides": {"create_training_job": {"RetryStrategy": {}}}}
     if model_id == "chronos-2":
         kwargs["data"] = pd.DataFrame({"target": [1.0]})
     else:

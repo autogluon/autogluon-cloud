@@ -1,13 +1,17 @@
 from unittest import mock
 
-import boto3
 import pandas as pd
 import pytest
 
 from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
-from autogluon.cloud.utils.sagemaker_api import check_override_keys, deep_merge, reject_legacy_kwargs
-from autogluon.cloud.utils.sagemaker_core_workarounds import bind_core_session
+from autogluon.cloud.utils.sagemaker_api import (
+    check_override_keys,
+    deep_merge,
+    delete_endpoint,
+    invoke_endpoint,
+    reject_legacy_kwargs,
+)
 
 SB = "autogluon.cloud.backend.sagemaker_backend"
 
@@ -37,24 +41,37 @@ def test_reject_legacy_kwargs_points_to_replacement():
         fit(backend_kwargs={})
 
 
-def test_bind_core_session_rebinds_when_session_changes():
-    from sagemaker.core.utils.utils import SageMakerClient, SingletonMeta
+def test_delete_endpoint_removes_endpoint_config_and_models():
+    session = mock.MagicMock()
+    client = session.sagemaker_client
+    client.describe_endpoint.return_value = {"EndpointConfigName": "ep-config"}
+    client.describe_endpoint_config.return_value = {"ProductionVariants": [{"ModelName": "m-1"}, {"ModelName": "m-2"}]}
+    delete_endpoint("ep", session)
+    client.delete_endpoint.assert_called_once_with(EndpointName="ep")
+    client.delete_endpoint_config.assert_called_once_with(EndpointConfigName="ep-config")
+    assert [c.kwargs for c in client.delete_model.call_args_list] == [{"ModelName": "m-1"}, {"ModelName": "m-2"}]
 
-    first = boto3.Session(region_name="us-east-1")
-    second = boto3.Session(region_name="eu-west-1")
-    bind_core_session(first)
-    cached = SingletonMeta._instances[SageMakerClient]
-    assert cached.session is first
-    bind_core_session(first)
-    assert SingletonMeta._instances[SageMakerClient] is cached  # no rebuild for the same session
-    bind_core_session(second)
-    assert SageMakerClient().session is second
-    assert SageMakerClient().region_name == "eu-west-1"
+
+def test_invoke_endpoint_uses_the_session_runtime_client():
+    session = mock.MagicMock()
+    runtime = session.sagemaker_runtime_client
+    runtime.invoke_endpoint.return_value = {"Body": mock.sentinel.body, "ContentType": "text/csv"}
+    serializer = mock.Mock(CONTENT_TYPE="text/csv")
+    deserializer = mock.Mock(ACCEPT=("application/json",))
+    result = invoke_endpoint("ep", session, "payload", serializer=serializer, deserializer=deserializer)
+    runtime.invoke_endpoint.assert_called_once_with(
+        EndpointName="ep",
+        Body=serializer.serialize.return_value,
+        ContentType="text/csv",
+        Accept="application/json",
+    )
+    deserializer.deserialize.assert_called_once_with(mock.sentinel.body, "text/csv")
+    assert result is deserializer.deserialize.return_value
 
 
 @pytest.fixture
-def fit_request(tmp_path):
-    """Run ``SagemakerBackend.fit(...)`` with uploads mocked and return the ``TrainingJob.create`` request."""
+def fit_request(tmp_path, assert_valid_request):
+    """Run ``SagemakerBackend.fit(...)`` with uploads mocked and return the ``CreateTrainingJob`` request."""
     with (
         mock.patch(f"{SB}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{SB}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/test"),
@@ -80,24 +97,26 @@ def fit_request(tmp_path):
                 image_uri="example.com/autogluon:train",
                 **fit_kwargs,
             )
-            return fit_job_cls.return_value.run.call_args.kwargs["training_job_request"]
+            request = fit_job_cls.return_value.run.call_args.kwargs["training_job_request"]
+            assert_valid_request("CreateTrainingJob", request)
+            return request
 
         yield run
 
 
 def test_fit_builds_script_mode_training_job(fit_request):
     request = fit_request(timeout=3600)
-    assert request["training_job_name"] == "job"
-    assert request["algorithm_specification"]["training_image"] == "example.com/autogluon:train"
-    assert request["hyper_parameters"]["sagemaker_program"] == '"train.py"'
-    assert request["hyper_parameters"]["sagemaker_submit_directory"] == (
+    assert request["TrainingJobName"] == "job"
+    assert request["AlgorithmSpecification"]["TrainingImage"] == "example.com/autogluon:train"
+    assert request["HyperParameters"]["sagemaker_program"] == '"train.py"'
+    assert request["HyperParameters"]["sagemaker_submit_directory"] == (
         '"s3://bucket/run/code/job/source/sourcedir.tar.gz"'
     )
-    assert request["input_data_config"][0]["channel_name"] == "train_data"
-    assert request["stopping_condition"] == {"max_runtime_in_seconds": 3600}
-    assert request["output_data_config"] == {"s3_output_path": "s3://bucket/run/model"}
-    assert {"key": "autogluon-cloud-module", "value": "tabular"} in request["tags"]
-    assert "vpc_config" not in request
+    assert request["InputDataConfig"][0]["ChannelName"] == "train_data"
+    assert request["StoppingCondition"] == {"MaxRuntimeInSeconds": 3600}
+    assert request["OutputDataConfig"] == {"S3OutputPath": "s3://bucket/run/model"}
+    assert {"Key": "autogluon-cloud-module", "Value": "tabular"} in request["Tags"]
+    assert "VpcConfig" not in request
 
 
 def test_fit_applies_infra_settings_spot_and_overrides(fit_request):
@@ -111,21 +130,25 @@ def test_fit_applies_infra_settings_spot_and_overrides(fit_request):
         timeout=3600,
         environment={"FOO": "bar"},
         use_spot_instances=True,
-        backend_overrides={"create_training_job": {"retry_strategy": {"maximum_retry_attempts": 2}}},
+        backend_overrides={"create_training_job": {"RetryStrategy": {"MaximumRetryAttempts": 2}}},
     )
-    assert request["vpc_config"] == {"subnets": ["s-1"], "security_group_ids": ["sg-1"]}
-    assert request["output_data_config"]["kms_key_id"] == "output-key"
-    assert request["resource_config"]["volume_kms_key_id"] == "volume-key"
-    assert {"key": "team", "value": "ts"} in request["tags"]
-    assert request["environment"] == {"FOO": "bar"}
-    assert request["enable_managed_spot_training"] is True
-    assert request["stopping_condition"]["max_wait_time_in_seconds"] == 3600
-    assert request["retry_strategy"] == {"maximum_retry_attempts": 2}
+    assert request["VpcConfig"] == {"Subnets": ["s-1"], "SecurityGroupIds": ["sg-1"]}
+    assert request["OutputDataConfig"]["KmsKeyId"] == "output-key"
+    assert request["ResourceConfig"]["VolumeKmsKeyId"] == "volume-key"
+    assert {"Key": "team", "Value": "ts"} in request["Tags"]
+    assert request["Environment"] == {"FOO": "bar"}
+    assert request["EnableManagedSpotTraining"] is True
+    assert request["StoppingCondition"]["MaxWaitTimeInSeconds"] == 3600
+    assert request["RetryStrategy"] == {"MaximumRetryAttempts": 2}
 
 
-def test_fit_rejects_malformed_vpc_config(fit_request):
-    with pytest.raises(ValueError, match="security_group_ids"):
-        fit_request(backend_config=SageMakerConfig(vpc_config={"subnets": ["s-1"]}))
+@pytest.mark.parametrize(
+    "vpc_config",
+    [{"subnets": ["s-1"]}, {"subnets": ["s-1"], "security_group_ids": ["sg-1"], "security_groups": ["sg-2"]}],
+)
+def test_fit_rejects_malformed_vpc_config(fit_request, vpc_config):
+    with pytest.raises(ValueError, match="security_group"):
+        fit_request(backend_config=SageMakerConfig(vpc_config=vpc_config))
 
 
 def test_output_encryption_does_not_set_volume_key_on_nvme_instance(fit_request):
@@ -133,8 +156,8 @@ def test_output_encryption_does_not_set_volume_key_on_nvme_instance(fit_request)
         backend_config=SageMakerConfig(output_kms_key="output-key"),
         instance_type="ml.g5.xlarge",
     )
-    assert request["output_data_config"]["kms_key_id"] == "output-key"
-    assert "volume_kms_key_id" not in request["resource_config"]
+    assert request["OutputDataConfig"]["KmsKeyId"] == "output-key"
+    assert "VolumeKmsKeyId" not in request["ResourceConfig"]
 
 
 def test_fit_rejects_local_mode_and_max_wait_without_spot(fit_request):
@@ -144,17 +167,8 @@ def test_fit_rejects_local_mode_and_max_wait_without_spot(fit_request):
         fit_request(max_wait=100)
 
 
-def test_core_serializes_acronym_field_names_with_api_casing():
-    from sagemaker.core.shapes import ProductionVariant
-    from sagemaker.core.utils.utils import serialize
+def test_misspelled_override_field_fails_request_validation(fit_request):
+    from botocore.exceptions import ParamValidationError
 
-    variant = ProductionVariant(
-        variant_name="AllTraffic",
-        serverless_config={"memory_size_in_mb": 4096, "max_concurrency": 5},
-        enable_ssm_access=True,
-    )
-    assert serialize(variant) == {
-        "VariantName": "AllTraffic",
-        "ServerlessConfig": {"MemorySizeInMB": 4096, "MaxConcurrency": 5},
-        "EnableSSMAccess": True,
-    }
+    with pytest.raises(ParamValidationError, match="RetryStrategyy"):
+        fit_request(backend_overrides={"create_training_job": {"RetryStrategyy": {"MaximumRetryAttempts": 2}}})

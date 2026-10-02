@@ -127,7 +127,8 @@ individual `fit()`, `predict()`, and `deploy()` calls.
 ## Advanced provider settings
 
 Use `backend_overrides` for SageMaker request fields without a named argument. It maps request names
-to fields in the snake_case format used by `sagemaker-core`:
+(the boto3 SageMaker client methods) to request fields in the PascalCase format of the
+[SageMaker API](https://docs.aws.amazon.com/sagemaker/latest/APIReference/Welcome.html) and boto3:
 
 ```python
 predictions = model.predict(
@@ -135,7 +136,7 @@ predictions = model.predict(
     prediction_length=24,
     backend_overrides={
         "create_training_job": {
-            "retry_strategy": {"maximum_retry_attempts": 2},
+            "RetryStrategy": {"MaximumRetryAttempts": 2},
         },
     },
 )

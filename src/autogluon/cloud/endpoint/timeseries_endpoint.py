@@ -32,7 +32,7 @@ class TimeSeriesEndpoint:
             ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
         """
         self._endpoint_name = endpoint_name
-        self._session = setup_sagemaker_session(boto_session=session).boto_session
+        self._session = setup_sagemaker_session(boto_session=session)
 
     @property
     def endpoint_name(self) -> str:

@@ -53,10 +53,12 @@ SB = "autogluon.cloud.backend.sagemaker_backend"
     ("backend_overrides", "expected"),
     [
         (None, "al2-ami-sagemaker-batch-gpu-535"),
-        ({"create_transform_job": {"transform_resources": {"transform_ami_version": "custom-ami"}}}, "custom-ami"),
+        ({"create_transform_job": {"TransformResources": {"TransformAmiVersion": "custom-ami"}}}, "custom-ami"),
     ],
 )
-def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(backend_overrides, expected):
+def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(
+    backend_overrides, expected, assert_valid_request
+):
     with (
         mock.patch(f"{SB}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{SB}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/test"),
@@ -86,7 +88,8 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(bac
         )
 
     request = job_cls.return_value.run.call_args.kwargs["transform_job_request"]
-    assert request["transform_resources"]["transform_ami_version"] == expected
-    assert request["transform_resources"]["instance_type"] == "ml.g4dn.xlarge"
-    assert request["transform_output"]["kms_key_id"] == "output-key"
-    assert "volume_kms_key_id" not in request["transform_resources"]
+    assert_valid_request("CreateTransformJob", request)
+    assert request["TransformResources"]["TransformAmiVersion"] == expected
+    assert request["TransformResources"]["InstanceType"] == "ml.g4dn.xlarge"
+    assert request["TransformOutput"]["KmsKeyId"] == "output-key"
+    assert "VolumeKmsKeyId" not in request["TransformResources"]

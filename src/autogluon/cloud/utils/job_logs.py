@@ -1,8 +1,6 @@
 """Wait for SageMaker jobs while streaming their CloudWatch logs through the caller's own boto3 session.
 
-sagemaker-core's ``TrainingJob.wait(logs=True)`` reads logs through a process-wide CloudWatch client built from the
-default credential chain and region, ignoring the session the job was created with. Polling here uses the clients
-we pass in, so logs always come from the job's account and region.
+Polling uses the clients we pass in, so logs always come from the job's account and region.
 """
 
 from __future__ import annotations

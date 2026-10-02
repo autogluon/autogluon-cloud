@@ -229,8 +229,8 @@ class CloudPredictor(ABC):
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument. Maps ``"create_training_job"`` to raw
             `CreateTrainingJob <https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateTrainingJob.html>`_
-            request fields in snake_case (as in ``sagemaker.core.shapes``), which are deep-merged over the request
-            built by AutoGluon-Cloud, e.g. ``{"create_training_job": {"retry_strategy": {"maximum_retry_attempts": 2}}}``.
+            request fields in the PascalCase format of the SageMaker API and boto3, which are deep-merged over the
+            request built by AutoGluon-Cloud, e.g. ``{"create_training_job": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``.
         Returns
         -------
         `CloudPredictor` object. Returns self.
@@ -434,11 +434,11 @@ class CloudPredictor(ABC):
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in snake_case
-            (as in ``sagemaker.core.shapes``), deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
+            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
+            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"``, ``"production_variant"`` (the endpoint config's single production variant),
             ``"create_endpoint_config"`` and ``"create_endpoint"``, e.g.
-            ``{"production_variant": {"model_data_download_timeout_in_seconds": 1200}}``.
+            ``{"production_variant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``.
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
@@ -617,10 +617,10 @@ class CloudPredictor(ABC):
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in snake_case
-            (as in ``sagemaker.core.shapes``), deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
+            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
+            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
-            ``{"create_transform_job": {"batch_strategy": "SingleRecord", "max_payload_in_mb": 20}}``.
+            ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
 
         Returns
         -------
@@ -712,10 +712,10 @@ class CloudPredictor(ABC):
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in snake_case
-            (as in ``sagemaker.core.shapes``), deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
+            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
+            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
-            ``{"create_transform_job": {"batch_strategy": "SingleRecord", "max_payload_in_mb": 20}}``.
+            ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
 
         Returns
         -------

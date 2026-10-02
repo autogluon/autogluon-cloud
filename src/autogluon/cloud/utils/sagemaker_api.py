@@ -1,19 +1,16 @@
-"""Helpers for building SageMaker API requests and calling them through sagemaker-core."""
+"""Helpers for building SageMaker API requests and sending them through a session's boto3 clients."""
 
 import copy
 import functools
 import logging
 from typing import Any, Dict, Iterable, Mapping, Optional
 
-import boto3
-from sagemaker.core.resources import Endpoint, EndpointConfig, Model
-
-from .sagemaker_core_workarounds import bind_core_session
+from sagemaker.core.helper.session_helper import Session
 
 logger = logging.getLogger(__name__)
 
-# Requests that each method sends, i.e. the valid `backend_overrides` keys. `production_variant` is the single
-# variant inside `create_endpoint_config.production_variants`.
+# Requests that each method sends, i.e. the valid `backend_overrides` keys, named after the boto3 client methods.
+# `production_variant` is the single variant inside `create_endpoint_config`'s `ProductionVariants`.
 FIT_OVERRIDE_KEYS = ("create_training_job",)
 DEPLOY_OVERRIDE_KEYS = ("create_model", "production_variant", "create_endpoint_config", "create_endpoint")
 BATCH_PREDICT_OVERRIDE_KEYS = ("create_model", "create_transform_job")
@@ -67,7 +64,7 @@ def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> Dict[str
 
 def invoke_endpoint(
     endpoint_name: str,
-    boto_session: boto3.Session,
+    session: Session,
     payload: Any,
     serializer,
     deserializer,
@@ -75,27 +72,22 @@ def invoke_endpoint(
     accept: Optional[str] = None,
 ) -> Any:
     """Serialize ``payload``, invoke the endpoint, and deserialize the response."""
-    bind_core_session(boto_session)
-    response = Endpoint(endpoint_name=endpoint_name).invoke(
-        body=serializer.serialize(payload),
-        content_type=content_type or serializer.CONTENT_TYPE,
-        accept=accept or ", ".join(deserializer.ACCEPT),
-        session=boto_session,
-        region=boto_session.region_name,
+    response = session.sagemaker_runtime_client.invoke_endpoint(
+        EndpointName=endpoint_name,
+        Body=serializer.serialize(payload),
+        ContentType=content_type or serializer.CONTENT_TYPE,
+        Accept=accept or ", ".join(deserializer.ACCEPT),
     )
-    return deserializer.deserialize(response.body, response.content_type)
+    return deserializer.deserialize(response["Body"], response["ContentType"])
 
 
-def delete_endpoint(endpoint_name: str, boto_session: boto3.Session) -> None:
+def delete_endpoint(endpoint_name: str, session: Session) -> None:
     """Delete an endpoint together with its endpoint config and models."""
-    bind_core_session(boto_session)
-    region = boto_session.region_name
-    endpoint = Endpoint.get(endpoint_name=endpoint_name, session=boto_session, region=region)
-    endpoint_config = EndpointConfig.get(
-        endpoint_config_name=endpoint.endpoint_config_name, session=boto_session, region=region
-    )
+    client = session.sagemaker_client
+    endpoint = client.describe_endpoint(EndpointName=endpoint_name)
+    endpoint_config = client.describe_endpoint_config(EndpointConfigName=endpoint["EndpointConfigName"])
     logger.info(f"Deleting endpoint {endpoint_name}")
-    endpoint.delete()
-    endpoint_config.delete()
-    for variant in endpoint_config.production_variants:
-        Model(model_name=variant.model_name).delete()
+    client.delete_endpoint(EndpointName=endpoint_name)
+    client.delete_endpoint_config(EndpointConfigName=endpoint["EndpointConfigName"])
+    for variant in endpoint_config["ProductionVariants"]:
+        client.delete_model(ModelName=variant["ModelName"])
