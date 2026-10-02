@@ -36,6 +36,8 @@ def test_reject_legacy_kwargs_points_to_replacement():
     assert fit(custom_image_uri="x") == {"custom_image_uri": "x"}
     with pytest.raises(TypeError, match="backend_overrides"):
         fit(backend_kwargs={})
+    with pytest.raises(TypeError, match="no longer supported"):
+        fit(backend_kwargs={"model_kwargs": {"entry_point": "serve.py"}})
 
 
 def test_delete_endpoint_removes_endpoint_config_and_models():

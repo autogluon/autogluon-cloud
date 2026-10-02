@@ -31,14 +31,26 @@ def reject_legacy_kwargs(func):
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        for name in kwargs:
-            if name in _REMOVED_KWARGS:
+        for name, value in kwargs.items():
+            if name not in _REMOVED_KWARGS:
+                continue
+            if _sets_custom_entry_point(value):
                 raise TypeError(
-                    f"`{name}` was removed from {func.__qualname__}(). Use {_REMOVED_KWARGS[name]} instead."
+                    f"Custom `entry_point` / `source_dir` scripts (passed via `{name}`) are no longer supported: "
+                    "AutoGluon-Cloud always runs its own training and serving scripts. To customize the container, "
+                    "pass `custom_image_uri`."
                 )
+            raise TypeError(f"`{name}` was removed from {func.__qualname__}(). Use {_REMOVED_KWARGS[name]} instead.")
         return func(*args, **kwargs)
 
     return wrapper
+
+
+def _sets_custom_entry_point(value: Any) -> bool:
+    """Whether a legacy SDK kwargs dict (possibly nested, e.g. ``backend_kwargs["model_kwargs"]``) sets a script."""
+    if not isinstance(value, Mapping):
+        return False
+    return any(key in ("entry_point", "source_dir") or _sets_custom_entry_point(v) for key, v in value.items())
 
 
 def check_override_keys(overrides: Optional[Mapping[str, Any]], allowed_keys: Iterable[str]) -> Dict[str, Any]:
