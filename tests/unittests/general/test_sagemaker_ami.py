@@ -3,6 +3,7 @@ from unittest import mock
 import pandas as pd
 import pytest
 
+from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
 from autogluon.cloud.utils.dlc_utils import infer_sagemaker_ami_version
 
@@ -49,13 +50,13 @@ SB = "autogluon.cloud.backend.sagemaker_backend"
 
 
 @pytest.mark.parametrize(
-    ("sagemaker_overrides", "expected"),
+    ("backend_overrides", "expected"),
     [
         (None, "al2-ami-sagemaker-batch-gpu-535"),
         ({"create_transform_job": {"transform_resources": {"transform_ami_version": "custom-ami"}}}, "custom-ami"),
     ],
 )
-def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(sagemaker_overrides, expected):
+def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(backend_overrides, expected):
     with (
         mock.patch(f"{SB}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{SB}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/test"),
@@ -69,6 +70,7 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(sag
             local_output_path="/tmp/test",
             cloud_output_path="s3://bucket/run",
             predictor_type="tabular",
+            config=SageMakerConfig(output_kms_key="output-key"),
         )
         backend._fit_job = mock.MagicMock()
         backend._predict(
@@ -80,9 +82,11 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(sag
             wait=False,
             download=False,
             persist=False,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
         )
 
     request = job_cls.return_value.run.call_args.kwargs["transform_job_request"]
     assert request["transform_resources"]["transform_ami_version"] == expected
     assert request["transform_resources"]["instance_type"] == "ml.g4dn.xlarge"
+    assert request["transform_output"]["kms_key_id"] == "output-key"
+    assert "volume_kms_key_id" not in request["transform_resources"]

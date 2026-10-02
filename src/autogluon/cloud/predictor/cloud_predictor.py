@@ -7,7 +7,7 @@ import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import boto3
 import pandas as pd
@@ -21,6 +21,7 @@ from autogluon.common.utils.utils import setup_outputdir
 from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
+from ..config import SageMakerConfig
 from ..utils.aws_utils import resolve_cloud_output_path
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import safe_unpack_archive
@@ -36,11 +37,7 @@ class CloudPredictor(ABC):
         self,
         local_output_path: Optional[str] = None,
         cloud_output_path: Optional[str] = None,
-        backend: str = SAGEMAKER,
-        role: Optional[str] = None,
-        vpc_config: Optional[Dict[str, List[str]]] = None,
-        kms_key: Optional[str] = None,
-        tags: Optional[Dict[str, str]] = None,
+        backend: Union[str, SageMakerConfig] = SAGEMAKER,
         verbosity: int = 2,
     ) -> None:
         """
@@ -63,21 +60,10 @@ class CloudPredictor(ABC):
             * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set
               by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
               append a timestamped subfolder. Raises if no bucket is configured.
-        backend: str, default = "sagemaker"
-            The backend to use. Currently only "sagemaker" is supported.
-            SageMaker backend supports training, deploying and batch inference on Amazon SageMaker. Only single instance training is supported.
-        role: Optional[str], default = None
-            ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
-            ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
-            :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
-        vpc_config: Optional[Dict[str, List[str]]], default = None
-            VPC to run training jobs, models and batch transform jobs in, as
-            ``{"subnets": ["subnet-..."], "security_group_ids": ["sg-..."]}``.
-        kms_key: Optional[str], default = None
-            KMS key ID/ARN used to encrypt S3 outputs and ML storage volumes of all created SageMaker resources.
-            Note that SageMaker rejects volume KMS keys for instance types with local NVMe storage (e.g. ``ml.g5``).
-        tags: Optional[Dict[str, str]], default = None
-            Tags added to every SageMaker resource created by this predictor, e.g. ``{"team": "forecasting"}``.
+        backend: Union[str, SageMakerConfig], default = "sagemaker"
+            Backend name or reusable :class:`~autogluon.cloud.SageMakerConfig` with region, execution role,
+            networking, encryption and tags. ``"sagemaker"`` uses default settings.
+            Only single instance training is supported.
         verbosity : int, default = 2
             Verbosity levels range from 0 to 4 and control how much information is printed.
             Higher levels correspond to more detailed print statements (you can set verbosity = 0 to suppress warnings).
@@ -87,21 +73,17 @@ class CloudPredictor(ABC):
         self.verbosity = verbosity
         cloud_logger = logging.getLogger("autogluon.cloud")
         set_logger_verbosity(self.verbosity, logger=cloud_logger)
+        config = BackendFactory.resolve_config(backend)
+        if config.name not in self.backend_map:
+            raise ValueError(f"Unsupported backend {config.name!r}. Supported backends: {sorted(self.backend_map)}.")
         self.local_output_path = self._setup_local_output_path(local_output_path)
-        if backend in ("ray", "ray_aws"):
-            raise ValueError("The Ray backend was removed in AutoGluon-Cloud v0.7.0. Use backend='sagemaker' instead.")
-        if backend not in self.backend_map:
-            raise ValueError(f"Unsupported backend {backend!r}. Supported backends: {sorted(self.backend_map)}.")
-        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
+        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=config.name)
         self.backend: Backend = BackendFactory.get_backend(
-            backend=self.backend_map[backend],
+            backend=self.backend_map[config.name],
             local_output_path=self.local_output_path,
             cloud_output_path=self.cloud_output_path,
             predictor_type=self.predictor_type,
-            role=role,
-            vpc_config=vpc_config,
-            kms_key=kms_key,
-            tags=tags,
+            config=config,
         )
 
     @property
@@ -194,7 +176,7 @@ class CloudPredictor(ABC):
         environment: Optional[Dict[str, str]] = None,
         use_spot_instances: bool = False,
         max_wait: Optional[int] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         **kwargs,
     ) -> CloudPredictor:
         """
@@ -244,7 +226,7 @@ class CloudPredictor(ABC):
         max_wait: Optional[int], default = None
             Maximum seconds to wait for spot capacity plus training time. Defaults to ``timeout``. Requires
             ``use_spot_instances=True``.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument. Maps ``"create_training_job"`` to raw
             `CreateTrainingJob <https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateTrainingJob.html>`_
             request fields in snake_case (as in ``sagemaker.core.shapes``), which are deep-merged over the request
@@ -295,7 +277,7 @@ class CloudPredictor(ABC):
             environment=environment,
             use_spot_instances=use_spot_instances,
             max_wait=max_wait,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
         )
 
@@ -409,7 +391,7 @@ class CloudPredictor(ABC):
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         environment: Optional[Dict[str, str]] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         """
         Deploy a predictor to an inference endpoint.
@@ -451,7 +433,7 @@ class CloudPredictor(ABC):
             Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in snake_case
             (as in ``sagemaker.core.shapes``), deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"``, ``"production_variant"`` (the endpoint config's single production variant),
@@ -474,7 +456,7 @@ class CloudPredictor(ABC):
             inference_mode=inference_mode,
             inference_config=inference_config,
             environment=environment,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
         )
 
     def attach_endpoint(self, endpoint: str) -> None:
@@ -588,7 +570,7 @@ class CloudPredictor(ABC):
         persist: bool = True,
         save_path: Optional[str] = None,
         environment: Optional[Dict[str, str]] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
         Batch inference.
@@ -634,7 +616,7 @@ class CloudPredictor(ABC):
             If `persist` is `False`, file would first be downloaded to this path and then removed.
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in snake_case
             (as in ``sagemaker.core.shapes``), deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
@@ -660,7 +642,7 @@ class CloudPredictor(ABC):
             persist=persist,
             save_path=save_path,
             environment=environment,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
         )
 
     @reject_legacy_kwargs
@@ -680,7 +662,7 @@ class CloudPredictor(ABC):
         persist: bool = True,
         save_path: Optional[str] = None,
         environment: Optional[Dict[str, str]] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Batch inference
@@ -729,7 +711,7 @@ class CloudPredictor(ABC):
             If `persist` is `False`, file would first be downloaded to this path and then removed.
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in snake_case
             (as in ``sagemaker.core.shapes``), deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
@@ -758,7 +740,7 @@ class CloudPredictor(ABC):
             persist=persist,
             save_path=save_path,
             environment=environment,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
         )
 
     def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:

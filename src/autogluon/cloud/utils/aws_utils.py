@@ -29,7 +29,7 @@ def _resolve_sagemaker_region() -> Optional[str]:
     return entry.region
 
 
-def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
+def resolve_execution_role(role: Optional[str], backend_name: str, *, session: Optional[Session] = None) -> str:
     """Resolve the SageMaker execution role ARN.
 
     Resolution order:
@@ -46,7 +46,7 @@ def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
         if entry is not None and entry.role_arn:
             logger.info(f"Using execution role from ~/.autogluon/cloud.yaml: {entry.role_arn}")
             return entry.role_arn
-    return get_execution_role()
+    return get_execution_role(sagemaker_session=session)
 
 
 def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optional[str]:
@@ -130,12 +130,13 @@ def setup_sagemaker_session(
     connect_timeout: int = 60,
     read_timeout: int = 60,
     retries: Optional[dict] = None,
+    region: Optional[str] = None,
     **kwargs,
 ):
     """
     Setup a sagemaker session with a given configuration
 
-    Region resolution (only when ``boto_session`` is not provided): read from
+    Region resolution (only when ``boto_session`` is not provided): use ``region``, then read from
     ``~/.autogluon/cloud.yaml`` if set, otherwise fall back to the boto3 default chain (env vars,
     shared config). Raises if no region can be resolved at all.
 
@@ -144,6 +145,9 @@ def setup_sagemaker_session(
     boto_session
         Pre-built ``boto3.Session`` to wrap. If provided, region resolution is skipped and the
         session is used as-is.
+    region
+        Explicit AWS region. Takes precedence over saved configuration and the boto3 default region.
+        Ignored when ``boto_session`` is provided.
     config
         A botocore.Config object providing the intended configuration
         https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
@@ -174,7 +178,7 @@ def setup_sagemaker_session(
             retries = {"max_attempts": 20}
         config = Config(connect_timeout=connect_timeout, read_timeout=read_timeout, retries=retries, **kwargs)
     if boto_session is None:
-        boto_session = boto3.Session(region_name=_resolve_sagemaker_region())
+        boto_session = boto3.Session(region_name=region or _resolve_sagemaker_region())
     if boto_session.region_name is None:
         raise ValueError(
             "AWS region could not be resolved. Set it in `~/.autogluon/cloud.yaml` (e.g. via "

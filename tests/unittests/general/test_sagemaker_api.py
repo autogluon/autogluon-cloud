@@ -4,6 +4,7 @@ import boto3
 import pandas as pd
 import pytest
 
+from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
 from autogluon.cloud.utils.sagemaker_api import check_override_keys, deep_merge, reject_legacy_kwargs
 from autogluon.cloud.utils.sagemaker_core_workarounds import bind_core_session
@@ -32,7 +33,7 @@ def test_reject_legacy_kwargs_points_to_replacement():
     assert fit(image_uri="x") == {"image_uri": "x"}
     with pytest.raises(TypeError, match="Use `image_uri` instead"):
         fit(custom_image_uri="x")
-    with pytest.raises(TypeError, match="sagemaker_overrides"):
+    with pytest.raises(TypeError, match="backend_overrides"):
         fit(backend_kwargs={})
 
 
@@ -58,19 +59,19 @@ def fit_request(tmp_path):
         mock.patch(f"{SB}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
         mock.patch(f"{SB}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/test"),
         mock.patch(f"{SB}.upload_training_code", return_value="s3://bucket/run/code/job/source/sourcedir.tar.gz"),
+        mock.patch(f"{SB}.SageMakerFitJob") as fit_job_cls,
         mock.patch.object(
             TabularSagemakerBackend, "_upload_fit_artifact", return_value={"train_data": "s3://b/train.csv"}
         ),
     ):
 
-        def run(backend_kwargs=None, **fit_kwargs):
+        def run(backend_config=None, **fit_kwargs):
             backend = TabularSagemakerBackend(
                 local_output_path=str(tmp_path),
                 cloud_output_path="s3://bucket/run",
                 predictor_type="tabular",
-                **(backend_kwargs or {}),
+                config=backend_config,
             )
-            backend._fit_job = mock.MagicMock()
             backend.fit(
                 predictor_init_args={"label": "y"},
                 predictor_fit_args={},
@@ -79,7 +80,7 @@ def fit_request(tmp_path):
                 image_uri="example.com/autogluon:train",
                 **fit_kwargs,
             )
-            return backend._fit_job.run.call_args.kwargs["training_job_request"]
+            return fit_job_cls.return_value.run.call_args.kwargs["training_job_request"]
 
         yield run
 
@@ -101,19 +102,20 @@ def test_fit_builds_script_mode_training_job(fit_request):
 
 def test_fit_applies_infra_settings_spot_and_overrides(fit_request):
     request = fit_request(
-        backend_kwargs={
-            "vpc_config": {"subnets": ["s-1"], "security_group_ids": ["sg-1"]},
-            "kms_key": "kms-1",
-            "tags": {"team": "ts"},
-        },
+        backend_config=SageMakerConfig(
+            vpc_config={"subnets": ["s-1"], "security_group_ids": ["sg-1"]},
+            output_kms_key="output-key",
+            volume_kms_key="volume-key",
+            tags={"team": "ts"},
+        ),
         timeout=3600,
         environment={"FOO": "bar"},
         use_spot_instances=True,
-        sagemaker_overrides={"create_training_job": {"retry_strategy": {"maximum_retry_attempts": 2}}},
+        backend_overrides={"create_training_job": {"retry_strategy": {"maximum_retry_attempts": 2}}},
     )
     assert request["vpc_config"] == {"subnets": ["s-1"], "security_group_ids": ["sg-1"]}
-    assert request["output_data_config"]["kms_key_id"] == "kms-1"
-    assert request["resource_config"]["volume_kms_key_id"] == "kms-1"
+    assert request["output_data_config"]["kms_key_id"] == "output-key"
+    assert request["resource_config"]["volume_kms_key_id"] == "volume-key"
     assert {"key": "team", "value": "ts"} in request["tags"]
     assert request["environment"] == {"FOO": "bar"}
     assert request["enable_managed_spot_training"] is True
@@ -123,7 +125,16 @@ def test_fit_applies_infra_settings_spot_and_overrides(fit_request):
 
 def test_fit_rejects_malformed_vpc_config(fit_request):
     with pytest.raises(ValueError, match="security_group_ids"):
-        fit_request(backend_kwargs={"vpc_config": {"subnets": ["s-1"]}})
+        fit_request(backend_config=SageMakerConfig(vpc_config={"subnets": ["s-1"]}))
+
+
+def test_output_encryption_does_not_set_volume_key_on_nvme_instance(fit_request):
+    request = fit_request(
+        backend_config=SageMakerConfig(output_kms_key="output-key"),
+        instance_type="ml.g5.xlarge",
+    )
+    assert request["output_data_config"]["kms_key_id"] == "output-key"
+    assert "volume_kms_key_id" not in request["resource_config"]
 
 
 def test_fit_rejects_local_mode_and_max_wait_without_spot(fit_request):

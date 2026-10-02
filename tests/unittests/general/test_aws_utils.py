@@ -9,7 +9,7 @@ from autogluon.cloud.config import (
     CloudConfig,
     save_config,
 )
-from autogluon.cloud.utils.aws_utils import resolve_cloud_output_path, resolve_execution_role
+from autogluon.cloud.utils.aws_utils import resolve_cloud_output_path, resolve_execution_role, setup_sagemaker_session
 
 
 @pytest.fixture(autouse=True)
@@ -81,6 +81,25 @@ def test_falls_back_to_env_when_backend_missing_in_config():
     ) as mock_env:
         assert resolve_execution_role(None, backend_name="sagemaker") == env_role
         mock_env.assert_called_once()
+
+
+def test_role_fallback_uses_the_backend_session():
+    session = mock.sentinel.session
+    with mock.patch("autogluon.cloud.utils.aws_utils.get_execution_role", return_value="role") as get_role:
+        assert resolve_execution_role(None, backend_name="sagemaker", session=session) == "role"
+    get_role.assert_called_once_with(sagemaker_session=session)
+
+
+@pytest.mark.parametrize("explicit_region", [None, "eu-west-1"])
+def test_session_region_uses_explicit_setting_before_saved_config(explicit_region):
+    import boto3
+
+    _save_role_in_config("sagemaker", "role")
+    with mock.patch("autogluon.cloud.utils.aws_utils.boto3.Session", wraps=boto3.Session) as session_cls:
+        session = setup_sagemaker_session(region=explicit_region)
+    expected_region = explicit_region or "us-east-1"
+    session_cls.assert_called_once_with(region_name=expected_region)
+    assert session.boto_region_name == expected_region
 
 
 def _save_bucket_in_config(backend_name: str, bucket: str) -> None:

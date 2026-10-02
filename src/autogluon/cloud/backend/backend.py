@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from ..endpoint.prediction_future import JobPredictionFuture
 
 
 def dumps_ag_args(config: Dict[str, Any]) -> str:
@@ -39,8 +42,20 @@ def dumps_ag_args(config: Dict[str, Any]) -> str:
 class Backend(ABC):
     name = "backend"
 
-    def __init__(self, **kwargs) -> None:
-        self.initialize(**kwargs)
+    def __init__(
+        self,
+        *,
+        local_output_path: str,
+        predictor_type: str,
+        cloud_output_path: Optional[str] = None,
+        resource_prefix: Optional[str] = None,
+    ) -> None:
+        self.local_output_path = local_output_path
+        self._cloud_output_path = cloud_output_path
+        self.predictor_type = predictor_type
+        self.resource_prefix = resource_prefix or f"ag-cloud-{predictor_type}"
+        self.original_features = None
+        self.endpoint_name: Optional[str] = None
 
     @property
     def cloud_output_path(self) -> str:
@@ -51,22 +66,6 @@ class Backend(ABC):
                 "`autogluon.cloud.bootstrap()` / `register(bucket=...)` once to persist a bucket."
             )
         return self._cloud_output_path
-
-    def initialize(
-        self,
-        local_output_path: str,
-        predictor_type: str,
-        cloud_output_path: Optional[str] = None,
-        resource_prefix: Optional[str] = None,
-        **kwargs,
-    ) -> None:
-        """Initialize the backend."""
-        self.local_output_path = local_output_path
-        self._cloud_output_path = cloud_output_path
-        self.predictor_type = predictor_type
-        self.resource_prefix = resource_prefix or f"ag-cloud-{predictor_type}"
-        self.original_features = None
-        self.endpoint_name: Optional[str] = None
 
     @abstractmethod
     def attach_job(self, job_name: str) -> None:
@@ -124,21 +123,33 @@ class Backend(ABC):
         with open(path, "w") as f:
             f.write(payload)
 
-    def _construct_ag_args(**kwargs):
+    def _construct_ag_args(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
-    def fit(self, **kwargs) -> None:
+    def fit(
+        self,
+        *,
+        predictor_init_args: Dict[str, Any],
+        predictor_fit_args: Dict[str, Any],
+        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
+        **kwargs,
+    ) -> None:
         """Fit AG on the backend"""
         raise NotImplementedError
 
     @abstractmethod
-    def deploy(self, **kwargs) -> None:
+    def deploy(
+        self,
+        predictor_path: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
+        **kwargs,
+    ) -> None:
         """Deploy and endpoint"""
         raise NotImplementedError
 
     @abstractmethod
-    def cleanup_deployment(self, **kwargs) -> None:
+    def cleanup_deployment(self) -> None:
         """Delete endpoint, and cleanup other artifacts"""
         raise NotImplementedError
 
@@ -199,3 +210,9 @@ class Backend(ABC):
 
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support `fit_predict`.")
+
+    def get_prediction_future(
+        self, *, result_transform: Optional[Callable[[pd.DataFrame], Any]] = None
+    ) -> JobPredictionFuture:
+        """Return a pending result bound to the most recently submitted prediction job."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support prediction futures.")

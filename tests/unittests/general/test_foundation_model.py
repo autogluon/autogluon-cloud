@@ -7,6 +7,7 @@ from unittest import mock
 import pandas as pd
 import pytest
 
+from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.model import FoundationModel
 
 
@@ -19,7 +20,7 @@ def _stub_aws(monkeypatch):
     )
     monkeypatch.setattr(
         "autogluon.cloud.backend.backend_factory.BackendFactory.get_backend",
-        lambda **kwargs: mock.MagicMock(role_arn="arn:aws:iam::0:role/stub"),
+        lambda **kwargs: mock.MagicMock(role_arn="arn:aws:iam::0:role/stub", config=kwargs["config"]),
     )
 
 
@@ -46,7 +47,7 @@ def test_to_dict_excludes_runtime_context():
     fm = FoundationModel(
         "chronos-2",
         cloud_output_path="s3://my-bucket/runs/",
-        role="arn:aws:iam::0:role/runtime",
+        backend=SageMakerConfig(role_arn="arn:aws:iam::0:role/runtime"),
     )
     d = fm.to_dict()
     assert "role" not in d
@@ -213,7 +214,8 @@ def test_cache_model_artifact_uploads_with_version_metadata(monkeypatch):
     """On cache miss, upload_file runs with the version metadata key — that's the cache-invalidation contract."""
     from autogluon.cloud.version import __version__
 
-    fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
+    backend_config = SageMakerConfig(region="eu-west-1", output_kms_key="output-key", tags={"team": "ts"})
+    fm = FoundationModel("chronos-2", cloud_output_path="s3://b", backend=backend_config)
     s3 = mock.MagicMock()
     fm._backend.sagemaker_session.boto_session.client.return_value = s3
     monkeypatch.setattr("autogluon.cloud.model.foundation_model._s3_head_or_none", lambda *_: None)
@@ -226,9 +228,12 @@ def test_cache_model_artifact_uploads_with_version_metadata(monkeypatch):
     new_fm = fm.cache_model_artifact("s3://b/cache")
 
     assert new_fm.model_artifact_uri == "s3://b/cache/chronos-2/model.tar.gz"
+    assert new_fm._backend.config == fm._backend.config == backend_config
     s3.upload_file.assert_called_once()
     metadata = s3.upload_file.call_args.kwargs["ExtraArgs"]["Metadata"]
     assert metadata == {"autogluon-cloud-version": __version__}
+    assert s3.upload_file.call_args.kwargs["ExtraArgs"]["SSEKMSKeyId"] == "output-key"
+    assert s3.upload_file.call_args.kwargs["ExtraArgs"]["ServerSideEncryption"] == "aws:kms"
 
 
 def test_cache_model_artifact_raises_on_stale_version_without_overwrite():

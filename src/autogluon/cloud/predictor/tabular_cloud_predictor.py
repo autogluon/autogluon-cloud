@@ -57,7 +57,7 @@ class TabularCloudPredictor(CloudPredictor):
         environment: Optional[Dict[str, str]] = None,
         use_spot_instances: bool = False,
         max_wait: Optional[int] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
         Fit and predict in a single SageMaker training job.
@@ -100,7 +100,7 @@ class TabularCloudPredictor(CloudPredictor):
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        environment, use_spot_instances, max_wait, sagemaker_overrides:
+        environment, use_spot_instances, max_wait, backend_overrides:
             Same as in :meth:`fit`.
 
         Returns
@@ -127,7 +127,7 @@ class TabularCloudPredictor(CloudPredictor):
             environment=environment,
             use_spot_instances=use_spot_instances,
             max_wait=max_wait,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
         )
         if result is None:  # wait=False
             return None
@@ -155,7 +155,7 @@ class TabularCloudPredictor(CloudPredictor):
         environment: Optional[Dict[str, str]] = None,
         use_spot_instances: bool = False,
         max_wait: Optional[int] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Fit and predict probabilities in a single SageMaker training job.
@@ -195,7 +195,7 @@ class TabularCloudPredictor(CloudPredictor):
         predictions_path: Optional[str]
             S3 URL where predictions will be written by the training container. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        environment, use_spot_instances, max_wait, sagemaker_overrides:
+        environment, use_spot_instances, max_wait, backend_overrides:
             Same as in :meth:`fit`.
 
         Returns
@@ -225,7 +225,7 @@ class TabularCloudPredictor(CloudPredictor):
             environment=environment,
             use_spot_instances=use_spot_instances,
             max_wait=max_wait,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
         )
 

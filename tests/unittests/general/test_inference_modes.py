@@ -4,6 +4,7 @@ from unittest import mock
 
 import pytest
 
+from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend
 
 GPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cu133-amzn2023"
@@ -30,8 +31,10 @@ def deploy_requests():
         )
         backend._fit_job = None  # deploy a serve-script tarball, not a fit-job artifact
 
-        def run(**kwargs):
+        def run(backend_config=None, **kwargs):
             backend.endpoint_name = None  # allow re-deploy across cases
+            if backend_config is not None:
+                backend.config = backend_config
             backend.deploy(endpoint_name="ep", entry_point="stub.py", **kwargs)
             return {
                 "model": model_cls.create.call_args.kwargs,
@@ -74,7 +77,7 @@ def test_when_inference_ami_is_overridden_then_override_wins(deploy_requests):
         deploy_requests(
             instance_type="ml.g4dn.xlarge",
             image_uri=GPU_IMAGE_URI,
-            sagemaker_overrides={"production_variant": {"inference_ami_version": "custom-ami"}},
+            backend_overrides={"production_variant": {"inference_ami_version": "custom-ami"}},
         )
     )
     assert variant["inference_ami_version"] == "custom-ami"
@@ -105,5 +108,21 @@ def test_when_environment_given_then_it_reaches_the_container(deploy_requests):
 
 
 def test_when_override_targets_training_job_then_deploy_rejects_it(deploy_requests):
-    with pytest.raises(ValueError, match="Unsupported `sagemaker_overrides` key"):
-        deploy_requests(sagemaker_overrides={"create_training_job": {}})
+    with pytest.raises(ValueError, match="Unsupported `backend_overrides` key"):
+        deploy_requests(backend_overrides={"create_training_job": {}})
+
+
+@pytest.mark.parametrize(
+    ("inference_mode", "volume_key"),
+    [("realtime", None), ("realtime", "volume-key"), ("serverless", "volume-key")],
+)
+def test_endpoint_volume_encryption_is_independent_of_output_encryption(deploy_requests, inference_mode, volume_key):
+    requests = deploy_requests(
+        inference_mode=inference_mode,
+        backend_config=SageMakerConfig(output_kms_key="output-key", volume_kms_key=volume_key),
+    )
+    config = requests["endpoint_config"]
+    if inference_mode == "realtime" and volume_key is not None:
+        assert config["kms_key_id"] == volume_key
+    else:
+        assert "kms_key_id" not in config

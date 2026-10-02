@@ -1,3 +1,5 @@
+:orphan:
+
 API
 ===
 
@@ -7,48 +9,53 @@ API
 .. autosummary::
     :toctree: api
     :template: custom_class.rst
-    :methods:
+
+    SageMakerConfig
+
+.. autosummary::
+    :toctree: api
+    :template: custom_class.rst
+
+    FoundationModel
+
+.. autosummary::
+    :toctree: api
+    :template: custom_class.rst
 
     TabularCloudPredictor
 
 .. autosummary::
     :toctree: api
     :template: custom_class.rst
-    :methods:
 
     TabularFoundationModel
 
 .. autosummary::
     :toctree: api
     :template: custom_class.rst
-    :methods:
 
     TabularEndpoint
 
 .. autosummary::
     :toctree: api
     :template: custom_class.rst
-    :methods:
 
     TimeSeriesCloudPredictor
 
 .. autosummary::
     :toctree: api
     :template: custom_class.rst
-    :methods:
 
     TimeSeriesFoundationModel
 
 .. autosummary::
     :toctree: api
     :template: custom_class.rst
-    :methods:
 
     TimeSeriesEndpoint
 
 .. autosummary::
     :toctree: api
     :template: custom_class.rst
-    :methods:
 
     MultiModalCloudPredictor

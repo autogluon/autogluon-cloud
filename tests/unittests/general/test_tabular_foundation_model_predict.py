@@ -33,10 +33,21 @@ def _stub_aws(monkeypatch):
         "autogluon.cloud.model.foundation_model.resolve_cloud_output_path",
         lambda path, backend_name: path or "s3://stub/output",
     )
-    monkeypatch.setattr(
-        "autogluon.cloud.backend.backend_factory.BackendFactory.get_backend",
-        lambda **kwargs: mock.MagicMock(role_arn="arn:aws:iam::0:role/stub"),
-    )
+
+    def make_backend(**kwargs):
+        backend = mock.MagicMock(role_arn="arn:aws:iam::0:role/stub", config=kwargs["config"])
+
+        def get_prediction_future(*, result_transform=None):
+            def load():
+                raw = backend.get_fit_predict_results()
+                return raw if result_transform is None else result_transform(raw)
+
+            return JobPredictionFuture(job=backend._fit_job, result_loader=load)
+
+        backend.get_prediction_future.side_effect = get_prediction_future
+        return backend
+
+    monkeypatch.setattr("autogluon.cloud.backend.backend_factory.BackendFactory.get_backend", make_backend)
 
 
 def _make_fm(model_id="mitra-classifier", result=CLASSIFICATION_FRAME):

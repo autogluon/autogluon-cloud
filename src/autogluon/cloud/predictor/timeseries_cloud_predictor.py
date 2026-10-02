@@ -57,7 +57,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         environment: Optional[Dict[str, str]] = None,
         use_spot_instances: bool = False,
         max_wait: Optional[int] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         **kwargs,
     ) -> TimeSeriesCloudPredictor:
         """
@@ -117,7 +117,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Whether to train on managed spot instances.
         max_wait: Optional[int], default = None
             Maximum seconds to wait for spot capacity plus training time. Requires ``use_spot_instances=True``.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw ``CreateTrainingJob`` request fields under the ``"create_training_job"`` key. See
             :meth:`TabularCloudPredictor.fit` for details.
 
@@ -165,7 +165,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             environment=environment,
             use_spot_instances=use_spot_instances,
             max_wait=max_wait,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
         )
 
@@ -238,7 +238,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         persist: bool = True,
         save_path: Optional[str] = None,
         environment: Optional[Dict[str, str]] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Predict using SageMaker batch transform.
@@ -279,7 +279,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
         image_uri: Optional[str], default = None
             Custom inference container image. If set, ``framework_version`` is ignored.
-        download, persist, save_path, environment, sagemaker_overrides:
+        download, persist, save_path, environment, backend_overrides:
             Same as in :meth:`TabularCloudPredictor.predict`.
         """
         return self.backend.predict(
@@ -297,7 +297,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             persist=persist,
             save_path=save_path,
             environment=environment,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
         )
 
     def predict_proba(
@@ -331,7 +331,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         environment: Optional[Dict[str, str]] = None,
         use_spot_instances: bool = False,
         max_wait: Optional[int] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Fit and predict in a single SageMaker training job.
@@ -384,7 +384,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        environment, use_spot_instances, max_wait, sagemaker_overrides:
+        environment, use_spot_instances, max_wait, backend_overrides:
             Same as in :meth:`fit`.
 
         Returns
@@ -414,7 +414,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             environment=environment,
             use_spot_instances=use_spot_instances,
             max_wait=max_wait,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
         )
 

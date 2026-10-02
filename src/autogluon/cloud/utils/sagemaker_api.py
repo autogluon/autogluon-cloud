@@ -12,21 +12,21 @@ from .sagemaker_core_workarounds import bind_core_session
 
 logger = logging.getLogger(__name__)
 
-# Requests that each method sends, i.e. the valid `sagemaker_overrides` keys. `production_variant` is the single
+# Requests that each method sends, i.e. the valid `backend_overrides` keys. `production_variant` is the single
 # variant inside `create_endpoint_config.production_variants`.
 FIT_OVERRIDE_KEYS = ("create_training_job",)
 DEPLOY_OVERRIDE_KEYS = ("create_model", "production_variant", "create_endpoint_config", "create_endpoint")
 BATCH_PREDICT_OVERRIDE_KEYS = ("create_model", "create_transform_job")
 
 _REMOVED_KWARGS = {
-    "backend_kwargs": "named arguments, the constructor's `vpc_config` / `kms_key` / `tags`, or `sagemaker_overrides`",
+    "backend_kwargs": "named arguments, `backend=SageMakerConfig(...)`, or `backend_overrides`",
     "custom_image_uri": "`image_uri`",
-    "autogluon_sagemaker_estimator_kwargs": "`sagemaker_overrides={'create_training_job': ...}`",
-    "fit_kwargs": "`sagemaker_overrides={'create_training_job': ...}`",
-    "model_kwargs": "`environment` or `sagemaker_overrides={'create_model': ...}`",
-    "deploy_kwargs": "`sagemaker_overrides={'production_variant': ..., 'create_endpoint_config': ...}`",
-    "transformer_kwargs": "`sagemaker_overrides={'create_transform_job': ...}`",
-    "transform_kwargs": "`sagemaker_overrides={'create_transform_job': ...}`",
+    "autogluon_sagemaker_estimator_kwargs": "`backend_overrides={'create_training_job': ...}`",
+    "fit_kwargs": "`backend_overrides={'create_training_job': ...}`",
+    "model_kwargs": "`environment` or `backend_overrides={'create_model': ...}`",
+    "deploy_kwargs": "`backend_overrides={'production_variant': ..., 'create_endpoint_config': ...}`",
+    "transformer_kwargs": "`backend_overrides={'create_transform_job': ...}`",
+    "transform_kwargs": "`backend_overrides={'create_transform_job': ...}`",
 }
 
 
@@ -50,7 +50,7 @@ def check_override_keys(overrides: Optional[Mapping[str, Any]], allowed_keys: It
     overrides = dict(overrides or {})
     unknown = sorted(set(overrides) - set(allowed_keys))
     if unknown:
-        raise ValueError(f"Unsupported `sagemaker_overrides` key(s) {unknown}. Valid keys: {list(allowed_keys)}.")
+        raise ValueError(f"Unsupported `backend_overrides` key(s) {unknown}. Valid keys: {list(allowed_keys)}.")
     return overrides
 
 

@@ -4,7 +4,9 @@ import logging
 import os
 import tarfile
 import tempfile
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from dataclasses import replace
+from functools import partial
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import pandas as pd
 from botocore.exceptions import ClientError
@@ -15,7 +17,9 @@ from sagemaker.core.shapes import VpcConfig
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
+from ..config import SageMakerConfig
 from ..data import FormatConverterFactory
+from ..endpoint.prediction_future import JobPredictionFuture
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
@@ -85,18 +89,38 @@ class SagemakerBackend(Backend):
     def __init__(
         self,
         local_output_path: str,
-        cloud_output_path: str,
+        cloud_output_path: Optional[str],
         predictor_type: str,
-        role: Optional[str] = None,
-        **kwargs,
+        *,
+        config: Optional[SageMakerConfig] = None,
+        resource_prefix: Optional[str] = None,
     ) -> None:
-        self.initialize(
+        super().__init__(
             local_output_path=local_output_path,
             cloud_output_path=cloud_output_path,
             predictor_type=predictor_type,
-            role=role,
-            **kwargs,
+            resource_prefix=resource_prefix,
         )
+        if config is not None and not isinstance(config, SageMakerConfig):
+            raise TypeError("`config` must be a SageMakerConfig.")
+        config = copy.deepcopy(config or SageMakerConfig())
+        if config.vpc_config is not None:
+            VpcConfig(**config.vpc_config)  # fail before creating a session or resolving the role
+        self.sagemaker_session = setup_sagemaker_session(region=config.region)
+        try:
+            self.role_arn = resolve_execution_role(
+                config.role_arn, backend_name=SAGEMAKER, session=self.sagemaker_session
+            )
+        except ClientError as e:
+            logger.warning(
+                "Failed to resolve SageMaker execution role. Pass `backend=SageMakerConfig(role_arn=<arn>)` "
+                "or run `autogluon.cloud.bootstrap()` / `register()` to persist one."
+            )
+            raise e
+        self._region = self.sagemaker_session.boto_region_name
+        self.config = replace(config, region=self._region, role_arn=self.role_arn)
+        self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
+        self._batch_transform_jobs = MostRecentInsertedOrderedDict()
 
     def _realtime_serializer(self):
         """Serializer used for realtime endpoint requests"""
@@ -104,50 +128,7 @@ class SagemakerBackend(Backend):
 
     def _resolve_tags(self, extra_tags: Optional[Dict[str, str]] = None) -> List[Dict[str, str]]:
         """Tags for a created SageMaker resource, in sagemaker-core request format: default + extra + user tags."""
-        return to_request_tags(build_tags(self.predictor_type, extra_tags=extra_tags, user_tags=self.tags))
-
-    def initialize(
-        self,
-        role: Optional[str] = None,
-        vpc_config: Optional[Dict[str, List[str]]] = None,
-        kms_key: Optional[str] = None,
-        tags: Optional[Dict[str, str]] = None,
-        **kwargs,
-    ) -> None:
-        """Initialize the backend.
-
-        Parameters
-        ----------
-        role
-            SageMaker execution role ARN. See
-            :func:`autogluon.cloud.utils.aws_utils.resolve_execution_role` for the resolution order.
-        vpc_config
-            ``{"subnets": [...], "security_group_ids": [...]}`` applied to every training job, model and
-            transform job created by this backend.
-        kms_key
-            KMS key used to encrypt the S3 outputs and ML storage volumes of the created SageMaker resources.
-        tags
-            ``{"key": "value"}`` tags added to every created SageMaker resource.
-        """
-        super().initialize(**kwargs)
-        try:
-            self.role_arn = resolve_execution_role(role, backend_name=SAGEMAKER)
-        except ClientError as e:
-            logger.warning(
-                "Failed to resolve SageMaker execution role. Pass `role=<arn>` to the predictor/model "
-                "or run `autogluon.cloud.bootstrap()` / `register()` to persist one."
-            )
-            raise e
-        if vpc_config is not None:
-            VpcConfig(**vpc_config)  # fail early on malformed configs
-        self.vpc_config = vpc_config
-        self.kms_key = kms_key
-        self.tags = dict(tags or {})
-        self.sagemaker_session = setup_sagemaker_session()
-        self.endpoint_name: Optional[str] = None
-        self._region = self.sagemaker_session.boto_region_name
-        self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
-        self._batch_transform_jobs = MostRecentInsertedOrderedDict()
+        return to_request_tags(build_tags(self.predictor_type, extra_tags=extra_tags, user_tags=self.config.tags))
 
     @property
     def _boto_session(self):
@@ -225,7 +206,7 @@ class SagemakerBackend(Backend):
         environment: Optional[Dict[str, str]] = None,
         use_spot_instances: bool = False,
         max_wait: Optional[int] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
         extra_tags: Optional[Dict[str, str]] = None,
     ) -> None:
@@ -279,7 +260,7 @@ class SagemakerBackend(Backend):
         max_wait: Optional[int], default = None
             Maximum seconds to wait for spot capacity plus training time. Defaults to ``timeout``. Requires
             ``use_spot_instances=True``.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw ``CreateTrainingJob`` request fields (sagemaker-core snake_case names) under the
             ``"create_training_job"`` key, deep-merged over the request built by AutoGluon-Cloud.
         extra_ag_args: Optional[Dict[str, Any]], default = None
@@ -290,7 +271,7 @@ class SagemakerBackend(Backend):
         if data_channels.get("train_data") is None:
             raise ValueError("`data_channels['train_data']` is required.")
         _reject_local_mode(instance_type)
-        overrides = check_override_keys(sagemaker_overrides, FIT_OVERRIDE_KEYS)
+        overrides = check_override_keys(backend_overrides, FIT_OVERRIDE_KEYS)
         if max_wait is not None and not use_spot_instances:
             raise ValueError("`max_wait` requires `use_spot_instances=True`.")
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
@@ -348,6 +329,7 @@ class SagemakerBackend(Backend):
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.json")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
+            job_name=job_name,
             data_channels=data_channels,
             label=label,
             ag_args=ag_args_path,
@@ -393,13 +375,15 @@ class SagemakerBackend(Backend):
             request["environment"] = dict(environment)
         if use_spot_instances:
             request["enable_managed_spot_training"] = True
-        if self.vpc_config is not None:
-            request["vpc_config"] = self.vpc_config
-        if self.kms_key is not None:
-            request["output_data_config"]["kms_key_id"] = self.kms_key
-            request["resource_config"]["volume_kms_key_id"] = self.kms_key
+        if self.config.vpc_config is not None:
+            request["vpc_config"] = self.config.vpc_config
+        if self.config.output_kms_key is not None:
+            request["output_data_config"]["kms_key_id"] = self.config.output_kms_key
+        if self.config.volume_kms_key is not None:
+            request["resource_config"]["volume_kms_key_id"] = self.config.volume_kms_key
         request = deep_merge(request, overrides.get("create_training_job", {}))
 
+        self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
         self._fit_job.run(training_job_request=request, framework_version=framework_version, wait=wait)
 
     def _create_model(
@@ -429,8 +413,8 @@ class SagemakerBackend(Backend):
             "execution_role_arn": self.role_arn,
             "tags": tags,
         }
-        if self.vpc_config is not None:
-            request["vpc_config"] = self.vpc_config
+        if self.config.vpc_config is not None:
+            request["vpc_config"] = self.config.vpc_config
         request = deep_merge(request, overrides.get("create_model", {}))
         logger.log(20, "Creating inference model...")
         Model.create(**request, session=self._boto_session, region=self._region)
@@ -453,7 +437,7 @@ class SagemakerBackend(Backend):
             entry_point=entry_point,
             repacked_model_uri=repacked_model_uri,
             sagemaker_session=self.sagemaker_session,
-            kms_key=self.kms_key,
+            kms_key=self.config.output_kms_key,
         )
 
     @staticmethod
@@ -478,7 +462,7 @@ class SagemakerBackend(Backend):
         volume_size: Optional[int] = None,
         wait: bool = True,
         environment: Optional[Dict[str, str]] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         entry_point: Optional[str] = None,
         fm_serve_config: Optional[Dict[str, Any]] = None,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
@@ -520,7 +504,7 @@ class SagemakerBackend(Backend):
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw request fields (sagemaker-core snake_case names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"production_variant"``,
             ``"create_endpoint_config"``, ``"create_endpoint"``.
@@ -543,7 +527,7 @@ class SagemakerBackend(Backend):
         assert self.endpoint_name is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
-        overrides = check_override_keys(sagemaker_overrides, DEPLOY_OVERRIDE_KEYS)
+        overrides = check_override_keys(backend_overrides, DEPLOY_OVERRIDE_KEYS)
         if inference_mode == "serverless" and instance_type is None:
             # Needed to infer the container image (CPU vs GPU) downstream — serverless is CPU-only.
             instance_type = "ml.m5.2xlarge"
@@ -643,8 +627,8 @@ class SagemakerBackend(Backend):
             "production_variants": [variant],
             "tags": tags,
         }
-        if self.kms_key is not None and inference_mode == "realtime":
-            endpoint_config_request["kms_key_id"] = self.kms_key
+        if self.config.volume_kms_key is not None and inference_mode == "realtime":
+            endpoint_config_request["kms_key_id"] = self.config.volume_kms_key
         endpoint_config_request = deep_merge(endpoint_config_request, overrides.get("create_endpoint_config", {}))
         endpoint_request = deep_merge(
             {
@@ -839,7 +823,7 @@ class SagemakerBackend(Backend):
         persist: bool = True,
         save_path: Optional[str] = None,
         environment: Optional[Dict[str, str]] = None,
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
         Predict using SageMaker batch transform.
@@ -889,7 +873,7 @@ class SagemakerBackend(Backend):
             If `persist` is `False`, file would first be downloaded to this path and then removed.
         environment: Optional[Dict[str, str]], default = None
             Environment variables set in the inference container.
-        sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw request fields (sagemaker-core snake_case names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
 
@@ -913,7 +897,7 @@ class SagemakerBackend(Backend):
             persist=persist,
             save_path=save_path,
             environment=environment,
-            sagemaker_overrides=sagemaker_overrides,
+            backend_overrides=backend_overrides,
             original_features=self.original_features,
         )
 
@@ -1000,7 +984,21 @@ class SagemakerBackend(Backend):
 
     def get_fit_predict_results(self) -> pd.DataFrame:
         """Read predictions produced by a completed ``fit_predict`` job from S3."""
-        ag_args = self._download_ag_args_from_job()
+        return self._load_fit_predict_results(self._fit_job)
+
+    def get_prediction_future(
+        self, *, result_transform: Optional[Callable[[pd.DataFrame], Any]] = None
+    ) -> JobPredictionFuture:
+        """Bind waiting and result loading to the current job, independent of later submissions."""
+        job = self._fit_job
+        if job.job_name is None:
+            raise ValueError("No prediction job found. Submit a prediction first.")
+        load_results = partial(self._load_fit_predict_results, job)
+        result_loader = load_results if result_transform is None else lambda: result_transform(load_results())
+        return JobPredictionFuture(job=job, result_loader=result_loader)
+
+    def _load_fit_predict_results(self, job: SageMakerFitJob) -> pd.DataFrame:
+        ag_args = self._download_ag_args_from_job(job)
         predictions_path = ag_args.get("predictions_path")
         assert predictions_path is not None, "No fit_predict job found. Call `fit_predict()` first."
         bucket, key = s3_path_to_bucket_prefix(predictions_path)
@@ -1009,15 +1007,16 @@ class SagemakerBackend(Backend):
             self.sagemaker_session.boto_session.client("s3").download_file(bucket, key, local_path)
             return load_pd.load(local_path)
 
-    def _download_ag_args_from_job(self) -> Dict[str, Any]:
+    def _download_ag_args_from_job(self, job: Optional[SageMakerFitJob] = None) -> Dict[str, Any]:
         """Fetch and parse the ``ag_args.json`` that was uploaded as the ``ag_args`` channel.
 
         Each training job carries the exact config it was launched with as an input channel,
         making this the authoritative source — independent of local-disk lifetime.
         """
-        job_name = self._fit_job.job_name
+        job = self._fit_job if job is None else job
+        job_name = job.job_name
         assert job_name is not None, "No fit job found. Call `fit()` / `fit_predict()` first."
-        channels = self._fit_job.get_input_channels()
+        channels = job.get_input_channels()
         ag_args_uri = channels.get("ag_args")
         assert ag_args_uri is not None, (
             f"Training job {job_name!r} has no `ag_args` input channel — cannot recover predictions_path."
@@ -1064,6 +1063,7 @@ class SagemakerBackend(Backend):
 
     def _upload_fit_artifact(
         self,
+        job_name: str,
         data_channels,
         label,
         ag_args,
@@ -1071,7 +1071,7 @@ class SagemakerBackend(Backend):
         image_column=None,
     ):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
-        util_key_prefix = cloud_key_prefix + "/utils"
+        util_key_prefix = f"{cloud_key_prefix}/{job_name}/utils"
 
         # Image-column mode: rewrite image paths to be container-relative; common image directories
         # are zipped and uploaded as separate train_images / tune_images channels below.
@@ -1217,7 +1217,7 @@ class SagemakerBackend(Backend):
         persist=True,
         save_path=None,
         environment=None,
-        sagemaker_overrides=None,
+        backend_overrides=None,
         split_pred_proba=True,
         original_features=None,
         content_type="text/csv",
@@ -1227,7 +1227,7 @@ class SagemakerBackend(Backend):
         batch_strategy="MultiRecord",
     ):
         _reject_local_mode(instance_type)
-        overrides = check_override_keys(sagemaker_overrides, BATCH_PREDICT_OVERRIDE_KEYS)
+        overrides = check_override_keys(backend_overrides, BATCH_PREDICT_OVERRIDE_KEYS)
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
             assert predictor_path, "No cloud trained model found."
@@ -1341,9 +1341,10 @@ class SagemakerBackend(Backend):
         transform_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="transform")
         if transform_ami_version is not None:
             transform_resources["transform_ami_version"] = transform_ami_version
-        if self.kms_key is not None:
-            transform_output["kms_key_id"] = self.kms_key
-            transform_resources["volume_kms_key_id"] = self.kms_key
+        if self.config.output_kms_key is not None:
+            transform_output["kms_key_id"] = self.config.output_kms_key
+        if self.config.volume_kms_key is not None:
+            transform_resources["volume_kms_key_id"] = self.config.volume_kms_key
         request = {
             "transform_job_name": job_name,
             "model_name": model_name,
@@ -1393,7 +1394,7 @@ class SagemakerBackend(Backend):
     def __setstate__(self, state):
         """Custom implementation of the unpickle process"""
         self.__dict__.update(state)
-        self.sagemaker_session = setup_sagemaker_session()
+        self.sagemaker_session = setup_sagemaker_session(region=self.config.region)
         self._region = self.sagemaker_session.boto_region_name
         self._fit_job.session = self.sagemaker_session
         for job in self._batch_transform_jobs.values():
