@@ -87,7 +87,7 @@ def test_role_fallback_uses_the_backend_session():
     session = mock.sentinel.session
     with mock.patch("autogluon.cloud.utils.aws_utils.get_execution_role", return_value="role") as get_role:
         assert resolve_execution_role(None, backend_name="sagemaker", session=session) == "role"
-    get_role.assert_called_once_with(sagemaker_session=session)
+    get_role.assert_called_once_with(session)
 
 
 @pytest.mark.parametrize("explicit_region", [None, "eu-west-1"])

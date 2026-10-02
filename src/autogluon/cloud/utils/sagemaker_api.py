@@ -5,7 +5,7 @@ import functools
 import logging
 from typing import Any, Dict, Iterable, Mapping, Optional
 
-from sagemaker.core.helper.session_helper import Session
+from .aws_utils import AwsSession
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ _REMOVED_KWARGS = {
 
 
 def reject_legacy_kwargs(func):
-    """Raise an actionable ``TypeError`` for kwargs removed in the SageMaker SDK v3 migration."""
+    """Raise an actionable ``TypeError`` for kwargs removed when AutoGluon-Cloud stopped using the SageMaker Python SDK."""
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -64,7 +64,7 @@ def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> Dict[str
 
 def invoke_endpoint(
     endpoint_name: str,
-    session: Session,
+    session: AwsSession,
     payload: Any,
     serializer,
     deserializer,
@@ -75,13 +75,13 @@ def invoke_endpoint(
     response = session.sagemaker_runtime_client.invoke_endpoint(
         EndpointName=endpoint_name,
         Body=serializer.serialize(payload),
-        ContentType=content_type or serializer.CONTENT_TYPE,
-        Accept=accept or ", ".join(deserializer.ACCEPT),
+        ContentType=content_type or serializer.content_type,
+        Accept=accept or ", ".join(deserializer.accept),
     )
     return deserializer.deserialize(response["Body"], response["ContentType"])
 
 
-def delete_endpoint(endpoint_name: str, session: Session) -> None:
+def delete_endpoint(endpoint_name: str, session: AwsSession) -> None:
     """Delete an endpoint together with its endpoint config and models."""
     client = session.sagemaker_client
     endpoint = client.describe_endpoint(EndpointName=endpoint_name)

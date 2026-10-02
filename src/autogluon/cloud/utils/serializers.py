@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-from sagemaker.core.serializers import SimpleBaseSerializer
 
 AUTOGLUON_SERDE_VERSION = 1
 
@@ -34,7 +33,7 @@ class AutoGluonSerializationWrapper:
     known_covariates: Optional[pd.DataFrame] = field(default=None)
 
 
-class AutoGluonSerializer(SimpleBaseSerializer):
+class AutoGluonSerializer:
     """Serialize data to a buffer with data itself and optional AutoGluon inference arguments."""
 
     def __init__(self, content_type="application/x-autogluon"):
@@ -44,7 +43,7 @@ class AutoGluonSerializer(SimpleBaseSerializer):
             content_type (str): The MIME type to signal to the inference endpoint when sending
                 request data (default: "application/x-autogluon").
         """
-        super(AutoGluonSerializer, self).__init__(content_type=content_type)
+        self.content_type = content_type
 
     def serialize(self, data: AutoGluonSerializationWrapper):
         """Serialize data to a JSON envelope with base64-encoded parquet payloads.
@@ -74,7 +73,7 @@ class AutoGluonSerializer(SimpleBaseSerializer):
         return json.dumps(package).encode("utf-8")
 
 
-class MultiModalSerializer(SimpleBaseSerializer):
+class MultiModalSerializer:
     """Serializer for multi-modal use case.
 
     Produces a JSON envelope containing either base64-encoded parquet (for DataFrames) or a
@@ -87,11 +86,9 @@ class MultiModalSerializer(SimpleBaseSerializer):
         Args:
             content_type (str): The MIME type to signal to the inference endpoint when sending
                 request data (default: "application/x-autogluon-parquet").
-                To BE NOTICED, this content_type will not used by MultiModalSerializer
-                as it doesn't support dynamic updating. Instead, we pass expected content_type to
-                `initial_args` of `predict()` call to endpoints.
+                Requests with image data pass their own content type to the endpoint call instead.
         """
-        super(MultiModalSerializer, self).__init__(content_type=content_type)
+        self.content_type = content_type
 
     def serialize(self, data):
         """Serialize data to a JSON envelope.

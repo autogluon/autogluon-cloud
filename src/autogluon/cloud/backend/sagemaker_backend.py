@@ -10,7 +10,6 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import pandas as pd
 from botocore.exceptions import ClientError
-from sagemaker.core.common_utils import sagemaker_timestamp, unique_name_from_base
 
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
@@ -33,7 +32,7 @@ from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
 from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, VALID_ACCEPT
 from ..utils.deserializers import PandasDeserializer
 from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version
-from ..utils.misc import MostRecentInsertedOrderedDict
+from ..utils.misc import MostRecentInsertedOrderedDict, sagemaker_timestamp, unique_name_from_base
 from ..utils.sagemaker_api import (
     BATCH_PREDICT_OVERRIDE_KEYS,
     DEPLOY_OVERRIDE_KEYS,
@@ -1022,7 +1021,7 @@ class SagemakerBackend(Backend):
         bucket, key = s3_path_to_bucket_prefix(predictions_path)
         with tempfile.TemporaryDirectory(prefix="ag_fit_predict_") as tmpdir:
             local_path = os.path.join(tmpdir, os.path.basename(key))
-            self.sagemaker_session.boto_session.client("s3").download_file(bucket, key, local_path)
+            self.sagemaker_session.s3_client.download_file(bucket, key, local_path)
             return load_pd.load(local_path)
 
     def _download_ag_args_from_job(self, job: Optional[SageMakerFitJob] = None) -> Dict[str, Any]:
@@ -1043,7 +1042,7 @@ class SagemakerBackend(Backend):
         assert key.endswith(".json"), f"Expected ag_args channel to point to a .json file, got {ag_args_uri!r}"
         with tempfile.TemporaryDirectory(prefix="ag_args_") as tmpdir:
             local_path = os.path.join(tmpdir, os.path.basename(key))
-            self.sagemaker_session.boto_session.client("s3").download_file(bucket, key, local_path)
+            self.sagemaker_session.s3_client.download_file(bucket, key, local_path)
             with open(local_path, "r") as f:
                 return json.load(f)
 

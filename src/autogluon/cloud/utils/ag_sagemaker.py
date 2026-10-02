@@ -14,9 +14,10 @@ import tempfile
 from contextlib import contextmanager
 from typing import Dict, Iterator, Optional
 
-from sagemaker.core.common_utils import repack_model
+from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 from .dlc_utils import retrieve_image_uri
+from .utils import safe_unpack_archive
 
 SOURCE_DIR_TARBALL_NAME = "sourcedir.tar.gz"
 
@@ -46,8 +47,6 @@ def upload_training_code(entry_point: str, source_dir: Optional[str], sagemaker_
 
     Returns the S3 URI of the uploaded tarball.
     """
-    from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
-
     with tempfile.TemporaryDirectory(prefix="ag_train_code_") as tmpdir:
         tarball_path = os.path.join(tmpdir, SOURCE_DIR_TARBALL_NAME)
         with tarfile.open(tarball_path, "w:gz") as tar:
@@ -107,20 +106,27 @@ def repack_model_with_serving_code(
     sagemaker_session,
     kms_key: Optional[str] = None,
 ) -> str:
-    """Replace ``code/`` inside the ``model_data`` tarball with ``entry_point`` + ``serving_utils/`` and upload it.
+    """Replace ``code/`` inside the S3 ``model_data`` tarball with ``entry_point`` + ``serving_utils/`` and upload it.
 
     Returns ``repacked_model_uri``.
     """
-    with staged_serving_code(entry_point) as code_dir:
-        repack_model(
-            inference_script=entry_point,
-            source_directory=code_dir,
-            dependencies=[],
-            model_uri=model_data,
-            repacked_model_uri=repacked_model_uri,
-            sagemaker_session=sagemaker_session,
-            kms_key=kms_key,
-        )
+    s3 = sagemaker_session.s3_client
+    with tempfile.TemporaryDirectory(prefix="ag_repack_") as tmpdir:
+        original_tarball = os.path.join(tmpdir, "original.tar.gz")
+        s3.download_file(*s3_path_to_bucket_prefix(model_data), original_tarball)
+        model_dir = os.path.join(tmpdir, "model")
+        safe_unpack_archive(original_tarball, model_dir)
+        code_dir = os.path.join(model_dir, "code")
+        shutil.rmtree(code_dir, ignore_errors=True)
+        with staged_serving_code(entry_point) as staging_dir:
+            shutil.copytree(staging_dir, code_dir)
+
+        repacked_tarball = os.path.join(tmpdir, "model.tar.gz")
+        with tarfile.open(repacked_tarball, "w:gz") as tar:
+            for name in sorted(os.listdir(model_dir)):
+                tar.add(os.path.join(model_dir, name), arcname=name)
+        extra_args = {"ServerSideEncryption": "aws:kms", "SSEKMSKeyId": kms_key} if kms_key else None
+        s3.upload_file(repacked_tarball, *s3_path_to_bucket_prefix(repacked_model_uri), ExtraArgs=extra_args)
     return repacked_model_uri
 
 

@@ -56,8 +56,8 @@ def test_invoke_endpoint_uses_the_session_runtime_client():
     session = mock.MagicMock()
     runtime = session.sagemaker_runtime_client
     runtime.invoke_endpoint.return_value = {"Body": mock.sentinel.body, "ContentType": "text/csv"}
-    serializer = mock.Mock(CONTENT_TYPE="text/csv")
-    deserializer = mock.Mock(ACCEPT=("application/json",))
+    serializer = mock.Mock(content_type="text/csv")
+    deserializer = mock.Mock(accept=("application/json",))
     result = invoke_endpoint("ep", session, "payload", serializer=serializer, deserializer=deserializer)
     runtime.invoke_endpoint.assert_called_once_with(
         EndpointName="ep",
