@@ -3,17 +3,10 @@ from unittest import mock
 import boto3
 import pandas as pd
 import pytest
-from sagemaker.core.shapes import StoppingCondition
 
 from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
-from autogluon.cloud.utils.sagemaker_api import (
-    bind_core_session,
-    deep_merge,
-    normalize_tags,
-    normalize_vpc_config,
-    reject_legacy_kwargs,
-    validate_sagemaker_overrides,
-)
+from autogluon.cloud.utils.sagemaker_api import check_override_keys, deep_merge, reject_legacy_kwargs
+from autogluon.cloud.utils.sagemaker_core_workarounds import bind_core_session
 
 SB = "autogluon.cloud.backend.sagemaker_backend"
 
@@ -25,20 +18,10 @@ def test_deep_merge_merges_dicts_and_replaces_other_values():
     assert base["a"]["y"] == 2  # input is not mutated
 
 
-def test_deep_merge_accepts_sagemaker_core_shapes():
-    merged = deep_merge(
-        {"stopping_condition": {"max_runtime_in_seconds": 10}},
-        {"stopping_condition": StoppingCondition(max_wait_time_in_seconds=20)},
-    )
-    assert merged == {"stopping_condition": {"max_runtime_in_seconds": 10, "max_wait_time_in_seconds": 20}}
-
-
-def test_validate_sagemaker_overrides_rejects_unknown_keys():
+def test_check_override_keys_rejects_unknown_keys():
     with pytest.raises(ValueError, match="create_model"):
-        validate_sagemaker_overrides({"create_model": {}}, ("create_training_job",))
-    with pytest.raises(TypeError, match="must be a dict"):
-        validate_sagemaker_overrides({"create_training_job": 1}, ("create_training_job",))
-    assert validate_sagemaker_overrides(None, ("create_training_job",)) == {}
+        check_override_keys({"create_model": {}}, ("create_training_job",))
+    assert check_override_keys(None, ("create_training_job",)) == {}
 
 
 def test_reject_legacy_kwargs_points_to_replacement():
@@ -47,21 +30,10 @@ def test_reject_legacy_kwargs_points_to_replacement():
         return kwargs
 
     assert fit(image_uri="x") == {"image_uri": "x"}
-    with pytest.raises(TypeError, match="renamed to `image_uri`"):
+    with pytest.raises(TypeError, match="Use `image_uri` instead"):
         fit(custom_image_uri="x")
     with pytest.raises(TypeError, match="sagemaker_overrides"):
         fit(backend_kwargs={})
-
-
-def test_normalize_tags_and_vpc_config():
-    assert normalize_tags({"team": "ts"}) == [{"Key": "team", "Value": "ts"}]
-    assert normalize_tags(None) == []
-    assert normalize_vpc_config({"subnets": ("s-1",), "security_group_ids": ["sg-1"]}) == {
-        "security_group_ids": ["sg-1"],
-        "subnets": ["s-1"],
-    }
-    with pytest.raises(ValueError, match="vpc_config"):
-        normalize_vpc_config({"Subnets": ["s-1"]})
 
 
 def test_bind_core_session_rebinds_when_session_changes():
@@ -70,9 +42,8 @@ def test_bind_core_session_rebinds_when_session_changes():
     first = boto3.Session(region_name="us-east-1")
     second = boto3.Session(region_name="eu-west-1")
     bind_core_session(first)
-    assert SageMakerClient().session is first
-    bind_core_session(first)
     cached = SingletonMeta._instances[SageMakerClient]
+    assert cached.session is first
     bind_core_session(first)
     assert SingletonMeta._instances[SageMakerClient] is cached  # no rebuild for the same session
     bind_core_session(second)
@@ -140,7 +111,7 @@ def test_fit_applies_infra_settings_spot_and_overrides(fit_request):
         use_spot_instances=True,
         sagemaker_overrides={"create_training_job": {"retry_strategy": {"maximum_retry_attempts": 2}}},
     )
-    assert request["vpc_config"] == {"security_group_ids": ["sg-1"], "subnets": ["s-1"]}
+    assert request["vpc_config"] == {"subnets": ["s-1"], "security_group_ids": ["sg-1"]}
     assert request["output_data_config"]["kms_key_id"] == "kms-1"
     assert request["resource_config"]["volume_kms_key_id"] == "kms-1"
     assert {"key": "team", "value": "ts"} in request["tags"]
@@ -148,6 +119,11 @@ def test_fit_applies_infra_settings_spot_and_overrides(fit_request):
     assert request["enable_managed_spot_training"] is True
     assert request["stopping_condition"]["max_wait_time_in_seconds"] == 3600
     assert request["retry_strategy"] == {"maximum_retry_attempts": 2}
+
+
+def test_fit_rejects_malformed_vpc_config(fit_request):
+    with pytest.raises(ValueError, match="security_group_ids"):
+        fit_request(backend_kwargs={"vpc_config": {"subnets": ["s-1"]}})
 
 
 def test_fit_rejects_local_mode_and_max_wait_without_spot(fit_request):

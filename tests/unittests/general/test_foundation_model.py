@@ -136,7 +136,7 @@ def test_deploy_passes_artifact_uri_and_overrides_model_path_to_container_dir():
     assert call.kwargs["repack"] is False
     serve_cfg = call.kwargs["fm_serve_config"]
     assert serve_cfg["hyperparameters"]["model_path"] == "/opt/ml/model/weights"
-    assert {"Key": "autogluon-cloud-model-id", "Value": "chronos-2"} in call.kwargs["extra_tags"]
+    assert call.kwargs["extra_tags"] == {"autogluon-cloud-model-id": "chronos-2"}
 
 
 def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
@@ -149,7 +149,7 @@ def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
     assert call.kwargs["repack"] is False
     serve_cfg = call.kwargs["fm_serve_config"]
     assert serve_cfg["hyperparameters"]["model_path"] == "autogluon/chronos-2"
-    assert {"Key": "autogluon-cloud-model-id", "Value": "chronos-2"} in call.kwargs["extra_tags"]
+    assert call.kwargs["extra_tags"] == {"autogluon-cloud-model-id": "chronos-2"}
 
 
 def test_tabular_deploy_uses_tabular_fm_handler_and_returns_tabular_endpoint():

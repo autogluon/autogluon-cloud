@@ -244,7 +244,7 @@ class FoundationModel:
             inference_mode=inference_mode,
             inference_config=inference_config,
             repack=False,
-            extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            extra_tags={"autogluon-cloud-model-id": self.model_id},
             **kwargs,
         )
         assert self._backend.endpoint_name is not None
@@ -611,7 +611,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             image_uri=image_uri,
             wait=wait,
             extra_ag_args=extra_ag_args,
-            extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            extra_tags={"autogluon-cloud-model-id": self.model_id},
             **kwargs,
         )
 
@@ -871,7 +871,7 @@ class TabularFoundationModel(FoundationModel):
             image_uri=image_uri,
             wait=wait,
             extra_ag_args=extra_ag_args,
-            extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            extra_tags={"autogluon-cloud-model-id": self.model_id},
             **kwargs,
         )
 

@@ -10,6 +10,7 @@ import pandas as pd
 from botocore.exceptions import ClientError
 from sagemaker.core.common_utils import sagemaker_timestamp, unique_name_from_base
 from sagemaker.core.resources import Endpoint, EndpointConfig, Model
+from sagemaker.core.shapes import VpcConfig
 
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
@@ -21,6 +22,7 @@ from ..utils.ag_sagemaker import (
     create_serve_script_tarball,
     repack_model_with_serving_code,
     resolve_image_uri,
+    script_mode_environment,
     staged_serving_code,
     training_script_hyperparameters,
     upload_training_code,
@@ -34,18 +36,14 @@ from ..utils.sagemaker_api import (
     BATCH_PREDICT_OVERRIDE_KEYS,
     DEPLOY_OVERRIDE_KEYS,
     FIT_OVERRIDE_KEYS,
-    apply_overrides,
-    bind_core_session,
+    check_override_keys,
+    deep_merge,
     delete_endpoint,
     invoke_endpoint,
-    normalize_tags,
-    normalize_vpc_config,
-    script_mode_environment,
-    to_request_tags,
-    validate_sagemaker_overrides,
 )
+from ..utils.sagemaker_core_workarounds import bind_core_session
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
-from ..utils.tag_utils import build_tags
+from ..utils.tag_utils import build_tags, to_request_tags
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
@@ -104,7 +102,7 @@ class SagemakerBackend(Backend):
         """Serializer used for realtime endpoint requests"""
         return AutoGluonSerializer()
 
-    def _resolve_tags(self, extra_tags: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, str]]:
+    def _resolve_tags(self, extra_tags: Optional[Dict[str, str]] = None) -> List[Dict[str, str]]:
         """Tags for a created SageMaker resource, in sagemaker-core request format: default + extra + user tags."""
         return to_request_tags(build_tags(self.predictor_type, extra_tags=extra_tags, user_tags=self.tags))
 
@@ -140,9 +138,11 @@ class SagemakerBackend(Backend):
                 "or run `autogluon.cloud.bootstrap()` / `register()` to persist one."
             )
             raise e
-        self.vpc_config = normalize_vpc_config(vpc_config)
+        if vpc_config is not None:
+            VpcConfig(**vpc_config)  # fail early on malformed configs
+        self.vpc_config = vpc_config
         self.kms_key = kms_key
-        self.tags = normalize_tags(tags)
+        self.tags = dict(tags or {})
         self.sagemaker_session = setup_sagemaker_session()
         self.endpoint_name: Optional[str] = None
         self._region = self.sagemaker_session.boto_region_name
@@ -227,7 +227,7 @@ class SagemakerBackend(Backend):
         max_wait: Optional[int] = None,
         sagemaker_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
-        extra_tags: Optional[List[Dict[str, str]]] = None,
+        extra_tags: Optional[Dict[str, str]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -290,7 +290,7 @@ class SagemakerBackend(Backend):
         if data_channels.get("train_data") is None:
             raise ValueError("`data_channels['train_data']` is required.")
         _reject_local_mode(instance_type)
-        overrides = validate_sagemaker_overrides(sagemaker_overrides, FIT_OVERRIDE_KEYS)
+        overrides = check_override_keys(sagemaker_overrides, FIT_OVERRIDE_KEYS)
         if max_wait is not None and not use_spot_instances:
             raise ValueError("`max_wait` requires `use_spot_instances=True`.")
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
@@ -398,7 +398,7 @@ class SagemakerBackend(Backend):
         if self.kms_key is not None:
             request["output_data_config"]["kms_key_id"] = self.kms_key
             request["resource_config"]["volume_kms_key_id"] = self.kms_key
-        request = apply_overrides(request, overrides, "create_training_job")
+        request = deep_merge(request, overrides.get("create_training_job", {}))
 
         self._fit_job.run(training_job_request=request, framework_version=framework_version, wait=wait)
 
@@ -431,7 +431,7 @@ class SagemakerBackend(Backend):
         }
         if self.vpc_config is not None:
             request["vpc_config"] = self.vpc_config
-        request = apply_overrides(request, overrides, "create_model")
+        request = deep_merge(request, overrides.get("create_model", {}))
         logger.log(20, "Creating inference model...")
         Model.create(**request, session=self._boto_session, region=self._region)
         logger.log(20, "Inference model created successfully")
@@ -484,7 +484,7 @@ class SagemakerBackend(Backend):
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         repack: bool = True,
-        extra_tags: Optional[List[Dict[str, str]]] = None,
+        extra_tags: Optional[Dict[str, str]] = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -543,7 +543,7 @@ class SagemakerBackend(Backend):
         assert self.endpoint_name is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
-        overrides = validate_sagemaker_overrides(sagemaker_overrides, DEPLOY_OVERRIDE_KEYS)
+        overrides = check_override_keys(sagemaker_overrides, DEPLOY_OVERRIDE_KEYS)
         if inference_mode == "serverless" and instance_type is None:
             # Needed to infer the container image (CPU vs GPU) downstream — serverless is CPU-only.
             instance_type = "ml.m5.2xlarge"
@@ -636,7 +636,7 @@ class SagemakerBackend(Backend):
             variant["serverless_config"] = {**preset, **(inference_config or {})}
         else:
             raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
-        variant = apply_overrides(variant, overrides, "production_variant")
+        variant = deep_merge(variant, overrides.get("production_variant", {}))
 
         endpoint_config_request: Dict[str, Any] = {
             "endpoint_config_name": endpoint_name,
@@ -645,15 +645,14 @@ class SagemakerBackend(Backend):
         }
         if self.kms_key is not None and inference_mode == "realtime":
             endpoint_config_request["kms_key_id"] = self.kms_key
-        endpoint_config_request = apply_overrides(endpoint_config_request, overrides, "create_endpoint_config")
-        endpoint_request = apply_overrides(
+        endpoint_config_request = deep_merge(endpoint_config_request, overrides.get("create_endpoint_config", {}))
+        endpoint_request = deep_merge(
             {
                 "endpoint_name": endpoint_name,
                 "endpoint_config_name": endpoint_config_request["endpoint_config_name"],
                 "tags": tags,
             },
-            overrides,
-            "create_endpoint",
+            overrides.get("create_endpoint", {}),
         )
 
         logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
@@ -1228,7 +1227,7 @@ class SagemakerBackend(Backend):
         batch_strategy="MultiRecord",
     ):
         _reject_local_mode(instance_type)
-        overrides = validate_sagemaker_overrides(sagemaker_overrides, BATCH_PREDICT_OVERRIDE_KEYS)
+        overrides = check_override_keys(sagemaker_overrides, BATCH_PREDICT_OVERRIDE_KEYS)
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
             assert predictor_path, "No cloud trained model found."
@@ -1358,7 +1357,7 @@ class SagemakerBackend(Backend):
             "max_concurrent_transforms": 1,
             "tags": tags,
         }
-        request = apply_overrides(request, overrides, "create_transform_job")
+        request = deep_merge(request, overrides.get("create_transform_job", {}))
 
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
         batch_transform_job.run(transform_job_request=request, wait=wait)

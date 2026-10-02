@@ -76,6 +76,16 @@ def training_script_hyperparameters(
     }
 
 
+def script_mode_environment(entry_point: str, region: str) -> Dict[str, str]:
+    """Environment variables pointing the inference toolkit at the serve script under the model's ``code/`` dir."""
+    return {
+        "SAGEMAKER_PROGRAM": os.path.basename(entry_point),
+        "SAGEMAKER_SUBMIT_DIRECTORY": "/opt/ml/model/code",
+        "SAGEMAKER_CONTAINER_LOG_LEVEL": "20",
+        "SAGEMAKER_REGION": region,
+    }
+
+
 @contextmanager
 def staged_serving_code(entry_point: str) -> Iterator[str]:
     """Yield a temporary directory holding ``entry_point`` and ``serving_utils/``, i.e. the model's ``code/`` dir."""

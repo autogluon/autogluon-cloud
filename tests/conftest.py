@@ -132,7 +132,7 @@ def tag_resources_with_ci_run():
     build_tags = sagemaker_backend.build_tags
 
     def build_tags_with_ci_run(*args, **kwargs):
-        return build_tags(*args, **kwargs) + [{"Key": CI_RUN_TAG, "Value": run_id}]
+        return {**build_tags(*args, **kwargs), CI_RUN_TAG: run_id}
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(sagemaker_backend, "build_tags", build_tags_with_ci_run)

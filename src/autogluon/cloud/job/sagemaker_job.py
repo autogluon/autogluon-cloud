@@ -7,7 +7,7 @@ from sagemaker.core.resources import Model, TrainingJob, TransformJob
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import MODEL_ARTIFACT_NAME
 from ..utils.job_logs import TRAINING_JOB_LOG_GROUP, TRANSFORM_JOB_LOG_GROUP, wait_for_job
-from ..utils.sagemaker_api import bind_core_session
+from ..utils.sagemaker_core_workarounds import bind_core_session
 from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
