@@ -161,7 +161,7 @@ class SageMakerFitJob(SageMakerJob):
         # FIXME: find a way to recover framework version
         obj = cls(session=session)
         obj._job_name = job_name
-        obj.wait(logs=True)
+        obj._wait_until_completed()
         return obj
 
     @property
@@ -247,15 +247,15 @@ class SageMakerBatchTransformationJob(SageMakerJob):
     def run(
         self,
         transform_job_request: Dict[str, Any],
+        model_name: str,
         wait: bool,
     ):
         """Create the transform job from a ``CreateTransformJob`` request.
 
-        The SageMaker model referenced by the request is deleted once the job finishes (``wait=True``) or fails to
+        ``model_name`` (the model created for this job) is deleted once the job finishes (``wait=True``) or fails to
         start. With ``wait=False`` the model is kept, since the job still needs it.
         """
         job_name = transform_job_request["TransformJobName"]
-        model_name = transform_job_request["ModelName"]
         try:
             logger.log(20, "Transforming")
             self.session.sagemaker_client.create_transform_job(**transform_job_request)

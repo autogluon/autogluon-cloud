@@ -129,3 +129,15 @@ def test_when_container_environment_overridden_then_it_merges_with_defaults(depl
 def test_when_override_targets_training_job_then_deploy_rejects_it(deploy_requests):
     with pytest.raises(ValueError, match="Unsupported `backend_overrides` key"):
         deploy_requests(backend_overrides={"create_training_job": {}})
+
+
+def test_when_endpoint_creation_fails_then_model_and_config_are_deleted(deploy_requests):
+    client = deploy_requests.backend.sagemaker_session.sagemaker_client
+    client.create_endpoint.side_effect = RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"):
+        deploy_requests(instance_type="ml.m5.xlarge")
+    config_name = client.create_endpoint_config.call_args.kwargs["EndpointConfigName"]
+    assert config_name.startswith("ep-")  # unique per deploy, so a leftover config can't block a redeploy
+    client.delete_endpoint_config.assert_called_once_with(EndpointConfigName=config_name)
+    client.delete_model.assert_called_once_with(ModelName=client.create_model.call_args.kwargs["ModelName"])
+    assert deploy_requests.backend.endpoint_name is None

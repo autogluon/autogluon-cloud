@@ -16,6 +16,7 @@ from ..data import FormatConverterFactory
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
+    SOURCE_DIR_TARBALL_NAME,
     repack_model_with_serving_code,
     script_mode_environment,
     staged_serving_code,
@@ -338,10 +339,15 @@ class SagemakerBackend(Backend):
                 ),
                 "TrainingInputMode": "File",
             },
+            # The code is passed as an input channel (not read from S3 by the container), like SageMaker SDK v2 did,
+            # so training also works with `EnableNetworkIsolation`.
             "HyperParameters": training_script_hyperparameters(
-                entry_point=entry_point, submit_directory=code_uri, job_name=job_name, region=self._region
+                entry_point=entry_point,
+                submit_directory=f"/opt/ml/input/data/code/{SOURCE_DIR_TARBALL_NAME}",
+                job_name=job_name,
+                region=self._region,
             ),
-            "InputDataConfig": [_s3_channel(name, uri) for name, uri in inputs.items()],
+            "InputDataConfig": [_s3_channel(name, uri) for name, uri in {**inputs, "code": code_uri}.items()],
             "OutputDataConfig": {"S3OutputPath": self.cloud_output_path + "/model"},
             "ResourceConfig": {
                 "InstanceType": instance_type,
@@ -584,7 +590,7 @@ class SagemakerBackend(Backend):
         variant = deep_merge(variant, overrides.get("production_variant", {}))
 
         endpoint_config_request: Dict[str, Any] = {
-            "EndpointConfigName": endpoint_name,
+            "EndpointConfigName": unique_name_from_base(endpoint_name),
             "ProductionVariants": [variant],
             "Tags": tags,
         }
@@ -600,8 +606,16 @@ class SagemakerBackend(Backend):
 
         logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
         client = self.sagemaker_session.sagemaker_client
-        client.create_endpoint_config(**endpoint_config_request)
-        client.create_endpoint(**endpoint_request)
+        try:
+            client.create_endpoint_config(**endpoint_config_request)
+            try:
+                client.create_endpoint(**endpoint_request)
+            except Exception:
+                client.delete_endpoint_config(EndpointConfigName=endpoint_config_request["EndpointConfigName"])
+                raise
+        except Exception:
+            client.delete_model(ModelName=model_name)
+            raise
         self.endpoint_name = endpoint_request["EndpointName"]
         if wait:
             client.get_waiter("endpoint_in_service").wait(EndpointName=self.endpoint_name)
@@ -1322,8 +1336,8 @@ class SagemakerBackend(Backend):
         request = deep_merge(request, overrides.get("create_transform_job", {}))
 
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
-        batch_transform_job.run(transform_job_request=request, wait=wait)
-        self._batch_transform_jobs[job_name] = batch_transform_job
+        batch_transform_job.run(transform_job_request=request, model_name=model_name, wait=wait)
+        self._batch_transform_jobs[batch_transform_job.job_name] = batch_transform_job
 
         pred, pred_proba = None, None
         if wait:

@@ -105,10 +105,10 @@ def test_fit_builds_script_mode_training_job(fit_request):
     assert request["TrainingJobName"] == "job"
     assert request["AlgorithmSpecification"]["TrainingImage"] == "example.com/autogluon:train"
     assert request["HyperParameters"]["sagemaker_program"] == '"train.py"'
-    assert request["HyperParameters"]["sagemaker_submit_directory"] == (
-        '"s3://bucket/run/code/job/source/sourcedir.tar.gz"'
-    )
-    assert request["InputDataConfig"][0]["ChannelName"] == "train_data"
+    assert request["HyperParameters"]["sagemaker_submit_directory"] == '"/opt/ml/input/data/code/sourcedir.tar.gz"'
+    channels = {c["ChannelName"]: c["DataSource"]["S3DataSource"]["S3Uri"] for c in request["InputDataConfig"]}
+    assert channels["code"] == "s3://bucket/run/code/job/source/sourcedir.tar.gz"
+    assert "train_data" in channels
     assert request["StoppingCondition"] == {"MaxRuntimeInSeconds": 3600}
     assert request["OutputDataConfig"] == {"S3OutputPath": "s3://bucket/run/model"}
     assert {"Key": "autogluon-cloud-module", "Value": "tabular"} in request["Tags"]

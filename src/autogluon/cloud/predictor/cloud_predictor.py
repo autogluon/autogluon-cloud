@@ -426,7 +426,8 @@ class CloudPredictor(ABC):
             ``"create_model"``, ``"production_variant"`` (the endpoint config's single production variant),
             ``"create_endpoint_config"`` and ``"create_endpoint"``, e.g.
             ``{"production_variant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``.
-            Nested dicts merge recursively; other values, including lists, replace the generated ones.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
+            resources created by AutoGluon-Cloud are cleaned up.
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
@@ -595,7 +596,8 @@ class CloudPredictor(ABC):
             format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
             ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
-            Nested dicts merge recursively; other values, including lists, replace the generated ones.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
+            resources created by AutoGluon-Cloud are cleaned up.
 
         Returns
         -------
@@ -675,7 +677,8 @@ class CloudPredictor(ABC):
             format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
             ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
-            Nested dicts merge recursively; other values, including lists, replace the generated ones.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
+            resources created by AutoGluon-Cloud are cleaned up.
 
         Returns
         -------
