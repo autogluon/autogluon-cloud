@@ -16,7 +16,7 @@ DEPLOY_OVERRIDE_KEYS = ("create_model", "production_variant", "create_endpoint_c
 BATCH_PREDICT_OVERRIDE_KEYS = ("create_model", "create_transform_job")
 
 _REMOVED_KWARGS = {
-    "backend_kwargs": "`backend_overrides` (and the `download` / `persist` / `save_path` arguments of `predict()`)",
+    "backend_kwargs": "`backend_overrides` (and `predictions_path` to choose where `predict()` writes results)",
     "autogluon_sagemaker_estimator_kwargs": "`backend_overrides={'create_training_job': ...}`",
     "fit_kwargs": "`backend_overrides={'create_training_job': ...}`",
     "model_kwargs": "`backend_overrides={'create_model': ...}`",

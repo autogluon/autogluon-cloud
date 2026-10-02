@@ -16,30 +16,9 @@ from typing import Dict, Iterator, Optional
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
-from .dlc_utils import retrieve_image_uri
 from .utils import safe_unpack_archive
 
 SOURCE_DIR_TARBALL_NAME = "sourcedir.tar.gz"
-
-
-def resolve_image_uri(
-    image_uri: Optional[str],
-    framework_version: Optional[str],
-    py_version: Optional[str],
-    region: str,
-    image_scope: str,
-    instance_type: str,
-) -> str:
-    """Return ``image_uri`` if set, otherwise the official AutoGluon DLC for the given version and instance."""
-    if image_uri:
-        return image_uri
-    return retrieve_image_uri(
-        framework_version=framework_version,
-        region=region,
-        image_scope=image_scope,
-        instance_type=instance_type,
-        py_version=py_version,
-    )
 
 
 def upload_training_code(entry_point: str, sagemaker_session, s3_uri_prefix: str) -> str:

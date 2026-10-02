@@ -553,9 +553,7 @@ class CloudPredictor(ABC):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        download: bool = True,
-        persist: bool = True,
-        save_path: Optional[str] = None,
+        predictions_path: Optional[str] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
@@ -589,17 +587,9 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        download: bool, default = True
-            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-            Will be ignored if `wait` is `False`.
-        persist: bool, default = True
-            Whether to persist the downloaded batch transform results on the disk.
-            Will be ignored if `download` is `False`
-        save_path: str, default = None,
-            Path to save the downloaded result.
-            Will be ignored if `download` is `False`.
-            If None, CloudPredictor will create one.
-            If `persist` is `False`, file would first be downloaded to this path and then removed.
+        predictions_path: Optional[str], default = None
+            S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
+            Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
             format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
@@ -610,8 +600,8 @@ class CloudPredictor(ABC):
         Returns
         -------
         Optional Pandas.Series
-            Predict results in Series if `download` is True
-            None if `download` is False
+            Predict results in Series if `wait` is True
+            None if `wait` is False
         """
         return self.backend.predict(
             test_data=test_data,
@@ -623,9 +613,7 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            download=download,
-            persist=persist,
-            save_path=save_path,
+            predictions_path=predictions_path,
             backend_overrides=backend_overrides,
         )
 
@@ -642,9 +630,7 @@ class CloudPredictor(ABC):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        download: bool = True,
-        persist: bool = True,
-        save_path: Optional[str] = None,
+        predictions_path: Optional[str] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
@@ -681,17 +667,9 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        download: bool, default = True
-            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-            Will be ignored if `wait` is `False`.
-        persist: bool, default = True
-            Whether to persist the downloaded batch transform results on the disk.
-            Will be ignored if `download` is `False`
-        save_path: str, default = None,
-            Path to save the downloaded result.
-            Will be ignored if `download` is `False`.
-            If None, CloudPredictor will create one.
-            If `persist` is `False`, file would first be downloaded to this path and then removed.
+        predictions_path: Optional[str], default = None
+            S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
+            Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
             format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
@@ -702,8 +680,8 @@ class CloudPredictor(ABC):
         Returns
         -------
         Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
-            If `download` is False, will return None or (None, None) if `include_predict` is True
-            If `download` is True and `include_predict` is True,
+            If `wait` is False, will return None or (None, None) if `include_predict` is True
+            If `wait` is True and `include_predict` is True,
             will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
             or a Pandas.Series that's identical to prediction when it's a regression problem.
         """
@@ -718,9 +696,7 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            download=download,
-            persist=persist,
-            save_path=save_path,
+            predictions_path=predictions_path,
             backend_overrides=backend_overrides,
         )
 

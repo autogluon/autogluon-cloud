@@ -17,7 +17,6 @@ from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
     repack_model_with_serving_code,
-    resolve_image_uri,
     script_mode_environment,
     staged_serving_code,
     training_script_hyperparameters,
@@ -26,7 +25,7 @@ from ..utils.ag_sagemaker import (
 from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
 from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, VALID_ACCEPT
 from ..utils.deserializers import PandasDeserializer
-from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version
+from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version, retrieve_image_uri
 from ..utils.misc import MostRecentInsertedOrderedDict, sagemaker_timestamp, unique_name_from_base
 from ..utils.sagemaker_api import (
     BATCH_PREDICT_OVERRIDE_KEYS,
@@ -334,9 +333,8 @@ class SagemakerBackend(Backend):
             "TrainingJobName": job_name,
             "RoleArn": self.role_arn,
             "AlgorithmSpecification": {
-                "TrainingImage": resolve_image_uri(
-                    custom_image_uri, framework_version, py_version, self._region, "training", instance_type
-                ),
+                "TrainingImage": custom_image_uri
+                or retrieve_image_uri(framework_version, self._region, "training", instance_type, py_version),
                 "TrainingInputMode": "File",
             },
             "HyperParameters": training_script_hyperparameters(
@@ -558,9 +556,8 @@ class SagemakerBackend(Backend):
         model_name = self._create_model(
             model_name=unique_name_from_base(endpoint_name),
             model_data=model_data,
-            image_uri=resolve_image_uri(
-                custom_image_uri, framework_version, py_version, self._region, "inference", instance_type
-            ),
+            image_uri=custom_image_uri
+            or retrieve_image_uri(framework_version, self._region, "inference", instance_type, py_version),
             entry_point=entry_point,
             environment=container_environment,
             tags=tags,
@@ -784,9 +781,7 @@ class SagemakerBackend(Backend):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        download: bool = True,
-        persist: bool = True,
-        save_path: Optional[str] = None,
+        predictions_path: Optional[str] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
@@ -822,17 +817,9 @@ class SagemakerBackend(Backend):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        download: bool, default = True
-            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-            Will be ignored if `wait` is `False`.
-        persist: bool, default = True
-            Whether to persist the downloaded batch transform results on the disk.
-            Will be ignored if `download` is `False`
-        save_path: str, default = None,
-            Path to save the downloaded result.
-            Will be ignored if `download` is `False`.
-            If None, CloudPredictor will create one.
-            If `persist` is `False`, file would first be downloaded to this path and then removed.
+        predictions_path: Optional[str], default = None
+            S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
+            Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
@@ -840,8 +827,8 @@ class SagemakerBackend(Backend):
         Returns
         -------
         Optional Pandas.Series
-            Predict results in Series if `download` is True
-            None if `download` is False
+            Predict results in Series if `wait` is True
+            None if `wait` is False
         """
         pred, _ = self._predict(
             test_data=test_data,
@@ -853,9 +840,7 @@ class SagemakerBackend(Backend):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            download=download,
-            persist=persist,
-            save_path=save_path,
+            predictions_path=predictions_path,
             backend_overrides=backend_overrides,
             original_features=self.original_features,
         )
@@ -874,9 +859,7 @@ class SagemakerBackend(Backend):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        download: bool = True,
-        persist: bool = True,
-        save_path: Optional[str] = None,
+        predictions_path: Optional[str] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
@@ -915,17 +898,9 @@ class SagemakerBackend(Backend):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        download: bool, default = True
-            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-            Will be ignored if `wait` is `False`.
-        persist: bool, default = True
-            Whether to persist the downloaded batch transform results on the disk.
-            Will be ignored if `download` is `False`
-        save_path: str, default = None,
-            Path to save the downloaded result.
-            Will be ignored if `download` is `False`.
-            If None, CloudPredictor will create one.
-            If `persist` is `False`, file would first be downloaded to this path and then removed.
+        predictions_path: Optional[str], default = None
+            S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
+            Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
@@ -934,8 +909,8 @@ class SagemakerBackend(Backend):
         Returns
         -------
         Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
-            If `download` is False, will return None or (None, None) if `include_predict` is True
-            If `download` is True and `include_predict` is True,
+            If `wait` is False, will return None or (None, None) if `include_predict` is True
+            If `wait` is True and `include_predict` is True,
             will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
             or a Pandas.Series that's identical to prediction when it's a regression problem.
         """
@@ -949,9 +924,7 @@ class SagemakerBackend(Backend):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            download=download,
-            persist=persist,
-            save_path=save_path,
+            predictions_path=predictions_path,
             backend_overrides=backend_overrides,
             original_features=self.original_features,
         )
@@ -1219,9 +1192,7 @@ class SagemakerBackend(Backend):
         instance_count=1,
         custom_image_uri=None,
         wait=True,
-        download=True,
-        persist=True,
-        save_path=None,
+        predictions_path=None,
         backend_overrides=None,
         split_pred_proba=True,
         original_features=None,
@@ -1233,6 +1204,8 @@ class SagemakerBackend(Backend):
     ):
         _reject_local_mode(instance_type)
         overrides = check_override_keys(backend_overrides, BATCH_PREDICT_OVERRIDE_KEYS)
+        if predictions_path is not None and not is_s3_url(predictions_path):
+            raise ValueError(f"`predictions_path` must be an S3 URL, got {predictions_path!r}.")
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
             assert predictor_path, "No cloud trained model found."
@@ -1302,31 +1275,12 @@ class SagemakerBackend(Backend):
             repacked_model_uri=f"{output_path}/model/model.tar.gz",
         )
 
-        if not wait:
-            if download:
-                logger.warning(
-                    f"`download={download}` will be ignored because `wait={wait}`. Setting `download` to `False`."
-                )
-                download = False
-        if not download:
-            if persist:
-                logger.warning(
-                    f"`persist={persist}` will be ignored because `download={download}`. Setting `persist` to `False`."
-                )
-                persist = False
-            if save_path:
-                logger.warning(
-                    f"`save_path={save_path}` will be ignored because `download={download}`. Setting `save_path` to `None`."
-                )
-                save_path = None
-
         tags = self._resolve_tags()
         model_name = self._create_model(
             model_name=job_name,
             model_data=model_data,
-            image_uri=resolve_image_uri(
-                custom_image_uri, framework_version, py_version, self._region, "inference", instance_type
-            ),
+            image_uri=custom_image_uri
+            or retrieve_image_uri(framework_version, self._region, "inference", instance_type, py_version),
             entry_point=entry_point,
             environment={},
             tags=tags,
@@ -1339,7 +1293,10 @@ class SagemakerBackend(Backend):
         }
         if split_type is not None:
             transform_input["SplitType"] = split_type
-        transform_output: Dict[str, Any] = {"S3OutputPath": output_path + "/results", "Accept": accept}
+        transform_output: Dict[str, Any] = {
+            "S3OutputPath": (predictions_path or output_path + "/results").rstrip("/"),
+            "Accept": accept,
+        }
         if assemble_with is not None:
             transform_output["AssembleWith"] = assemble_with
         transform_resources: Dict[str, Any] = {"InstanceType": instance_type, "InstanceCount": instance_count}
@@ -1366,22 +1323,23 @@ class SagemakerBackend(Backend):
         self._batch_transform_jobs[job_name] = batch_transform_job
 
         pred, pred_proba = None, None
-        if download:
-            results_path = self.download_predict_results(save_path=save_path)
-            accept = request["TransformOutput"].get("Accept")
-            if accept == "application/x-parquet":
-                results = pd.read_parquet(results_path)
-            elif accept == "text/csv":
-                results = pd.read_csv(results_path)
-            elif accept == "application/json":
-                results = pd.read_json(results_path)
-            else:
-                raise ValueError(f"Unsupported accept type for batch inference results: {accept!r}")
+        if wait:
+            bucket, key = s3_path_to_bucket_prefix(batch_transform_job.get_output_path())
+            with tempfile.TemporaryDirectory(prefix="ag_batch_results_") as tmpdir:
+                results_path = os.path.join(tmpdir, os.path.basename(key))
+                self.sagemaker_session.s3_client.download_file(bucket, key, results_path)
+                accept = request["TransformOutput"].get("Accept")
+                if accept == "application/x-parquet":
+                    results = pd.read_parquet(results_path)
+                elif accept == "text/csv":
+                    results = pd.read_csv(results_path)
+                elif accept == "application/json":
+                    results = pd.read_json(results_path)
+                else:
+                    raise ValueError(f"Unsupported accept type for batch inference results: {accept!r}")
             pred = results
             if split_pred_proba:
                 pred, pred_proba = split_pred_and_pred_proba(results)
-            if not persist:
-                os.remove(results_path)
 
         return pred, pred_proba
 

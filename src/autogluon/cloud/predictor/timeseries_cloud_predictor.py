@@ -220,9 +220,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        download: bool = True,
-        persist: bool = True,
-        save_path: Optional[str] = None,
+        predictions_path: Optional[str] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.DataFrame]:
         """
@@ -262,7 +260,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        download, persist, save_path, backend_overrides:
+        predictions_path, backend_overrides:
             Same as in :meth:`TabularCloudPredictor.predict`.
         """
         return self.backend.predict(
@@ -276,9 +274,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            download=download,
-            persist=persist,
-            save_path=save_path,
+            predictions_path=predictions_path,
             backend_overrides=backend_overrides,
         )
 
