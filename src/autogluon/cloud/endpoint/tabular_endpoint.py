@@ -3,12 +3,12 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import boto3
 import pandas as pd
-from sagemaker.predictor import Predictor
 
 from autogluon.common.loaders import load_pd
 
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.deserializers import PandasDeserializer
+from ..utils.sagemaker_api import delete_endpoint, invoke_endpoint
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 from ..utils.utils import split_pred_and_pred_proba
 
@@ -29,16 +29,12 @@ class TabularEndpoint:
         session
             ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
         """
-        self._predictor = Predictor(
-            endpoint_name=endpoint_name,
-            sagemaker_session=setup_sagemaker_session(boto_session=session),
-            serializer=AutoGluonSerializer(),
-            deserializer=PandasDeserializer(),
-        )
+        self._endpoint_name = endpoint_name
+        self._session = setup_sagemaker_session(boto_session=session)
 
     @property
     def endpoint_name(self) -> str:
-        return self._predictor.endpoint_name
+        return self._endpoint_name
 
     @staticmethod
     def _load_data(data: DataInput) -> pd.DataFrame:
@@ -68,7 +64,14 @@ class TabularEndpoint:
             train_data=train_data,
             inference_kwargs={"label": label, **(inference_kwargs or {})},
         )
-        raw = self._predictor.predict(payload, initial_args={"Accept": "application/x-parquet"})
+        raw = invoke_endpoint(
+            self._endpoint_name,
+            self._session,
+            payload,
+            serializer=AutoGluonSerializer(),
+            deserializer=PandasDeserializer(),
+            accept="application/x-parquet",
+        )
         pred, pred_proba = split_pred_and_pred_proba(raw)
         if pred_proba is None:
             pred_proba = pred
@@ -124,5 +127,4 @@ class TabularEndpoint:
 
     def delete_endpoint(self) -> None:
         """Delete the endpoint and its backing model + endpoint config."""
-        self._predictor.delete_model()
-        self._predictor.delete_endpoint(delete_endpoint_config=True)
+        delete_endpoint(self._endpoint_name, self._session)

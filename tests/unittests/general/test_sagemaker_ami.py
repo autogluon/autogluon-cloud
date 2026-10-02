@@ -1,9 +1,9 @@
 from unittest import mock
 
+import pandas as pd
 import pytest
 
-from autogluon.cloud.job.sagemaker_job import SageMakerBatchTransformationJob
-from autogluon.cloud.utils.ag_sagemaker import _TransformAmiVersionSession
+from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
 from autogluon.cloud.utils.dlc_utils import infer_sagemaker_ami_version
 
 GPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cu133-amzn2023"
@@ -45,52 +45,75 @@ def test_infer_realtime_ami_ignores_unsupported_or_already_compatible_instance_f
     assert infer_sagemaker_ami_version(GPU_IMAGE_URI, instance_type, "inference") is None
 
 
-def test_transform_ami_session_injects_ami_without_mutating_input():
-    session = mock.MagicMock()
-    wrapper = _TransformAmiVersionSession(session, "al2-ami-sagemaker-batch-gpu-535")
-    resource_config = {"InstanceCount": 1, "InstanceType": "ml.g4dn.xlarge"}
+SB = "autogluon.cloud.backend.sagemaker_backend"
 
-    wrapper.transform(resource_config=resource_config, job_name="job")
 
-    assert "TransformAmiVersion" not in resource_config
-    assert session.transform.call_args.kwargs["resource_config"]["TransformAmiVersion"] == (
-        "al2-ami-sagemaker-batch-gpu-535"
-    )
+@pytest.fixture
+def transform_request(assert_valid_request):
+    """Run ``TabularSagemakerBackend._predict(...)`` with AWS calls mocked and return the ``CreateTransformJob`` request."""
+
+    def run(**predict_kwargs):
+        with (
+            mock.patch(f"{SB}.setup_sagemaker_session", return_value=mock.MagicMock(boto_region_name="us-east-1")),
+            mock.patch(f"{SB}.resolve_execution_role", return_value="arn:aws:iam::000000000000:role/test"),
+            mock.patch(f"{SB}.SageMakerBatchTransformationJob") as job_cls,
+            mock.patch.object(TabularSagemakerBackend, "_upload_predictor", side_effect=lambda path, _: path),
+            mock.patch.object(
+                TabularSagemakerBackend, "_upload_batch_predict_data", return_value="s3://input/data.csv"
+            ),
+            mock.patch.object(TabularSagemakerBackend, "_prepare_model_data", return_value="s3://bucket/model.tar.gz"),
+            mock.patch.object(TabularSagemakerBackend, "_create_model", return_value="job"),
+        ):
+            backend = TabularSagemakerBackend(
+                local_output_path="/tmp/test",
+                cloud_output_path="s3://bucket/run",
+                predictor_type="tabular",
+            )
+            backend._fit_job = mock.MagicMock()
+            backend._predict(
+                test_data=pd.DataFrame({"x": [1]}),
+                predictor_path="s3://bucket/model.tar.gz",
+                job_name="job",
+                wait=False,
+                **predict_kwargs,
+            )
+        request = job_cls.return_value.run.call_args.kwargs["transform_job_request"]
+        assert_valid_request("CreateTransformJob", request)
+        return request
+
+    return run
 
 
 @pytest.mark.parametrize(
-    ("transformer_kwargs", "expected"),
+    ("backend_overrides", "expected"),
     [
-        ({}, "al2-ami-sagemaker-batch-gpu-535"),
-        ({"transform_ami_version": "custom-ami"}, "custom-ami"),
+        (None, "al2-ami-sagemaker-batch-gpu-535"),
+        ({"create_transform_job": {"TransformResources": {"TransformAmiVersion": "custom-ami"}}}, "custom-ami"),
     ],
 )
-def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(transformer_kwargs, expected):
-    sj = "autogluon.cloud.job.sagemaker_job"
-    transformer = mock.MagicMock(output_path="s3://output")
-    transformer.latest_transform_job.name = "job"
-    with mock.patch(f"{sj}.AutoGluonNonRepackInferenceModel") as model_cls:
-        model_cls.return_value.transformer.return_value = transformer
-        job = SageMakerBatchTransformationJob(session=mock.MagicMock())
-        job.run(
-            model_data="s3://bucket/model.tar.gz",
-            role="role",
-            region="us-east-1",
-            framework_version=None,
-            py_version=None,
-            instance_count=1,
-            instance_type="ml.g4dn.xlarge",
-            entry_point="serve.py",
-            predictor_cls=mock.MagicMock(),
-            output_path="s3://output",
-            test_input="s3://input/data.csv",
-            job_name="job",
-            split_type="Line",
-            content_type="text/csv",
-            custom_image_uri=GPU_IMAGE_URI,
-            wait=False,
-            model_kwargs={},
-            transformer_kwargs=transformer_kwargs,
-        )
+def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(
+    transform_request, backend_overrides, expected
+):
+    request = transform_request(
+        instance_type="ml.g4dn.xlarge",
+        custom_image_uri=GPU_IMAGE_URI,
+        backend_overrides=backend_overrides,
+    )
+    assert request["TransformResources"]["TransformAmiVersion"] == expected
+    assert request["TransformResources"]["InstanceType"] == "ml.g4dn.xlarge"
 
-    assert model_cls.return_value.transformer.call_args.kwargs["transform_ami_version"] == expected
+
+def test_batch_transform_writes_results_to_predictions_path(transform_request):
+    request = transform_request(predictions_path="s3://my-bucket/preds/")
+    assert request["TransformOutput"]["S3OutputPath"] == "s3://my-bucket/preds"
+
+
+def test_batch_transform_results_default_to_cloud_output_path(transform_request):
+    output_path = transform_request()["TransformOutput"]["S3OutputPath"]
+    assert output_path.startswith("s3://bucket/run/batch_transform/")
+    assert output_path.endswith("/results")
+
+
+def test_batch_transform_rejects_non_s3_predictions_path(transform_request):
+    with pytest.raises(ValueError, match="S3 URL"):
+        transform_request(predictions_path="/tmp/preds")

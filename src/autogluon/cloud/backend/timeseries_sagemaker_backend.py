@@ -31,8 +31,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        autogluon_sagemaker_estimator_kwargs: Optional[Dict] = None,
-        fit_kwargs: Optional[Dict] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
         extra_tags: Optional[List[Dict[str, str]]] = None,
     ) -> None:
@@ -63,8 +62,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            autogluon_sagemaker_estimator_kwargs=autogluon_sagemaker_estimator_kwargs,
-            fit_kwargs=fit_kwargs,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
             extra_tags=extra_tags,
         )
@@ -138,8 +136,6 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
         If you want to minimize latency, use `predict_real_time()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
-        This method would first create a AutoGluonSagemakerInferenceModel with the trained predictor,
-        then create a transformer with it, and call transform in the end.
 
         Parameters
         ----------
@@ -176,20 +172,15 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         payload_path = os.path.join(payload_dir, "predict_payload.json")
         with open(payload_path, "wb") as f:
             f.write(AutoGluonSerializer().serialize(wrapper))
-        transform_kwargs = kwargs.pop("transform_kwargs", None) or {}
-        transform_kwargs["content_type"] = "application/x-autogluon"
-        transform_kwargs["split_type"] = "None"
-        # Parquet output (JSON can exceed TorchServe's 6.5MB cap); assemble_with=None preserves
-        # parquet footer (default "Line" appends a newline that corrupts it).
-        transformer_kwargs = kwargs.pop("transformer_kwargs", None) or {}
-        transformer_kwargs.setdefault("accept", "application/x-parquet")
-        transformer_kwargs.setdefault("assemble_with", None)
-
+        # Parquet output (JSON can exceed TorchServe's 6.5MB cap); assemble_with="None" preserves
+        # parquet footer ("Line" appends a newline that corrupts it).
         pred, _ = super()._predict(
             test_data=payload_path,
             split_pred_proba=False,
-            transform_kwargs=transform_kwargs,
-            transformer_kwargs=transformer_kwargs,
+            content_type="application/x-autogluon",
+            split_type="None",
+            accept="application/x-parquet",
+            assemble_with="None",
             **kwargs,
         )
         return pred

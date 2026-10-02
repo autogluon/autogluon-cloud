@@ -1,13 +1,16 @@
 import logging
-from typing import Optional
+import os
+import re
+from typing import Any, Dict, List, Optional
 
 import boto3
-import sagemaker
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from autogluon.common.utils.s3_utils import is_s3_url
 
 from ..config import load_config
+from .misc import sagemaker_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +31,107 @@ def _resolve_sagemaker_region() -> Optional[str]:
     return entry.region
 
 
-def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
+class AwsSession:
+    """A ``boto3.Session`` together with the clients AutoGluon-Cloud uses, all sharing its credentials and region."""
+
+    def __init__(self, boto_session: boto3.Session, sagemaker_client: Any = None) -> None:
+        self.boto_session = boto_session
+        self.sagemaker_client = sagemaker_client or boto_session.client("sagemaker")
+        # Realtime inference requests can take up to 60s server-side, so allow some headroom over botocore's default.
+        self.sagemaker_runtime_client = boto_session.client("sagemaker-runtime", config=Config(read_timeout=80))
+        self.s3_client = boto_session.client("s3")
+
+    @property
+    def boto_region_name(self) -> Optional[str]:
+        return self.boto_session.region_name
+
+    def upload_data(self, path: str, bucket: str, key_prefix: str, extra_args: Optional[Dict[str, Any]] = None) -> str:
+        """Upload a local file or directory under ``s3://bucket/key_prefix``.
+
+        A file is uploaded to ``{key_prefix}/{filename}`` and its S3 URI is returned. A directory is uploaded
+        recursively, preserving its structure below ``key_prefix``, and ``s3://bucket/key_prefix`` is returned.
+        """
+        key_prefix = key_prefix.strip("/")
+        if os.path.isdir(path):
+            for dirpath, _, filenames in os.walk(path):
+                for name in filenames:
+                    local_path = os.path.join(dirpath, name)
+                    key = f"{key_prefix}/{os.path.relpath(local_path, path)}".replace(os.sep, "/")
+                    self.s3_client.upload_file(local_path, bucket, key, ExtraArgs=extra_args)
+            return f"s3://{bucket}/{key_prefix}"
+        key = f"{key_prefix}/{os.path.basename(path)}"
+        self.s3_client.upload_file(path, bucket, key, ExtraArgs=extra_args)
+        return f"s3://{bucket}/{key}"
+
+    def download_data(self, path: str, bucket: str, key_prefix: str) -> List[str]:
+        """Download every object under ``s3://bucket/key_prefix`` into the local directory ``path``.
+
+        Objects keep their key relative to ``key_prefix``; if ``key_prefix`` is a single object, it is saved under
+        its file name. Returns the local paths of the downloaded files.
+        """
+        root = os.path.realpath(path)
+        folder_prefix = key_prefix.rstrip("/") + "/"
+        downloaded = []
+        for page in self.s3_client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key == key_prefix:
+                    relative = os.path.basename(key)
+                elif key.startswith(folder_prefix) and not key.endswith("/"):
+                    relative = key[len(folder_prefix) :]
+                else:
+                    continue  # folder placeholder, or a sibling that merely shares the string prefix
+                destination = os.path.realpath(os.path.join(root, relative))
+                if not destination.startswith(root + os.sep):
+                    raise ValueError(f"S3 key {key!r} would be downloaded outside of {path!r}.")
+                os.makedirs(os.path.dirname(destination), exist_ok=True)
+                self.s3_client.download_file(bucket, key, destination)
+                downloaded.append(destination)
+        return downloaded
+
+
+_ASSUMED_ROLE_ARN = re.compile(r"^arn:([^:]+):sts::(\d+):assumed-role/([^/]+)/.+$")
+
+
+def get_execution_role(session: Optional[AwsSession] = None) -> str:
+    """Return the IAM role whose credentials ``session`` (default: a new session) uses, e.g. the execution role
+    inside SageMaker.
+
+    Raises ``ValueError`` if the caller is not an assumed role (e.g. an IAM user), since only roles can be passed to
+    SageMaker as execution roles.
+    """
+    session = session or setup_sagemaker_session()
+    caller_arn = session.boto_session.client("sts").get_caller_identity()["Arn"]
+    match = _ASSUMED_ROLE_ARN.match(caller_arn)
+    if match is None:
+        raise ValueError(
+            f"Cannot infer a SageMaker execution role from the current AWS identity {caller_arn}. Pass "
+            "`role=<arn>`, or run `autogluon.cloud.bootstrap()` / `register()` once to "
+            "persist a role."
+        )
+    partition, account, role_name = match.groups()
+    try:
+        # The STS ARN drops the role path (e.g. `service-role/`), which only IAM knows.
+        return session.boto_session.client("iam").get_role(RoleName=role_name)["Role"]["Arn"]
+    except ClientError:
+        # Roles created by the SageMaker console live under `service-role/` and often lack `iam:GetRole`.
+        path = "service-role/" if role_name.startswith("AmazonSageMaker-ExecutionRole") else ""
+        role_arn = f"arn:{partition}:iam::{account}:role/{path}{role_name}"
+        logger.warning(
+            f"Could not look up role {role_name!r} in IAM, using {role_arn}. Pass `role=<arn>` if this is wrong."
+        )
+        return role_arn
+
+
+def resolve_execution_role(role: Optional[str], backend_name: str, *, session: Optional[AwsSession] = None) -> str:
     """Resolve the SageMaker execution role ARN.
 
     Resolution order:
 
     1. ``role`` argument if provided.
     2. ``role_arn`` from ``~/.autogluon/cloud.yaml`` under the matching backend slot.
-    3. ``sagemaker.get_execution_role()``.
+    3. The role whose credentials ``session`` uses (e.g. the execution role inside SageMaker), see
+       :func:`get_execution_role`.
     """
     if role:
         return role
@@ -45,7 +141,7 @@ def resolve_execution_role(role: Optional[str], backend_name: str) -> str:
         if entry is not None and entry.role_arn:
             logger.info(f"Using execution role from ~/.autogluon/cloud.yaml: {entry.role_arn}")
             return entry.role_arn
-    return sagemaker.get_execution_role()
+    return get_execution_role(session)
 
 
 def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optional[str]:
@@ -81,7 +177,7 @@ def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optiona
     body = path[len("s3://") :]
     bucket, _, prefix = body.partition("/")
     if not prefix:
-        path = f"s3://{bucket}/ag-{sagemaker.utils.sagemaker_timestamp()}"
+        path = f"s3://{bucket}/ag-{sagemaker_timestamp()}"
         logger.info(f"cloud_output_path set to {path} (timestamped subfolder under bucket).")
     else:
         logger.info(f"cloud_output_path set to {path}.")
@@ -130,9 +226,9 @@ def setup_sagemaker_session(
     read_timeout: int = 60,
     retries: Optional[dict] = None,
     **kwargs,
-):
+) -> AwsSession:
     """
-    Setup a sagemaker session with a given configuration
+    Setup an :class:`AwsSession` with a given configuration
 
     Region resolution (only when ``boto_session`` is not provided): read from
     ``~/.autogluon/cloud.yaml`` if set, otherwise fall back to the boto3 default chain (env vars,
@@ -180,5 +276,4 @@ def setup_sagemaker_session(
             "`autogluon-cloud register --region <region>`), set the `AWS_DEFAULT_REGION` env var, "
             "or configure a default region in `~/.aws/config`."
         )
-    sm_boto = boto_session.client("sagemaker", config=config)
-    return sagemaker.Session(boto_session=boto_session, sagemaker_client=sm_boto)
+    return AwsSession(boto_session=boto_session, sagemaker_client=boto_session.client("sagemaker", config=config))

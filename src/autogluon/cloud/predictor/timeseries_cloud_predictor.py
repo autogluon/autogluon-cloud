@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Union
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
+from ..utils.sagemaker_api import reject_legacy_kwargs
 from .cloud_predictor import CloudPredictor
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         return TimeSeriesPredictor
 
+    @reject_legacy_kwargs
     def fit(
         self,
         train_data: Optional[Union[str, Path, pd.DataFrame]] = None,
@@ -51,8 +53,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_kwargs: Optional[Dict] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
+        **kwargs,
     ) -> TimeSeriesCloudPredictor:
         """
         Fit the predictor in a SageMaker training job.
@@ -105,15 +108,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        backend_kwargs: dict, default = None
-            Any extra arguments needed to pass to the underneath backend.
-            For SageMaker backend, valid keys are:
-                1. autogluon_sagemaker_estimator_kwargs
-                    Any extra arguments needed to initialize AutoGluonSagemakerEstimator
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator for all options
-                2. fit_kwargs
-                    Any extra arguments needed to pass to fit.
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Raw SageMaker request fields under ``"create_training_job"``. See :meth:`TabularCloudPredictor.fit`.
 
         Returns
         -------
@@ -122,9 +118,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         assert not self.backend.is_fit, (
             "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         )
-        if backend_kwargs is None:
-            backend_kwargs = {}
-
+        # `extra_ag_args` is an internal channel for `fit_predict`; it is intentionally not part of the public signature.
+        extra_ag_args = kwargs.pop("extra_ag_args", None)
+        if kwargs:
+            raise TypeError(f"fit() got unexpected keyword arguments: {sorted(kwargs)}")
         predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
         data_channels = {
             "train_data": train_data,
@@ -141,7 +138,6 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         if data_channels["train_data"] is None:
             raise TypeError("fit() missing required argument: 'train_data'")
 
-        backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -155,7 +151,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            **backend_kwargs,
+            backend_overrides=backend_overrides,
+            extra_ag_args=extra_ag_args,
         )
 
         return self
@@ -210,6 +207,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
+    @reject_legacy_kwargs
     def predict(
         self,
         data: Union[str, pd.DataFrame],
@@ -222,7 +220,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_kwargs: Optional[Dict] = None,
+        predictions_path: Optional[str] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Predict using SageMaker batch transform.
@@ -261,34 +260,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        backend_kwargs: dict, default = None
-            Any extra arguments needed to pass to the underneath backend.
-            For SageMaker backend, valid keys are:
-                1. download: bool, default = True
-                    Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-                    Will be ignored if `wait` is `False`.
-                2. persist: bool, default = True
-                    Whether to persist the downloaded batch transform results on the disk.
-                    Will be ignored if `download` is `False`
-                3. save_path: str, default = None,
-                    Path to save the downloaded result.
-                    Will be ignored if `download` is `False`.
-                    If None, CloudPredictor will create one.
-                    If `persist` is `False`, file would first be downloaded to this path and then removed.
-                4. model_kwargs: dict, default = dict()
-                    Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
-                5. transformer_kwargs: dict
-                    Any extra arguments needed to pass to transformer.
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
-                6. transform_kwargs:
-                    Any extra arguments needed to pass to transform.
-                    Please refer to
-                    https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+        predictions_path, backend_overrides:
+            Same as in :meth:`TabularCloudPredictor.predict`.
         """
-        if backend_kwargs is None:
-            backend_kwargs = {}
-        backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
         return self.backend.predict(
             test_data=data,
             static_features=static_features,
@@ -300,7 +274,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            **backend_kwargs,
+            predictions_path=predictions_path,
+            backend_overrides=backend_overrides,
         )
 
     def predict_proba(
@@ -312,6 +287,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
+    @reject_legacy_kwargs
     def fit_predict(
         self,
         train_data: Union[str, Path, pd.DataFrame],
@@ -330,7 +306,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         volume_size: int = 100,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_kwargs: Optional[Dict] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Fit and predict in a single SageMaker training job.
@@ -383,22 +359,17 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        backend_kwargs: Optional[dict], default = None
-            Backend-specific arguments. Same keys as ``fit()``.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Raw SageMaker request fields, same as in :meth:`fit`.
 
         Returns
         -------
         Optional[pd.DataFrame]
             Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
         """
-        if backend_kwargs is None:
-            backend_kwargs = {}
-        else:
-            backend_kwargs = dict(backend_kwargs)
         extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
-        backend_kwargs["extra_ag_args"] = extra_ag_args
 
         self.fit(
             train_data=train_data,
@@ -415,7 +386,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            backend_kwargs=backend_kwargs,
+            backend_overrides=backend_overrides,
+            extra_ag_args=extra_ag_args,
         )
 
         if not wait:

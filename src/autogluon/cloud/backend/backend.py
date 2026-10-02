@@ -7,8 +7,6 @@ from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
-from ..endpoint.endpoint import Endpoint
-
 
 def dumps_ag_args(config: Dict[str, Any]) -> str:
     """Serialize the remote-training config to JSON, raising a user-facing error on failure.
@@ -68,12 +66,7 @@ class Backend(ABC):
         self.predictor_type = predictor_type
         self.resource_prefix = resource_prefix or f"ag-cloud-{predictor_type}"
         self.original_features = None
-        self.endpoint: Optional[Endpoint] = None
-
-    @abstractmethod
-    def parse_backend_fit_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
-        """Parse backend specific kwargs and get them ready to be sent to fit call"""
-        raise NotImplementedError
+        self.endpoint_name: Optional[str] = None
 
     @abstractmethod
     def attach_job(self, job_name: str) -> None:
@@ -140,11 +133,6 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def parse_backend_deploy_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
-        """Parse backend specific kwargs and get them ready to be sent to deploy call"""
-        raise NotImplementedError
-
-    @abstractmethod
     def deploy(self, **kwargs) -> None:
         """Deploy and endpoint"""
         raise NotImplementedError
@@ -155,13 +143,13 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def attach_endpoint(self, endpoint: Endpoint) -> None:
-        """Attach the backend to an existing endpoint"""
+    def attach_endpoint(self, endpoint: str) -> None:
+        """Attach the backend to an existing endpoint by name"""
         raise NotImplementedError
 
     @abstractmethod
-    def detach_endpoint(self) -> Endpoint:
-        """Detach the current endpoint and return it"""
+    def detach_endpoint(self) -> str:
+        """Detach the current endpoint and return its name"""
         raise NotImplementedError
 
     @abstractmethod
@@ -172,11 +160,6 @@ class Backend(ABC):
     @abstractmethod
     def predict_proba_real_time(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """Realtime prediction probability with the endpoint"""
-        raise NotImplementedError
-
-    @abstractmethod
-    def parse_backend_predict_kwargs(self, kwargs: Dict) -> Dict[str, Any]:
-        """Parse backend specific kwargs and get them ready to be sent to predict call"""
         raise NotImplementedError
 
     @abstractmethod

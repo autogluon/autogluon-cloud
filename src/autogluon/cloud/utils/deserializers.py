@@ -2,7 +2,6 @@ import io
 from abc import ABC, abstractmethod
 
 import pandas as pd
-from sagemaker.deserializers import SimpleBaseDeserializer
 
 
 class PandasDeserializeStrategy(ABC):
@@ -68,7 +67,7 @@ class PandasDeserializeStrategyFactory:
         return PandasDeserializeStrategyFactory.__content_type_to_strategy[content_type]()
 
 
-class PandasDeserializer(SimpleBaseDeserializer):
+class PandasDeserializer:
     """Deserialize Parquet, CSV or JSON data from an inference endpoint into a pandas dataframe."""
 
     def __init__(self, accept=("application/x-parquet", "text/csv", "application/json")):
@@ -78,7 +77,7 @@ class PandasDeserializer(SimpleBaseDeserializer):
             accept (union[str, tuple[str]]): The MIME type (or tuple of allowable MIME types) that
                 is expected from the inference endpoint (default: ("application/x-parquet", "text/csv","application/json")).
         """
-        super().__init__(accept=accept)
+        self.accept = (accept,) if isinstance(accept, str) else tuple(accept)
 
     def deserialize(self, stream, content_type):
         """Deserialize CSV or JSON data from an inference endpoint into a pandas dataframe.

@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER
+from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from .cloud_predictor import CloudPredictor
 
@@ -36,6 +37,7 @@ class TabularCloudPredictor(CloudPredictor):
         predictor_cls = TabularPredictor
         return predictor_cls
 
+    @reject_legacy_kwargs
     def fit_predict(
         self,
         train_data: Union[str, Path, pd.DataFrame],
@@ -52,7 +54,7 @@ class TabularCloudPredictor(CloudPredictor):
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         predictions_path: Optional[str] = None,
-        backend_kwargs: Optional[Dict] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
         Fit and predict in a single SageMaker training job.
@@ -95,8 +97,8 @@ class TabularCloudPredictor(CloudPredictor):
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        backend_kwargs: Optional[dict], default = None
-            Backend-specific arguments. Same keys as ``fit()``.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Raw SageMaker request fields, same as in :meth:`fit`.
 
         Returns
         -------
@@ -119,13 +121,14 @@ class TabularCloudPredictor(CloudPredictor):
             custom_image_uri=custom_image_uri,
             wait=wait,
             predictions_path=predictions_path,
-            backend_kwargs=backend_kwargs,
+            backend_overrides=backend_overrides,
         )
         if result is None:  # wait=False
             return None
         pred, _ = result
         return pred
 
+    @reject_legacy_kwargs
     def fit_predict_proba(
         self,
         train_data: Union[str, Path, pd.DataFrame],
@@ -143,7 +146,7 @@ class TabularCloudPredictor(CloudPredictor):
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         predictions_path: Optional[str] = None,
-        backend_kwargs: Optional[Dict] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Fit and predict probabilities in a single SageMaker training job.
@@ -183,8 +186,8 @@ class TabularCloudPredictor(CloudPredictor):
         predictions_path: Optional[str]
             S3 URL where predictions will be written by the training container. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        backend_kwargs: Optional[dict], default = None
-            Backend-specific arguments. Same keys as ``fit()``.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Raw SageMaker request fields, same as in :meth:`fit`.
 
         Returns
         -------
@@ -193,12 +196,9 @@ class TabularCloudPredictor(CloudPredictor):
             ``predict_probability``. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_proba_results()``.
         """
-        backend_kwargs = {} if backend_kwargs is None else dict(backend_kwargs)
-        extra_ag_args = dict(backend_kwargs.get("extra_ag_args") or {})
-        extra_ag_args["predict_after_fit"] = True
+        extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
-        backend_kwargs["extra_ag_args"] = extra_ag_args
 
         self.fit(
             train_data=train_data,
@@ -213,7 +213,8 @@ class TabularCloudPredictor(CloudPredictor):
             volume_size=volume_size,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            backend_kwargs=backend_kwargs,
+            backend_overrides=backend_overrides,
+            extra_ag_args=extra_ag_args,
         )
 
         if not wait:

@@ -36,7 +36,7 @@ def _save_role_in_config(backend_name: str, role_arn: str) -> None:
 def test_explicit_role_wins_over_config_and_env():
     _save_role_in_config("sagemaker", "arn:aws:iam::111111111111:role/from-config")
     explicit = "arn:aws:iam::222222222222:role/explicit"
-    with mock.patch("autogluon.cloud.utils.aws_utils.sagemaker.get_execution_role") as mock_env:
+    with mock.patch("autogluon.cloud.utils.aws_utils.get_execution_role") as mock_env:
         assert resolve_execution_role(explicit, backend_name="sagemaker") == explicit
         mock_env.assert_not_called()
 
@@ -52,7 +52,7 @@ def test_config_role_used_when_no_explicit():
     aws_utils_logger.addHandler(handler)
     aws_utils_logger.setLevel(logging.INFO)
     try:
-        with mock.patch("autogluon.cloud.utils.aws_utils.sagemaker.get_execution_role") as mock_env:
+        with mock.patch("autogluon.cloud.utils.aws_utils.get_execution_role") as mock_env:
             assert resolve_execution_role(None, backend_name="sagemaker") == config_role
             mock_env.assert_not_called()
     finally:
@@ -65,7 +65,7 @@ def test_config_role_used_when_no_explicit():
 def test_falls_back_to_env_when_no_config_or_explicit():
     env_role = "arn:aws:iam::333333333333:role/from-env"
     with mock.patch(
-        "autogluon.cloud.utils.aws_utils.sagemaker.get_execution_role",
+        "autogluon.cloud.utils.aws_utils.get_execution_role",
         return_value=env_role,
     ) as mock_env:
         assert resolve_execution_role(None, backend_name="sagemaker") == env_role
@@ -76,11 +76,18 @@ def test_falls_back_to_env_when_backend_missing_in_config():
     _save_role_in_config("other_backend", "arn:aws:iam::111111111111:role/other")
     env_role = "arn:aws:iam::333333333333:role/from-env"
     with mock.patch(
-        "autogluon.cloud.utils.aws_utils.sagemaker.get_execution_role",
+        "autogluon.cloud.utils.aws_utils.get_execution_role",
         return_value=env_role,
     ) as mock_env:
         assert resolve_execution_role(None, backend_name="sagemaker") == env_role
         mock_env.assert_called_once()
+
+
+def test_role_fallback_uses_the_backend_session():
+    session = mock.sentinel.session
+    with mock.patch("autogluon.cloud.utils.aws_utils.get_execution_role", return_value="role") as get_role:
+        assert resolve_execution_role(None, backend_name="sagemaker", session=session) == "role"
+    get_role.assert_called_once_with(session)
 
 
 def _save_bucket_in_config(backend_name: str, bucket: str) -> None:

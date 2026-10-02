@@ -2,8 +2,10 @@ import os
 from datetime import datetime, timezone
 
 import boto3
+import botocore.session
 import pandas as pd
 import pytest
+from botocore.validate import validate_parameters
 
 from autogluon.cloud.backend import sagemaker_backend
 
@@ -153,3 +155,17 @@ def shared_training_job_name():
 @pytest.fixture
 def test_helper():
     return CloudTestHelper
+
+
+@pytest.fixture(scope="session")
+def assert_valid_request():
+    """Check a generated SageMaker request against botocore's service model, as the boto3 client does before sending.
+
+    Raises ``botocore.exceptions.ParamValidationError`` for unknown, missing or mistyped fields.
+    """
+    service_model = botocore.session.get_session().get_service_model("sagemaker")
+
+    def check(operation: str, request):
+        validate_parameters(request, service_model.operation_model(operation).input_shape)
+
+    return check

@@ -21,8 +21,8 @@ from autogluon.common.utils.utils import setup_outputdir
 from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
-from ..endpoint.endpoint import Endpoint
 from ..utils.aws_utils import resolve_cloud_output_path
+from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import safe_unpack_archive
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class CloudPredictor(ABC):
         role: Optional[str], default = None
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
-            :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
+            :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
         verbosity : int, default = 2
             Verbosity levels range from 0 to 4 and control how much information is printed.
             Higher levels correspond to more detailed print statements (you can set verbosity = 0 to suppress warnings).
@@ -110,9 +110,7 @@ class CloudPredictor(ABC):
         """
         Return the CloudPredictor deployed endpoint name
         """
-        if self.backend.endpoint:
-            return self.backend.endpoint.endpoint_name
-        return None
+        return self.backend.endpoint_name
 
     def info(self) -> Dict[str, Any]:
         """
@@ -161,6 +159,7 @@ class CloudPredictor(ABC):
             )
         return os.path.abspath(path)
 
+    @reject_legacy_kwargs
     def fit(
         self,
         train_data: Optional[Union[str, Path, pd.DataFrame]] = None,
@@ -178,7 +177,7 @@ class CloudPredictor(ABC):
         custom_image_uri: Optional[str] = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
-        backend_kwargs: Optional[Dict] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         **kwargs,
     ) -> CloudPredictor:
         """
@@ -219,15 +218,12 @@ class CloudPredictor(ABC):
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        backend_kwargs: dict, default = None
-            Any extra arguments needed to pass to the underneath backend.
-            For SageMaker backend, valid keys are:
-                1. autogluon_sagemaker_estimator_kwargs
-                    Any extra arguments needed to initialize AutoGluonSagemakerEstimator
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator for all options
-                2. fit_kwargs
-                    Any extra arguments needed to pass to fit.
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/training/estimators.html#sagemaker.estimator.Estimator.fit for all options
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Escape hatch for SageMaker settings without a dedicated argument. Maps ``"create_training_job"`` to raw
+            `CreateTrainingJob <https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateTrainingJob.html>`_
+            request fields in the PascalCase format of the SageMaker API and boto3, which are deep-merged over the
+            request built by AutoGluon-Cloud, e.g. ``{"create_training_job": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones.
         Returns
         -------
         `CloudPredictor` object. Returns self.
@@ -235,11 +231,10 @@ class CloudPredictor(ABC):
         assert not self.backend.is_fit, (
             "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         )
-        if backend_kwargs is None:
-            backend_kwargs = {}
-        # `test_data` is an internal channel for the fit_predict path (see TabularCloudPredictor.fit_predict_proba);
-        # it is intentionally not part of the public `fit()` signature.
+        # `test_data` / `extra_ag_args` are internal channels for the fit_predict path (see
+        # TabularCloudPredictor.fit_predict_proba); they are intentionally not part of the public `fit()` signature.
         test_data = kwargs.pop("test_data", None)
+        extra_ag_args = kwargs.pop("extra_ag_args", None)
         if kwargs:
             raise TypeError(f"fit() got unexpected keyword arguments: {sorted(kwargs)}")
         predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
@@ -258,7 +253,6 @@ class CloudPredictor(ABC):
                 "AutoGluon-Tabular require autogluon.multimodal, which is being deprecated. "
                 "Use `MultiModalCloudPredictor` for image data."
             )
-        backend_kwargs = self.backend.parse_backend_fit_kwargs(backend_kwargs)
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -273,7 +267,8 @@ class CloudPredictor(ABC):
             custom_image_uri=custom_image_uri,
             timeout=timeout,
             wait=wait,
-            **backend_kwargs,
+            backend_overrides=backend_overrides,
+            extra_ag_args=extra_ag_args,
         )
 
         return self
@@ -372,6 +367,7 @@ class CloudPredictor(ABC):
         local_model_path = self.download_trained_predictor(predictor_path=predictor_path, save_path=save_path)
         return predictor_cls.load(local_model_path, **kwargs)
 
+    @reject_legacy_kwargs
     def deploy(
         self,
         predictor_path: Optional[str] = None,
@@ -384,7 +380,7 @@ class CloudPredictor(ABC):
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
-        backend_kwargs: Optional[Dict] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         """
         Deploy a predictor to an inference endpoint.
@@ -423,25 +419,20 @@ class CloudPredictor(ABC):
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero).
         inference_config: Optional[Dict[str, Any]], default = None
-            Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
-            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
-        backend_kwargs: dict, default = None
-            Any extra arguments needed to pass to the underneath backend.
-            For SageMaker backend, valid keys are:
-                1. model_kwargs: dict, default = dict()
-                    Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
-                2. deploy_kwargs
-                    Any extra arguments needed to pass to deploy.
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#sagemaker.model.Model.deploy for all options
+            Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
+            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
+            ``"create_model"``, ``"production_variant"`` (the endpoint config's single production variant),
+            ``"create_endpoint_config"`` and ``"create_endpoint"``, e.g.
+            ``{"production_variant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
+            resources created by AutoGluon-Cloud are cleaned up.
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
         if instance_type is None and inference_mode == "realtime":
             instance_type = "ml.m5.2xlarge"
-        if backend_kwargs is None:
-            backend_kwargs = {}
-        backend_kwargs = self.backend.parse_backend_deploy_kwargs(backend_kwargs)
         self.backend.deploy(
             predictor_path=predictor_path,
             endpoint_name=endpoint_name,
@@ -453,27 +444,28 @@ class CloudPredictor(ABC):
             wait=wait,
             inference_mode=inference_mode,
             inference_config=inference_config,
-            **backend_kwargs,
+            backend_overrides=backend_overrides,
         )
 
-    def attach_endpoint(self, endpoint: Union[str, Endpoint]) -> None:
+    def attach_endpoint(self, endpoint: str) -> None:
         """
         Attach the current CloudPredictor to an existing endpoint.
 
         Parameters
         ----------
-        endpoint: str or  :class:`Endpoint`
-            If str is passed, it should be the name of the endpoint being attached to.
+        endpoint: str
+            Name of the endpoint being attached to.
         """
         self.backend.attach_endpoint(endpoint)
 
-    def detach_endpoint(self) -> Endpoint:
+    def detach_endpoint(self) -> str:
         """
-        Detach the current endpoint and return it.
+        Detach the current endpoint and return its name.
 
         Returns
         -------
-        `Endpoint` object.
+        str
+            Name of the detached endpoint. Pass it to :meth:`attach_endpoint` to attach it again.
         """
         return self.backend.detach_endpoint()
 
@@ -550,6 +542,7 @@ class CloudPredictor(ABC):
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
         )
 
+    @reject_legacy_kwargs
     def predict(
         self,
         test_data: Union[str, pd.DataFrame],
@@ -561,7 +554,8 @@ class CloudPredictor(ABC):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_kwargs: Optional[Dict] = None,
+        predictions_path: Optional[str] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
         Batch inference.
@@ -594,40 +588,23 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        backend_kwargs: dict, default = None
-            Any extra arguments needed to pass to the underneath backend.
-            For SageMaker backend, valid keys are:
-                1. download: bool, default = True
-                    Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-                    Will be ignored if `wait` is `False`.
-                2. persist: bool, default = True
-                    Whether to persist the downloaded batch transform results on the disk.
-                    Will be ignored if `download` is `False`
-                3. save_path: str, default = None,
-                    Path to save the downloaded result.
-                    Will be ignored if `download` is `False`.
-                    If None, CloudPredictor will create one.
-                    If `persist` is `False`, file would first be downloaded to this path and then removed.
-                4. model_kwargs: dict, default = dict()
-                    Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
-                5. transformer_kwargs: dict
-                    Any extra arguments needed to pass to transformer.
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
-                6. transform_kwargs:
-                    Any extra arguments needed to pass to transform.
-                    Please refer to
-                    https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+        predictions_path: Optional[str], default = None
+            S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
+            Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
+            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
+            ``"create_model"`` and ``"create_transform_job"``, e.g.
+            ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
+            resources created by AutoGluon-Cloud are cleaned up.
 
         Returns
         -------
         Optional Pandas.Series
-            Predict results in Series if `download` is True
-            None if `download` is False
+            Predict results in Series if `wait` is True
+            None if `wait` is False
         """
-        if backend_kwargs is None:
-            backend_kwargs = {}
-        backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
         return self.backend.predict(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
@@ -638,9 +615,11 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            **backend_kwargs,
+            predictions_path=predictions_path,
+            backend_overrides=backend_overrides,
         )
 
+    @reject_legacy_kwargs
     def predict_proba(
         self,
         test_data: Union[str, pd.DataFrame],
@@ -653,7 +632,8 @@ class CloudPredictor(ABC):
         instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_kwargs: Optional[Dict] = None,
+        predictions_path: Optional[str] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
         Batch inference
@@ -689,42 +669,25 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        backend_kwargs: dict, default = None
-            Any extra arguments needed to pass to the underneath backend.
-            For SageMaker backend, valid keys are:
-                1. download: bool, default = True
-                    Whether to download the batch transform results to the disk and load it after the batch transform finishes.
-                    Will be ignored if `wait` is `False`.
-                2. persist: bool, default = True
-                    Whether to persist the downloaded batch transform results on the disk.
-                    Will be ignored if `download` is `False`
-                3. save_path: str, default = None,
-                    Path to save the downloaded result.
-                    Will be ignored if `download` is `False`.
-                    If None, CloudPredictor will create one.
-                    If `persist` is `False`, file would first be downloaded to this path and then removed.
-                4. model_kwargs: dict, default = dict()
-                    Any extra arguments needed to initialize Sagemaker Model
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/model.html#model for all options
-                5. transformer_kwargs: dict
-                    Any extra arguments needed to pass to transformer.
-                    Please refer to https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer for all options.
-                6. transform_kwargs:
-                    Any extra arguments needed to pass to transform.
-                    Please refer to
-                    https://sagemaker.readthedocs.io/en/v2/api/inference/transformer.html#sagemaker.transformer.Transformer.transform for all options.
+        predictions_path: Optional[str], default = None
+            S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
+            Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
+            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
+            ``"create_model"`` and ``"create_transform_job"``, e.g.
+            ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
+            resources created by AutoGluon-Cloud are cleaned up.
 
         Returns
         -------
         Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
-            If `download` is False, will return None or (None, None) if `include_predict` is True
-            If `download` is True and `include_predict` is True,
+            If `wait` is False, will return None or (None, None) if `include_predict` is True
+            If `wait` is True and `include_predict` is True,
             will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
             or a Pandas.Series that's identical to prediction when it's a regression problem.
         """
-        if backend_kwargs is None:
-            backend_kwargs = {}
-        backend_kwargs = self.backend.parse_backend_predict_kwargs(backend_kwargs)
         return self.backend.predict_proba(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
@@ -736,7 +699,8 @@ class CloudPredictor(ABC):
             instance_count=instance_count,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            **backend_kwargs,
+            predictions_path=predictions_path,
+            backend_overrides=backend_overrides,
         )
 
     def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:

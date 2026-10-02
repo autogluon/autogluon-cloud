@@ -23,6 +23,7 @@ from ..endpoint.tabular_endpoint import TabularEndpoint
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
+from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from ..version import __version__
 from .registry import get_model_config
@@ -104,7 +105,7 @@ class FoundationModel:
         role
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
-            :func:`autogluon.cloud.register`), and finally to ``sagemaker.get_execution_role()``.
+            :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
         hyperparameters
             Default hyperparameters applied to inference and (when supported) training.
         model_artifact_uri
@@ -218,10 +219,7 @@ class FoundationModel:
             "problem_type": self._config.problem_type,
         }
 
-        model_kwargs = backend_kwargs.pop("model_kwargs", {})
-        model_kwargs["entry_point"] = self._serve_script_path
-
-        # FM deploys never want SDK repack: predictor_path is either None (script-only tarball is built locally) or a
+        # FM deploys never repack: predictor_path is either None (script-only tarball is built locally) or a
         # pre-bundled cache artifact that already contains the serve script.
         self._backend.deploy(
             predictor_path=self.model_artifact_uri,
@@ -230,7 +228,7 @@ class FoundationModel:
             instance_type=instance_type,
             custom_image_uri=custom_image_uri,
             wait=wait,
-            model_kwargs=model_kwargs,
+            entry_point=self._serve_script_path,
             fm_serve_config=fm_serve_config,
             inference_mode=inference_mode,
             inference_config=inference_config,
@@ -238,7 +236,7 @@ class FoundationModel:
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
             **backend_kwargs,
         )
-        assert self._backend.endpoint is not None
+        assert self._backend.endpoint_name is not None
 
     def fit(
         self,
@@ -410,6 +408,7 @@ class TimeSeriesFoundationModel(FoundationModel):
     def _serve_script_path(self) -> str:
         return ScriptManager.SAGEMAKER_TIMESERIES_FM_SERVE_SCRIPT_PATH
 
+    @reject_legacy_kwargs
     def deploy(
         self,
         instance_type: Optional[str] = None,
@@ -444,11 +443,10 @@ class TimeSeriesFoundationModel(FoundationModel):
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero).
         inference_config
-            Mode-specific overrides forwarded to ``sagemaker.serverless.ServerlessInferenceConfig``
-            (e.g. ``memory_size_in_mb``, ``max_concurrency``).
+            Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
         **backend_kwargs
-            Backend-specific arguments (e.g., initial_instance_count, volume_size,
-            model_kwargs, deploy_kwargs).
+            Backend-specific arguments (e.g., ``initial_instance_count``, ``volume_size``, ``backend_overrides``; see
+            :meth:`autogluon.cloud.TabularCloudPredictor.deploy`).
         """
         self._deploy_backend(
             instance_type=instance_type,
@@ -462,7 +460,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             **backend_kwargs,
         )
         return TimeSeriesEndpoint(
-            endpoint_name=self._backend.endpoint.endpoint_name,
+            endpoint_name=self._backend.endpoint_name,
             session=self._backend.sagemaker_session.boto_session,
         )
 
@@ -489,6 +487,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             args["quantile_levels"] = quantile_levels
         return args
 
+    @reject_legacy_kwargs
     def predict(
         self,
         data: Union[str, Path, pd.DataFrame],
@@ -552,8 +551,8 @@ class TimeSeriesFoundationModel(FoundationModel):
             :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
             retrieve the DataFrame, or ``.status()`` to check progress.
         **backend_kwargs
-            Additional backend-specific arguments (e.g., job_name, volume_size,
-            autogluon_sagemaker_estimator_kwargs).
+            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
+            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
 
         Returns
         -------
@@ -623,6 +622,7 @@ class TabularFoundationModel(FoundationModel):
     def _serve_script_path(self) -> str:
         return ScriptManager.SAGEMAKER_TABULAR_FM_SERVE_SCRIPT_PATH
 
+    @reject_legacy_kwargs
     def deploy(
         self,
         instance_type: Optional[str] = None,
@@ -664,7 +664,7 @@ class TabularFoundationModel(FoundationModel):
             **backend_kwargs,
         )
         return TabularEndpoint(
-            endpoint_name=self._backend.endpoint.endpoint_name,
+            endpoint_name=self._backend.endpoint_name,
             session=self._backend.sagemaker_session.boto_session,
         )
 
@@ -694,6 +694,7 @@ class TabularFoundationModel(FoundationModel):
         else:
             return pred_proba
 
+    @reject_legacy_kwargs
     def predict(
         self,
         test_data: Union[str, Path, pd.DataFrame],
@@ -738,7 +739,8 @@ class TabularFoundationModel(FoundationModel):
             If True, block and return the predictions. If False, return a :class:`JobPredictionFuture`
             immediately — call ``.result()`` on it later to retrieve the predictions.
         **backend_kwargs
-            Additional backend-specific arguments (e.g., job_name, volume_size).
+            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
+            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
 
         Returns
         -------
@@ -766,6 +768,7 @@ class TabularFoundationModel(FoundationModel):
         pred, _ = result
         return pred
 
+    @reject_legacy_kwargs
     def predict_proba(
         self,
         test_data: Union[str, Path, pd.DataFrame],
@@ -812,7 +815,8 @@ class TabularFoundationModel(FoundationModel):
         wait
             If True, block and return the result. If False, return a :class:`JobPredictionFuture` immediately.
         **backend_kwargs
-            Additional backend-specific arguments (e.g., job_name, volume_size).
+            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
+            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
 
         Returns
         -------

@@ -34,7 +34,7 @@ def cloud_predictor():
 
 def test_when_fit_predict_then_launches_predict_job_and_returns_prediction_series(cloud_predictor):
     pred = cloud_predictor.fit_predict(**DEFAULT_ARGS)
-    extra_ag_args = cloud_predictor.fit.call_args.kwargs["backend_kwargs"]["extra_ag_args"]
+    extra_ag_args = cloud_predictor.fit.call_args.kwargs["extra_ag_args"]
 
     assert extra_ag_args["predict_after_fit"] is True
     assert "predictions_path" not in extra_ag_args  # not passed -> backend fills in a default
@@ -44,7 +44,7 @@ def test_when_fit_predict_then_launches_predict_job_and_returns_prediction_serie
 
 def test_when_predictions_path_given_then_forwarded_to_backend(cloud_predictor):
     cloud_predictor.fit_predict(**DEFAULT_ARGS, predictions_path="s3://bucket/key/predictions.csv")
-    extra_ag_args = cloud_predictor.fit.call_args.kwargs["backend_kwargs"]["extra_ag_args"]
+    extra_ag_args = cloud_predictor.fit.call_args.kwargs["extra_ag_args"]
     assert extra_ag_args["predictions_path"] == "s3://bucket/key/predictions.csv"
 
 
