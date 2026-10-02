@@ -96,11 +96,13 @@ def retrieve_latest_framework_version(framework_type="training"):
     return versions[-1]
 
 
-def retrieve_image_uri(framework_version, region, image_scope, instance_type, py_version=None):
+def retrieve_image_uri(framework_version, region, image_scope, instance_type, py_version=None, custom_image_uri=None):
     """Construct the full ECR image URI for a given AG version/region/scope.
 
-    Drop-in replacement for sagemaker.image_uris.retrieve("autogluon", ...).
+    Drop-in replacement for sagemaker.image_uris.retrieve("autogluon", ...). Returns ``custom_image_uri`` as-is if set.
     """
+    if custom_image_uri:
+        return custom_image_uri
     config = _load_config()
     version_info = config[image_scope]["versions"][framework_version]
     registry = version_info["registries"][region]

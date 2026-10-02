@@ -333,8 +333,9 @@ class SagemakerBackend(Backend):
             "TrainingJobName": job_name,
             "RoleArn": self.role_arn,
             "AlgorithmSpecification": {
-                "TrainingImage": custom_image_uri
-                or retrieve_image_uri(framework_version, self._region, "training", instance_type, py_version),
+                "TrainingImage": retrieve_image_uri(
+                    framework_version, self._region, "training", instance_type, py_version, custom_image_uri
+                ),
                 "TrainingInputMode": "File",
             },
             "HyperParameters": training_script_hyperparameters(
@@ -556,8 +557,9 @@ class SagemakerBackend(Backend):
         model_name = self._create_model(
             model_name=unique_name_from_base(endpoint_name),
             model_data=model_data,
-            image_uri=custom_image_uri
-            or retrieve_image_uri(framework_version, self._region, "inference", instance_type, py_version),
+            image_uri=retrieve_image_uri(
+                framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
+            ),
             entry_point=entry_point,
             environment=container_environment,
             tags=tags,
@@ -1279,8 +1281,9 @@ class SagemakerBackend(Backend):
         model_name = self._create_model(
             model_name=job_name,
             model_data=model_data,
-            image_uri=custom_image_uri
-            or retrieve_image_uri(framework_version, self._region, "inference", instance_type, py_version),
+            image_uri=retrieve_image_uri(
+                framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
+            ),
             entry_point=entry_point,
             environment={},
             tags=tags,
