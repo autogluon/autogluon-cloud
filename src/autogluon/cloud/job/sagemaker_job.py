@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Union
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import MODEL_ARTIFACT_NAME
 from ..utils.job_logs import TRAINING_JOB_LOG_GROUP, TRANSFORM_JOB_LOG_GROUP, wait_for_job
+from ..utils.sagemaker_api import delete_quietly
 from .remote_job import RemoteJob
 
 logger = logging.getLogger(__name__)
@@ -264,7 +265,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
                 self._wait_until_completed()
             logger.log(20, "Transform done")
         except Exception as e:
-            self._delete_model(model_name)
+            delete_quietly(self.session.sagemaker_client.delete_model, ModelName=model_name)
             raise e
 
         input_uri = transform_job_request["TransformInput"]["DataSource"]["S3DataSource"]["S3Uri"]

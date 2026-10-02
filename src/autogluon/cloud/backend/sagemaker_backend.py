@@ -35,6 +35,7 @@ from ..utils.sagemaker_api import (
     check_override_keys,
     deep_merge,
     delete_endpoint,
+    delete_quietly,
     invoke_endpoint,
 )
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
@@ -487,6 +488,8 @@ class SagemakerBackend(Backend):
         assert self.endpoint_name is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
+        if inference_mode not in ("realtime", "serverless"):
+            raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
         overrides = check_override_keys(backend_overrides, DEPLOY_OVERRIDE_KEYS)
         serverless_config = None
         if inference_mode == "serverless":
@@ -583,10 +586,8 @@ class SagemakerBackend(Backend):
             )
             if inference_ami_version is not None:
                 variant["InferenceAmiVersion"] = inference_ami_version
-        elif inference_mode == "serverless":
-            variant["ServerlessConfig"] = serverless_config
         else:
-            raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
+            variant["ServerlessConfig"] = serverless_config
         variant = deep_merge(variant, overrides.get("production_variant", {}))
 
         endpoint_config_request: Dict[str, Any] = {
@@ -611,10 +612,12 @@ class SagemakerBackend(Backend):
             try:
                 client.create_endpoint(**endpoint_request)
             except Exception:
-                client.delete_endpoint_config(EndpointConfigName=endpoint_config_request["EndpointConfigName"])
+                delete_quietly(
+                    client.delete_endpoint_config, EndpointConfigName=endpoint_config_request["EndpointConfigName"]
+                )
                 raise
         except Exception:
-            client.delete_model(ModelName=model_name)
+            delete_quietly(client.delete_model, ModelName=model_name)
             raise
         self.endpoint_name = endpoint_request["EndpointName"]
         if wait:

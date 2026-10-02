@@ -3,7 +3,7 @@
 import copy
 import functools
 import logging
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from .aws_utils import AwsSession
 
@@ -14,6 +14,14 @@ logger = logging.getLogger(__name__)
 FIT_OVERRIDE_KEYS = ("create_training_job",)
 DEPLOY_OVERRIDE_KEYS = ("create_model", "production_variant", "create_endpoint_config", "create_endpoint")
 BATCH_PREDICT_OVERRIDE_KEYS = ("create_model", "create_transform_job")
+# Fields that link the resources AutoGluon-Cloud creates to each other. Overriding them would point a request at a
+# resource we didn't create, which cleanup would then delete.
+_RESERVED_OVERRIDE_FIELDS = {
+    "production_variant": ("ModelName",),
+    "create_endpoint_config": ("ProductionVariants",),
+    "create_endpoint": ("EndpointConfigName",),
+    "create_transform_job": ("ModelName",),
+}
 
 _REMOVED_KWARGS = {
     "backend_kwargs": "`backend_overrides` (and `predictions_path` to choose where `predict()` writes results)",
@@ -59,7 +67,19 @@ def check_override_keys(overrides: Optional[Mapping[str, Any]], allowed_keys: It
     unknown = sorted(set(overrides) - set(allowed_keys))
     if unknown:
         raise ValueError(f"Unsupported `backend_overrides` key(s) {unknown}. Valid keys: {list(allowed_keys)}.")
+    for key, fields in _RESERVED_OVERRIDE_FIELDS.items():
+        reserved = sorted(set(overrides.get(key, {})) & set(fields))
+        if reserved:
+            raise ValueError(f"`backend_overrides[{key!r}]` cannot set {reserved}; AutoGluon-Cloud manages these.")
     return overrides
+
+
+def delete_quietly(delete: Callable[..., Any], **kwargs) -> None:
+    """Call a ``delete_*`` API during rollback, logging instead of raising so the original error propagates."""
+    try:
+        delete(**kwargs)
+    except Exception as e:
+        logger.warning(f"Failed to clean up {kwargs}: {e}")
 
 
 def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:

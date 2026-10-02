@@ -28,6 +28,11 @@ def test_check_override_keys_rejects_unknown_keys():
     assert check_override_keys(None, ("create_training_job",)) == {}
 
 
+def test_check_override_keys_rejects_resource_references():
+    with pytest.raises(ValueError, match="ModelName"):
+        check_override_keys({"production_variant": {"ModelName": "other"}}, ("production_variant",))
+
+
 def test_reject_legacy_kwargs_points_to_replacement():
     @reject_legacy_kwargs
     def fit(**kwargs):
