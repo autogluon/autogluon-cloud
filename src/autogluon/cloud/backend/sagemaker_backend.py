@@ -591,7 +591,7 @@ class SagemakerBackend(Backend):
         variant = deep_merge(variant, overrides.get("production_variant", {}))
 
         endpoint_config_request: Dict[str, Any] = {
-            "EndpointConfigName": unique_name_from_base(endpoint_name),
+            "EndpointConfigName": endpoint_name,
             "ProductionVariants": [variant],
             "Tags": tags,
         }

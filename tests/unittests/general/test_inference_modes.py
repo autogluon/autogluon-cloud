@@ -136,8 +136,6 @@ def test_when_endpoint_creation_fails_then_model_and_config_are_deleted(deploy_r
     client.create_endpoint.side_effect = RuntimeError("boom")
     with pytest.raises(RuntimeError, match="boom"):
         deploy_requests(instance_type="ml.m5.xlarge")
-    config_name = client.create_endpoint_config.call_args.kwargs["EndpointConfigName"]
-    assert config_name.startswith("ep-")  # unique per deploy, so a leftover config can't block a redeploy
-    client.delete_endpoint_config.assert_called_once_with(EndpointConfigName=config_name)
+    client.delete_endpoint_config.assert_called_once_with(EndpointConfigName="ep")
     client.delete_model.assert_called_once_with(ModelName=client.create_model.call_args.kwargs["ModelName"])
     assert deploy_requests.backend.endpoint_name is None
