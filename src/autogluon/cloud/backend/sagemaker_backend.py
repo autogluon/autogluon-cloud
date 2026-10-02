@@ -564,7 +564,7 @@ class SagemakerBackend(Backend):
 
         tags = self._resolve_tags(extra_tags)
         model_name = self._create_model(
-            model_name=unique_name_from_base(endpoint_name),
+            model_name=endpoint_name,
             model_data=model_data,
             image_uri=retrieve_image_uri(
                 framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
