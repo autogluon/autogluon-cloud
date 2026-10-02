@@ -3,10 +3,10 @@ from abc import abstractmethod
 from typing import Any, Dict, Optional, Union
 
 from sagemaker.core.resources import Model, TrainingJob, TransformJob
-from sagemaker.core.utils.exceptions import FailedStatusError
 
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import MODEL_ARTIFACT_NAME
+from ..utils.job_logs import TRAINING_JOB_LOG_GROUP, TRANSFORM_JOB_LOG_GROUP, wait_for_job
 from ..utils.sagemaker_api import bind_core_session
 from .remote_job import RemoteJob
 
@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class SageMakerJob(RemoteJob):
+    _LOG_GROUP: str
+
     def __init__(self, session=None):
         self.session = session or setup_sagemaker_session()
         self._job_name = None
@@ -120,16 +122,31 @@ class SageMakerJob(RemoteJob):
         """
         return self._get_hyperparameters()
 
-    def wait(self, logs: bool = True) -> None:
+    def wait(self, logs: bool = True) -> str:
         """Block until the job reaches a terminal state, streaming its CloudWatch logs if ``logs`` is True.
 
-        Does not raise if the job fails; check :meth:`get_job_status` afterwards.
+        Does not raise if the job fails. Returns the final status (Completed | Failed | Stopped).
         """
         assert self.job_name, "The job has not been started"
-        try:
-            self._describe().wait(logs=logs)
-        except FailedStatusError as e:
-            logger.error(f"SageMaker job {self.job_name} did not complete successfully: {e}")
+        status = wait_for_job(
+            self.get_job_status,
+            job_name=self.job_name,
+            log_group=self._LOG_GROUP,
+            logs_client=self.session.boto_session.client("logs") if logs else None,
+        )
+        if status != "Completed":
+            logger.error(
+                f"SageMaker job {self.job_name} finished with status {status}: {self._describe().failure_reason}"
+            )
+        return status
+
+    def _wait_until_completed(self) -> None:
+        """Wait for the job with logs and raise if it does not complete successfully."""
+        status = self.wait(logs=True)
+        if status != "Completed":
+            raise RuntimeError(
+                f"SageMaker job {self.job_name} finished with status {status}: {self._describe().failure_reason}"
+            )
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
@@ -141,6 +158,8 @@ class SageMakerJob(RemoteJob):
 
 
 class SageMakerFitJob(SageMakerJob):
+    _LOG_GROUP = TRAINING_JOB_LOG_GROUP
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._framework_version = None
@@ -149,9 +168,6 @@ class SageMakerFitJob(SageMakerJob):
     @classmethod
     def attach(cls, job_name, session=None):
         # FIXME: find a way to recover framework version
-        logger.warning(
-            "Reattach to a job does not support real-time logging. Logs will be printed once the training job completes"
-        )
         obj = cls(session=session)
         obj._job_name = job_name
         obj.wait(logs=True)
@@ -206,7 +222,7 @@ class SageMakerFitJob(SageMakerJob):
         job_name = training_job_request["training_job_name"]
         logger.log(20, f"Start sagemaker training job `{job_name}`")
         try:
-            training_job = TrainingJob.create(
+            TrainingJob.create(
                 **training_job_request,
                 session=self._boto_session,
                 region=self.session.boto_region_name,
@@ -214,13 +230,15 @@ class SageMakerFitJob(SageMakerJob):
             self._job_name = job_name
             self._framework_version = framework_version
             if wait:
-                training_job.wait(logs=True)
+                self._wait_until_completed()
         except Exception as e:
             logger.error(f"Training failed. Please check sagemaker console training jobs {job_name} for details.")
             raise e
 
 
 class SageMakerBatchTransformationJob(SageMakerJob):
+    _LOG_GROUP = TRANSFORM_JOB_LOG_GROUP
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._output_filename = ""
@@ -269,14 +287,14 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         model_name = transform_job_request["model_name"]
         try:
             logger.log(20, "Transforming")
-            transform_job = TransformJob.create(
+            TransformJob.create(
                 **transform_job_request,
                 session=self._boto_session,
                 region=self.session.boto_region_name,
             )
             self._job_name = job_name
             if wait:
-                transform_job.wait(logs=True)
+                self._wait_until_completed()
             logger.log(20, "Transform done")
         except Exception as e:
             self._delete_model(model_name)
