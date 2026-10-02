@@ -4,9 +4,7 @@ import logging
 import os
 import tarfile
 import tempfile
-from dataclasses import replace
-from functools import partial
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import pandas as pd
 from botocore.exceptions import ClientError
@@ -14,13 +12,10 @@ from botocore.exceptions import ClientError
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
-from ..config import SageMakerConfig
 from ..data import FormatConverterFactory
-from ..endpoint.prediction_future import JobPredictionFuture
 from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
-    create_serve_script_tarball,
     repack_model_with_serving_code,
     resolve_image_uri,
     script_mode_environment,
@@ -43,7 +38,7 @@ from ..utils.sagemaker_api import (
     invoke_endpoint,
 )
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
-from ..utils.tag_utils import build_tags, to_request_tags
+from ..utils.tag_utils import build_tags
 from ..utils.utils import (
     convert_image_path_to_encoded_bytes_in_dataframe,
     is_image_file,
@@ -56,7 +51,6 @@ from .constant import SAGEMAKER
 logger = logging.getLogger(__name__)
 
 SAGEMAKER_MODEL_SERVER_WORKERS = "SAGEMAKER_MODEL_SERVER_WORKERS"
-_VPC_CONFIG_FIELDS = {"subnets": "Subnets", "security_group_ids": "SecurityGroupIds"}
 _SERVERLESS_CONFIG_FIELDS = {
     "memory_size_in_mb": "MemorySizeInMB",
     "max_concurrency": "MaxConcurrency",
@@ -93,50 +87,45 @@ def _to_request_fields(settings: Dict[str, Any], fields: Dict[str, str], arg_nam
     return {fields[key]: value for key, value in settings.items()}
 
 
-def _vpc_request(vpc_config: Dict[str, List[str]]) -> Dict[str, List[str]]:
-    """``SageMakerConfig.vpc_config`` in the ``VpcConfig`` request format."""
-    missing = sorted(set(_VPC_CONFIG_FIELDS) - set(vpc_config))
-    if missing:
-        raise ValueError(f"`vpc_config` is missing required key(s) {missing}.")
-    return _to_request_fields(vpc_config, _VPC_CONFIG_FIELDS, "vpc_config")
-
-
 class SagemakerBackend(Backend):
     name = SAGEMAKER
 
     def __init__(
         self,
         local_output_path: str,
-        cloud_output_path: Optional[str],
+        cloud_output_path: str,
         predictor_type: str,
-        *,
-        config: Optional[SageMakerConfig] = None,
-        resource_prefix: Optional[str] = None,
+        role: Optional[str] = None,
+        **kwargs,
     ) -> None:
-        super().__init__(
+        self.initialize(
             local_output_path=local_output_path,
             cloud_output_path=cloud_output_path,
             predictor_type=predictor_type,
-            resource_prefix=resource_prefix,
+            role=role,
+            **kwargs,
         )
-        if config is not None and not isinstance(config, SageMakerConfig):
-            raise TypeError("`config` must be a SageMakerConfig.")
-        config = copy.deepcopy(config or SageMakerConfig())
-        if config.vpc_config is not None:
-            _vpc_request(config.vpc_config)  # fail before creating a session or resolving the role
-        self.sagemaker_session = setup_sagemaker_session(region=config.region)
+
+    def initialize(self, role: Optional[str] = None, **kwargs) -> None:
+        """Initialize the backend.
+
+        Parameters
+        ----------
+        role
+            SageMaker execution role ARN. See
+            :func:`autogluon.cloud.utils.aws_utils.resolve_execution_role` for the resolution order.
+        """
+        super().initialize(**kwargs)
+        self.sagemaker_session = setup_sagemaker_session()
         try:
-            self.role_arn = resolve_execution_role(
-                config.role_arn, backend_name=SAGEMAKER, session=self.sagemaker_session
-            )
+            self.role_arn = resolve_execution_role(role, backend_name=SAGEMAKER, session=self.sagemaker_session)
         except ClientError as e:
             logger.warning(
-                "Failed to resolve SageMaker execution role. Pass `backend=SageMakerConfig(role_arn=<arn>)` "
+                "Failed to resolve SageMaker execution role. Pass `role=<arn>` to the predictor/model "
                 "or run `autogluon.cloud.bootstrap()` / `register()` to persist one."
             )
             raise e
         self._region = self.sagemaker_session.boto_region_name
-        self.config = replace(config, region=self._region, role_arn=self.role_arn)
         self._fit_job: SageMakerFitJob = SageMakerFitJob(session=self.sagemaker_session)
         self._batch_transform_jobs = MostRecentInsertedOrderedDict()
 
@@ -144,9 +133,9 @@ class SagemakerBackend(Backend):
         """Serializer used for realtime endpoint requests"""
         return AutoGluonSerializer()
 
-    def _resolve_tags(self, extra_tags: Optional[Dict[str, str]] = None) -> List[Dict[str, str]]:
-        """Tags for a created SageMaker resource, in SageMaker API request format: default + extra + user tags."""
-        return to_request_tags(build_tags(self.predictor_type, extra_tags=extra_tags, user_tags=self.config.tags))
+    def _resolve_tags(self, extra_tags: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, str]]:
+        """Tags for a created SageMaker resource: default + extra tags."""
+        return build_tags(self.predictor_type, extra_tags=extra_tags)
 
     def attach_job(self, job_name: str) -> None:
         """
@@ -212,15 +201,12 @@ class SagemakerBackend(Backend):
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = 1,
         volume_size: int = 256,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
-        environment: Optional[Dict[str, str]] = None,
-        use_spot_instances: bool = False,
-        max_wait: Optional[int] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
-        extra_tags: Optional[Dict[str, str]] = None,
+        extra_tags: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -246,7 +232,7 @@ class SagemakerBackend(Backend):
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
             If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
@@ -257,21 +243,12 @@ class SagemakerBackend(Backend):
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training (default: 256).
             Must be large enough to store training data if File Mode is used (which is the default).
-        image_uri: Optional[str], default = None
-            Custom training container image. If None, the official AutoGluon DLC for ``framework_version`` is used.
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the training container.
-        use_spot_instances: bool, default = False
-            Whether to use managed spot training.
-        max_wait: Optional[int], default = None
-            Maximum seconds to wait for spot capacity plus training time. Defaults to ``timeout``. Requires
-            ``use_spot_instances=True``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw ``CreateTrainingJob`` request fields (SageMaker API / boto3 PascalCase names) under the
             ``"create_training_job"`` key, deep-merged over the request built by AutoGluon-Cloud.
@@ -284,8 +261,6 @@ class SagemakerBackend(Backend):
             raise ValueError("`data_channels['train_data']` is required.")
         _reject_local_mode(instance_type)
         overrides = check_override_keys(backend_overrides, FIT_OVERRIDE_KEYS)
-        if max_wait is not None and not use_spot_instances:
-            raise ValueError("`max_wait` requires `use_spot_instances=True`.")
         predictor_fit_args = copy.deepcopy(predictor_fit_args)
         # Resolve any path inputs (str or pathlib.Path) into DataFrames so they can be CSV-uploaded as SageMaker channels.
         data_channels = {
@@ -293,9 +268,9 @@ class SagemakerBackend(Backend):
             for k, v in data_channels.items()
             if v is not None
         }
-        if image_uri:
+        if custom_image_uri:
             framework_version, py_version = None, None
-            logger.log(20, f"Training with image_uri=={image_uri}")
+            logger.log(20, f"Training with custom_image_uri=={custom_image_uri}")
         else:
             framework_version, py_version = parse_framework_version(
                 framework_version, "training", minimum_version="0.6.0"
@@ -341,7 +316,6 @@ class SagemakerBackend(Backend):
         ag_args_path = os.path.join(self.local_output_path, "utils", "ag_args.json")
         self.prepare_args(path=ag_args_path, **ag_args)
         inputs = self._upload_fit_artifact(
-            job_name=job_name,
             data_channels=data_channels,
             label=label,
             ag_args=ag_args_path,
@@ -352,20 +326,16 @@ class SagemakerBackend(Backend):
         )
         code_uri = upload_training_code(
             entry_point=entry_point,
-            source_dir=None,
             sagemaker_session=self.sagemaker_session,
             s3_uri_prefix=f"{self.cloud_output_path}/code/{job_name}/source",
         )
 
-        stopping_condition: Dict[str, Any] = {"MaxRuntimeInSeconds": timeout}
-        if use_spot_instances:
-            stopping_condition["MaxWaitTimeInSeconds"] = max_wait or timeout
         request: Dict[str, Any] = {
             "TrainingJobName": job_name,
             "RoleArn": self.role_arn,
             "AlgorithmSpecification": {
                 "TrainingImage": resolve_image_uri(
-                    image_uri, framework_version, py_version, self._region, "training", instance_type
+                    custom_image_uri, framework_version, py_version, self._region, "training", instance_type
                 ),
                 "TrainingInputMode": "File",
             },
@@ -379,20 +349,10 @@ class SagemakerBackend(Backend):
                 "InstanceCount": instance_count,
                 "VolumeSizeInGB": volume_size,
             },
-            "StoppingCondition": stopping_condition,
+            "StoppingCondition": {"MaxRuntimeInSeconds": timeout},
             "ProfilerConfig": {"DisableProfiler": True},
             "Tags": self._resolve_tags(extra_tags),
         }
-        if environment:
-            request["Environment"] = dict(environment)
-        if use_spot_instances:
-            request["EnableManagedSpotTraining"] = True
-        if self.config.vpc_config is not None:
-            request["VpcConfig"] = _vpc_request(self.config.vpc_config)
-        if self.config.output_kms_key is not None:
-            request["OutputDataConfig"]["KmsKeyId"] = self.config.output_kms_key
-        if self.config.volume_kms_key is not None:
-            request["ResourceConfig"]["VolumeKmsKeyId"] = self.config.volume_kms_key
         request = deep_merge(request, overrides.get("create_training_job", {}))
 
         self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
@@ -425,8 +385,6 @@ class SagemakerBackend(Backend):
             "ExecutionRoleArn": self.role_arn,
             "Tags": tags,
         }
-        if self.config.vpc_config is not None:
-            request["VpcConfig"] = _vpc_request(self.config.vpc_config)
         request = deep_merge(request, overrides.get("create_model", {}))
         logger.log(20, "Creating inference model...")
         self.sagemaker_session.sagemaker_client.create_model(**request)
@@ -449,19 +407,7 @@ class SagemakerBackend(Backend):
             entry_point=entry_point,
             repacked_model_uri=repacked_model_uri,
             sagemaker_session=self.sagemaker_session,
-            kms_key=self.config.output_kms_key,
         )
-
-    @staticmethod
-    def _model_server_environment(environment: Optional[Dict[str, str]]) -> Dict[str, str]:
-        environment = dict(environment or {})
-        if SAGEMAKER_MODEL_SERVER_WORKERS in environment and int(environment[SAGEMAKER_MODEL_SERVER_WORKERS]) > 1:
-            logger.warning(
-                f"Setting {SAGEMAKER_MODEL_SERVER_WORKERS} to value larger than 1 might cause running out of RAM and/or GPU RAM"
-            )
-        else:
-            environment[SAGEMAKER_MODEL_SERVER_WORKERS] = "1"
-        return environment
 
     def deploy(
         self,
@@ -470,17 +416,16 @@ class SagemakerBackend(Backend):
         framework_version: str = "latest",
         instance_type: Optional[str] = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
         wait: bool = True,
-        environment: Optional[Dict[str, str]] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         entry_point: Optional[str] = None,
         fm_serve_config: Optional[Dict[str, Any]] = None,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
         repack: bool = True,
-        extra_tags: Optional[Dict[str, str]] = None,
+        extra_tags: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -499,12 +444,12 @@ class SagemakerBackend(Backend):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance to be deployed for the endpoint
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint
-        image_uri: Optional[str], default = None,
+        custom_image_uri: Optional[str], default = None,
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
             https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon
@@ -514,8 +459,6 @@ class SagemakerBackend(Backend):
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"production_variant"``,
@@ -554,9 +497,9 @@ class SagemakerBackend(Backend):
             endpoint_name = unique_name_from_base(self.resource_prefix)
 
         # Resolve container image
-        if image_uri:
+        if custom_image_uri:
             framework_version, py_version = None, None
-            logger.log(20, f"Deploying with image_uri=={image_uri}")
+            logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
         else:
             framework_version, py_version = parse_framework_version(
                 framework_version, "inference", minimum_version="0.6.0"
@@ -602,7 +545,7 @@ class SagemakerBackend(Backend):
                 repacked_model_uri=f"{self.cloud_output_path}/endpoints/{endpoint_name}/model/model.tar.gz",
             )
 
-        container_environment = self._model_server_environment(environment)
+        container_environment = {SAGEMAKER_MODEL_SERVER_WORKERS: "1"}
         if fm_serve_config is not None:
             container_environment["AG_FM_SERVE_CONFIG"] = json.dumps(fm_serve_config)
         if inference_mode == "serverless":
@@ -616,7 +559,7 @@ class SagemakerBackend(Backend):
             model_name=unique_name_from_base(endpoint_name),
             model_data=model_data,
             image_uri=resolve_image_uri(
-                image_uri, framework_version, py_version, self._region, "inference", instance_type
+                custom_image_uri, framework_version, py_version, self._region, "inference", instance_type
             ),
             entry_point=entry_point,
             environment=container_environment,
@@ -630,7 +573,9 @@ class SagemakerBackend(Backend):
             variant["InitialInstanceCount"] = initial_instance_count
             if volume_size:
                 variant["VolumeSizeInGB"] = volume_size
-            inference_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="inference")
+            inference_ami_version = infer_sagemaker_ami_version(
+                custom_image_uri, instance_type, image_scope="inference"
+            )
             if inference_ami_version is not None:
                 variant["InferenceAmiVersion"] = inference_ami_version
         elif inference_mode == "serverless":
@@ -644,8 +589,6 @@ class SagemakerBackend(Backend):
             "ProductionVariants": [variant],
             "Tags": tags,
         }
-        if self.config.volume_kms_key is not None and inference_mode == "realtime":
-            endpoint_config_request["KmsKeyId"] = self.config.volume_kms_key
         endpoint_config_request = deep_merge(endpoint_config_request, overrides.get("create_endpoint_config", {}))
         endpoint_request = deep_merge(
             {
@@ -665,11 +608,16 @@ class SagemakerBackend(Backend):
             client.get_waiter("endpoint_in_service").wait(EndpointName=self.endpoint_name)
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
-        """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/ and upload it."""
+        """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/."""
+
         tarball_dir = tempfile.mkdtemp(prefix="ag_serve_")
-        tarball_path = create_serve_script_tarball(serve_script_path, tarball_dir)
+        tarball_path = os.path.join(tarball_dir, "model.tar.gz")
+        with tarfile.open(tarball_path, "w:gz") as tar:
+            tar.add(serve_script_path, arcname=f"code/{os.path.basename(serve_script_path)}")
+            tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
         s3_key = f"endpoints/{endpoint_name}/model/model.tar.gz"
-        return self._upload_predictor(tarball_path, s3_key)
+        s3_path = self._upload_predictor(tarball_path, s3_key)
+        return s3_path
 
     def cleanup_deployment(self) -> None:
         """
@@ -834,12 +782,11 @@ class SagemakerBackend(Backend):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         download: bool = True,
         persist: bool = True,
         save_path: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
@@ -864,16 +811,14 @@ class SagemakerBackend(Backend):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
-            Name of the launched transform job.
+            Name of the launched training job.
             If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
         instance_count: int, default = 1,
             Number of instances used to do batch transform.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance to be used for batch transform.
-        image_uri: Optional[str], default = None
-            Custom inference container image. If None, the official AutoGluon DLC is used.
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
@@ -888,8 +833,6 @@ class SagemakerBackend(Backend):
             Will be ignored if `download` is `False`.
             If None, CloudPredictor will create one.
             If `persist` is `False`, file would first be downloaded to this path and then removed.
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
             AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
@@ -908,12 +851,11 @@ class SagemakerBackend(Backend):
             job_name=job_name,
             instance_type=instance_type,
             instance_count=instance_count,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
             download=download,
             persist=persist,
             save_path=save_path,
-            environment=environment,
             backend_overrides=backend_overrides,
             original_features=self.original_features,
         )
@@ -925,17 +867,69 @@ class SagemakerBackend(Backend):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         include_predict: bool = True,
-        **kwargs,
+        predictor_path: Optional[str] = None,
+        framework_version: str = "latest",
+        job_name: Optional[str] = None,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        download: bool = True,
+        persist: bool = True,
+        save_path: Optional[str] = None,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
-        Predict probabilities using SageMaker batch transform.
-        Accepts the same arguments as :meth:`predict`.
+        Predict using SageMaker batch transform.
+        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
+        If you want to minimize latency, use `predict_real_time()` instead.
+        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
+        This method creates a SageMaker model with the trained predictor and runs a transform job with it.
 
         Parameters
         ----------
+        test_data: Union(str, pandas.DataFrame)
+            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to a csv.
+        test_data_image_column: str, default = None
+            If test_data involves image modality, you must specify the column name corresponding to image paths.
+            The path MUST be an abspath
         include_predict: bool, default = True
             Whether to include predict result along with predict_proba results.
             This flag can save you time from making two calls to get both the prediction and the probability as batch inference involves noticeable overhead.
+        predictor_path: str
+            Path to the predictor tarball you want to use to predict.
+            Path can be both a local path or a S3 location.
+            If None, will use the most recent trained predictor trained with `fit()`.
+        framework_version: str, default = `latest`
+            Inference container version of autogluon.
+            If `latest`, will use the latest available container version.
+            If provided a specific version, will use this version.
+            If `custom_image_uri` is set, this argument will be ignored.
+        job_name: str, default = None
+            Name of the launched training job.
+            If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
+        instance_count: int, default = 1,
+            Number of instances used to do batch transform.
+        instance_type: str, default = 'ml.m5.2xlarge'
+            Instance to be used for batch transform.
+        wait: bool, default = True
+            Whether to wait for batch transform to complete.
+            To be noticed, the function won't return immediately because there are some preparations needed prior transform.
+        download: bool, default = True
+            Whether to download the batch transform results to the disk and load it after the batch transform finishes.
+            Will be ignored if `wait` is `False`.
+        persist: bool, default = True
+            Whether to persist the downloaded batch transform results on the disk.
+            Will be ignored if `download` is `False`
+        save_path: str, default = None,
+            Path to save the downloaded result.
+            Will be ignored if `download` is `False`.
+            If None, CloudPredictor will create one.
+            If `persist` is `False`, file would first be downloaded to this path and then removed.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
+            AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
+
 
         Returns
         -------
@@ -948,8 +942,18 @@ class SagemakerBackend(Backend):
         pred, pred_proba = self._predict(
             test_data=test_data,
             test_data_image_column=test_data_image_column,
+            predictor_path=predictor_path,
+            framework_version=framework_version,
+            job_name=job_name,
+            instance_type=instance_type,
+            instance_count=instance_count,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            download=download,
+            persist=persist,
+            save_path=save_path,
+            backend_overrides=backend_overrides,
             original_features=self.original_features,
-            **kwargs,
         )
 
         if include_predict:
@@ -1001,21 +1005,7 @@ class SagemakerBackend(Backend):
 
     def get_fit_predict_results(self) -> pd.DataFrame:
         """Read predictions produced by a completed ``fit_predict`` job from S3."""
-        return self._load_fit_predict_results(self._fit_job)
-
-    def get_prediction_future(
-        self, *, result_transform: Optional[Callable[[pd.DataFrame], Any]] = None
-    ) -> JobPredictionFuture:
-        """Bind waiting and result loading to the current job, independent of later submissions."""
-        job = self._fit_job
-        if job.job_name is None:
-            raise ValueError("No prediction job found. Submit a prediction first.")
-        load_results = partial(self._load_fit_predict_results, job)
-        result_loader = load_results if result_transform is None else lambda: result_transform(load_results())
-        return JobPredictionFuture(job=job, result_loader=result_loader)
-
-    def _load_fit_predict_results(self, job: SageMakerFitJob) -> pd.DataFrame:
-        ag_args = self._download_ag_args_from_job(job)
+        ag_args = self._download_ag_args_from_job()
         predictions_path = ag_args.get("predictions_path")
         assert predictions_path is not None, "No fit_predict job found. Call `fit_predict()` first."
         bucket, key = s3_path_to_bucket_prefix(predictions_path)
@@ -1024,16 +1014,16 @@ class SagemakerBackend(Backend):
             self.sagemaker_session.s3_client.download_file(bucket, key, local_path)
             return load_pd.load(local_path)
 
-    def _download_ag_args_from_job(self, job: Optional[SageMakerFitJob] = None) -> Dict[str, Any]:
+    def _download_ag_args_from_job(self) -> Dict[str, Any]:
         """Fetch and parse the ``ag_args.json`` that was uploaded as the ``ag_args`` channel.
 
         Each training job carries the exact config it was launched with as an input channel,
         making this the authoritative source — independent of local-disk lifetime.
         """
-        job = self._fit_job if job is None else job
-        job_name = job.job_name
+        job_name = self._fit_job.job_name
         assert job_name is not None, "No fit job found. Call `fit()` / `fit_predict()` first."
-        channels = job.get_input_channels()
+        desc = self.sagemaker_session.sagemaker_client.describe_training_job(TrainingJobName=job_name)
+        channels = {c["ChannelName"]: c["DataSource"]["S3DataSource"]["S3Uri"] for c in desc["InputDataConfig"]}
         ag_args_uri = channels.get("ag_args")
         assert ag_args_uri is not None, (
             f"Training job {job_name!r} has no `ag_args` input channel — cannot recover predictions_path."
@@ -1080,7 +1070,6 @@ class SagemakerBackend(Backend):
 
     def _upload_fit_artifact(
         self,
-        job_name: str,
         data_channels,
         label,
         ag_args,
@@ -1088,7 +1077,7 @@ class SagemakerBackend(Backend):
         image_column=None,
     ):
         cloud_bucket, cloud_key_prefix = s3_path_to_bucket_prefix(self.cloud_output_path)
-        util_key_prefix = f"{cloud_key_prefix}/{job_name}/utils"
+        util_key_prefix = cloud_key_prefix + "/utils"
 
         # Image-column mode: rewrite image paths to be container-relative; common image directories
         # are zipped and uploaded as separate train_images / tune_images channels below.
@@ -1228,12 +1217,11 @@ class SagemakerBackend(Backend):
         job_name=None,
         instance_type="ml.m5.2xlarge",
         instance_count=1,
-        image_uri=None,
+        custom_image_uri=None,
         wait=True,
         download=True,
         persist=True,
         save_path=None,
-        environment=None,
         backend_overrides=None,
         split_pred_proba=True,
         original_features=None,
@@ -1249,9 +1237,9 @@ class SagemakerBackend(Backend):
             predictor_path = self._fit_job.get_output_path()
             assert predictor_path, "No cloud trained model found."
 
-        if image_uri:
+        if custom_image_uri:
             framework_version, py_version = None, None
-            logger.log(20, f"Predicting with image_uri=={image_uri}")
+            logger.log(20, f"Predicting with custom_image_uri=={custom_image_uri}")
         else:
             framework_version, py_version = parse_framework_version(
                 framework_version, "inference", minimum_version="0.6.0"
@@ -1337,10 +1325,10 @@ class SagemakerBackend(Backend):
             model_name=job_name,
             model_data=model_data,
             image_uri=resolve_image_uri(
-                image_uri, framework_version, py_version, self._region, "inference", instance_type
+                custom_image_uri, framework_version, py_version, self._region, "inference", instance_type
             ),
             entry_point=entry_point,
-            environment=dict(environment or {}),
+            environment={},
             tags=tags,
             overrides=overrides,
         )
@@ -1355,13 +1343,9 @@ class SagemakerBackend(Backend):
         if assemble_with is not None:
             transform_output["AssembleWith"] = assemble_with
         transform_resources: Dict[str, Any] = {"InstanceType": instance_type, "InstanceCount": instance_count}
-        transform_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="transform")
+        transform_ami_version = infer_sagemaker_ami_version(custom_image_uri, instance_type, image_scope="transform")
         if transform_ami_version is not None:
             transform_resources["TransformAmiVersion"] = transform_ami_version
-        if self.config.output_kms_key is not None:
-            transform_output["KmsKeyId"] = self.config.output_kms_key
-        if self.config.volume_kms_key is not None:
-            transform_resources["VolumeKmsKeyId"] = self.config.volume_kms_key
         request = {
             "TransformJobName": job_name,
             "ModelName": model_name,
@@ -1411,7 +1395,7 @@ class SagemakerBackend(Backend):
     def __setstate__(self, state):
         """Custom implementation of the unpickle process"""
         self.__dict__.update(state)
-        self.sagemaker_session = setup_sagemaker_session(region=self.config.region)
+        self.sagemaker_session = setup_sagemaker_session()
         self._region = self.sagemaker_session.boto_region_name
         self._fit_job.session = self.sagemaker_session
         for job in self._batch_transform_jobs.values():

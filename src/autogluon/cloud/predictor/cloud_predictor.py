@@ -21,7 +21,6 @@ from autogluon.common.utils.utils import setup_outputdir
 from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
-from ..config import SageMakerConfig
 from ..utils.aws_utils import resolve_cloud_output_path
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import safe_unpack_archive
@@ -37,7 +36,8 @@ class CloudPredictor(ABC):
         self,
         local_output_path: Optional[str] = None,
         cloud_output_path: Optional[str] = None,
-        backend: Union[str, SageMakerConfig] = SAGEMAKER,
+        backend: str = SAGEMAKER,
+        role: Optional[str] = None,
         verbosity: int = 2,
     ) -> None:
         """
@@ -60,10 +60,13 @@ class CloudPredictor(ABC):
             * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set
               by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
               append a timestamped subfolder. Raises if no bucket is configured.
-        backend: Union[str, SageMakerConfig], default = "sagemaker"
-            Backend name or reusable :class:`~autogluon.cloud.SageMakerConfig` with region, execution role,
-            networking, encryption and tags. ``"sagemaker"`` uses default settings.
-            Only single instance training is supported.
+        backend: str, default = "sagemaker"
+            The backend to use. Currently only "sagemaker" is supported.
+            SageMaker backend supports training, deploying and batch inference on Amazon SageMaker. Only single instance training is supported.
+        role: Optional[str], default = None
+            ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
+            ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
+            :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
         verbosity : int, default = 2
             Verbosity levels range from 0 to 4 and control how much information is printed.
             Higher levels correspond to more detailed print statements (you can set verbosity = 0 to suppress warnings).
@@ -73,17 +76,18 @@ class CloudPredictor(ABC):
         self.verbosity = verbosity
         cloud_logger = logging.getLogger("autogluon.cloud")
         set_logger_verbosity(self.verbosity, logger=cloud_logger)
-        config = BackendFactory.resolve_config(backend)
-        if config.name not in self.backend_map:
-            raise ValueError(f"Unsupported backend {config.name!r}. Supported backends: {sorted(self.backend_map)}.")
         self.local_output_path = self._setup_local_output_path(local_output_path)
-        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=config.name)
+        if backend in ("ray", "ray_aws"):
+            raise ValueError("The Ray backend was removed in AutoGluon-Cloud v0.7.0. Use backend='sagemaker' instead.")
+        if backend not in self.backend_map:
+            raise ValueError(f"Unsupported backend {backend!r}. Supported backends: {sorted(self.backend_map)}.")
+        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
         self.backend: Backend = BackendFactory.get_backend(
-            backend=self.backend_map[config.name],
+            backend=self.backend_map[backend],
             local_output_path=self.local_output_path,
             cloud_output_path=self.cloud_output_path,
             predictor_type=self.predictor_type,
-            config=config,
+            role=role,
         )
 
     @property
@@ -170,12 +174,9 @@ class CloudPredictor(ABC):
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = "auto",
         volume_size: int = 256,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
-        environment: Optional[Dict[str, str]] = None,
-        use_spot_instances: bool = False,
-        max_wait: Optional[int] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         **kwargs,
     ) -> CloudPredictor:
@@ -199,7 +200,7 @@ class CloudPredictor(ABC):
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
             If None, CloudPredictor creates one with a predictor-specific prefix.
@@ -211,26 +212,18 @@ class CloudPredictor(ABC):
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
-        image_uri: Optional[str], default = None
-            Custom training container image. If None, the official AutoGluon DLC for ``framework_version`` is used.
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the training container.
-        use_spot_instances: bool, default = False
-            Whether to train on managed spot instances.
-        max_wait: Optional[int], default = None
-            Maximum seconds to wait for spot capacity plus training time. Defaults to ``timeout``. Requires
-            ``use_spot_instances=True``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument. Maps ``"create_training_job"`` to raw
             `CreateTrainingJob <https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateTrainingJob.html>`_
             request fields in the PascalCase format of the SageMaker API and boto3, which are deep-merged over the
             request built by AutoGluon-Cloud, e.g. ``{"create_training_job": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones.
         Returns
         -------
         `CloudPredictor` object. Returns self.
@@ -271,12 +264,9 @@ class CloudPredictor(ABC):
             instance_type=instance_type,
             instance_count=instance_count,
             volume_size=volume_size,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             timeout=timeout,
             wait=wait,
-            environment=environment,
-            use_spot_instances=use_spot_instances,
-            max_wait=max_wait,
             backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
         )
@@ -385,12 +375,11 @@ class CloudPredictor(ABC):
         framework_version: str = "latest",
         instance_type: Optional[str] = None,
         initial_instance_count: int = 1,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         volume_size: Optional[int] = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
-        environment: Optional[Dict[str, str]] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         """
@@ -409,14 +398,14 @@ class CloudPredictor(ABC):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         instance_type: Optional[str], default = None
             Instance to be deployed for the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None``
             when ``inference_mode="serverless"``.
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint. Ignored when
             ``inference_mode="serverless"``.
-        image_uri: Optional[str], default = None,
+        custom_image_uri: Optional[str], default = None,
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
             https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
@@ -431,14 +420,13 @@ class CloudPredictor(ABC):
             (no instance management, scales to zero).
         inference_config: Optional[Dict[str, Any]], default = None
             Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
             format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"``, ``"production_variant"`` (the endpoint config's single production variant),
             ``"create_endpoint_config"`` and ``"create_endpoint"``, e.g.
             ``{"production_variant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones.
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
@@ -450,12 +438,11 @@ class CloudPredictor(ABC):
             framework_version=framework_version,
             instance_type=instance_type,
             initial_instance_count=initial_instance_count,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             volume_size=volume_size,
             wait=wait,
             inference_mode=inference_mode,
             inference_config=inference_config,
-            environment=environment,
             backend_overrides=backend_overrides,
         )
 
@@ -564,12 +551,11 @@ class CloudPredictor(ABC):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         download: bool = True,
         persist: bool = True,
         save_path: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.Series]:
         """
@@ -592,9 +578,9 @@ class CloudPredictor(ABC):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
-            Name of the launched batch transform job.
+            Name of the launched training job.
             If None, CloudPredictor creates one with a predictor-specific prefix.
         instance_count: int, default = 1,
             Number of instances used to do batch transform.
@@ -614,13 +600,12 @@ class CloudPredictor(ABC):
             Will be ignored if `download` is `False`.
             If None, CloudPredictor will create one.
             If `persist` is `False`, file would first be downloaded to this path and then removed.
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
             format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
             ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones.
 
         Returns
         -------
@@ -636,12 +621,11 @@ class CloudPredictor(ABC):
             job_name=job_name,
             instance_type=instance_type,
             instance_count=instance_count,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
             download=download,
             persist=persist,
             save_path=save_path,
-            environment=environment,
             backend_overrides=backend_overrides,
         )
 
@@ -656,12 +640,11 @@ class CloudPredictor(ABC):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         download: bool = True,
         persist: bool = True,
         save_path: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
         """
@@ -687,9 +670,9 @@ class CloudPredictor(ABC):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
-            Name of the launched batch transform job.
+            Name of the launched training job.
             If None, CloudPredictor creates one with a predictor-specific prefix.
         instance_count: int, default = 1,
             Number of instances used to do batch transform.
@@ -709,13 +692,12 @@ class CloudPredictor(ABC):
             Will be ignored if `download` is `False`.
             If None, CloudPredictor will create one.
             If `persist` is `False`, file would first be downloaded to this path and then removed.
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the inference container.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
             Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
             format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
             ``"create_model"`` and ``"create_transform_job"``, e.g.
             ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
+            Nested dicts merge recursively; other values, including lists, replace the generated ones.
 
         Returns
         -------
@@ -734,12 +716,11 @@ class CloudPredictor(ABC):
             job_name=job_name,
             instance_type=instance_type,
             instance_count=instance_count,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
             download=download,
             persist=persist,
             save_path=save_path,
-            environment=environment,
             backend_overrides=backend_overrides,
         )
 

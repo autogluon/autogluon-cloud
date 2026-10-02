@@ -42,19 +42,15 @@ def resolve_image_uri(
     )
 
 
-def upload_training_code(entry_point: str, source_dir: Optional[str], sagemaker_session, s3_uri_prefix: str) -> str:
-    """Bundle the training entry point (or ``source_dir`` containing it) as ``sourcedir.tar.gz`` and upload it.
+def upload_training_code(entry_point: str, sagemaker_session, s3_uri_prefix: str) -> str:
+    """Bundle the training entry point as ``sourcedir.tar.gz`` and upload it.
 
     Returns the S3 URI of the uploaded tarball.
     """
     with tempfile.TemporaryDirectory(prefix="ag_train_code_") as tmpdir:
         tarball_path = os.path.join(tmpdir, SOURCE_DIR_TARBALL_NAME)
         with tarfile.open(tarball_path, "w:gz") as tar:
-            if source_dir:
-                for name in os.listdir(source_dir):
-                    tar.add(os.path.join(source_dir, name), arcname=name)
-            else:
-                tar.add(entry_point, arcname=os.path.basename(entry_point))
+            tar.add(entry_point, arcname=os.path.basename(entry_point))
         bucket, key_prefix = s3_path_to_bucket_prefix(s3_uri_prefix)
         return sagemaker_session.upload_data(path=tarball_path, bucket=bucket, key_prefix=key_prefix)
 
@@ -128,14 +124,3 @@ def repack_model_with_serving_code(
         extra_args = {"ServerSideEncryption": "aws:kms", "SSEKMSKeyId": kms_key} if kms_key else None
         s3.upload_file(repacked_tarball, *s3_path_to_bucket_prefix(repacked_model_uri), ExtraArgs=extra_args)
     return repacked_model_uri
-
-
-def create_serve_script_tarball(entry_point: str, output_dir: str) -> str:
-    """Create a minimal ``model.tar.gz`` that only contains the serving code under ``code/``."""
-    from ..scripts import ScriptManager  # deferred: importing scripts pulls in the backend package
-
-    tarball_path = os.path.join(output_dir, "model.tar.gz")
-    with tarfile.open(tarball_path, "w:gz") as tar:
-        tar.add(entry_point, arcname=f"code/{os.path.basename(entry_point)}")
-        tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
-    return tarball_path

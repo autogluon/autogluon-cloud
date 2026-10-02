@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -24,15 +24,22 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         id_column: str,
         timestamp_column: str,
+        framework_version: str = "latest",
+        job_name: Optional[str] = None,
+        instance_type: str = "ml.m5.2xlarge",
+        instance_count: int = 1,
         volume_size: int = 100,
+        custom_image_uri: Optional[str] = None,
+        wait: bool = True,
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         extra_ag_args: Optional[Dict[str, Any]] = None,
-        **kwargs,
+        extra_tags: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
         ``id_column`` / ``timestamp_column`` are forwarded to the training script via ``ag_args.json``.
         ``known_covariates`` (if present in ``data_channels``) is only honored when
-        ``extra_ag_args["predict_after_fit"]`` is True. Other arguments are forwarded to ``SagemakerBackend.fit()``.
+        ``extra_ag_args["predict_after_fit"]`` is True.
         """
         extra_ag_args = {**(extra_ag_args or {}), "id_column": id_column, "timestamp_column": timestamp_column}
         if data_channels.get("known_covariates") is not None and not extra_ag_args.get("predict_after_fit", False):
@@ -48,9 +55,16 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             data_channels=data_channels,
+            framework_version=framework_version,
+            job_name=job_name,
+            instance_type=instance_type,
+            instance_count=instance_count,
             volume_size=volume_size,
+            custom_image_uri=custom_image_uri,
+            wait=wait,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
-            **kwargs,
+            extra_tags=extra_tags,
         )
 
     def predict_real_time(

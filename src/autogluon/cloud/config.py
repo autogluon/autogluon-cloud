@@ -1,4 +1,4 @@
-"""Backend settings and persistent resource identifiers for AutoGluon-Cloud.
+"""Persistent config for AutoGluon-Cloud.
 
 Stores resource identifiers (region, stack name, bucket, IAM role ARN) at
 ``~/.autogluon/cloud.yaml`` so users don't need to re-specify them every
@@ -20,50 +20,11 @@ import os
 import stat
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import ClassVar, Dict, List, Optional
+from typing import Dict, Optional
 
 import yaml
 
 CONFIG_DIR_ENV = "AG_CONFIG_DIR"
-
-
-@dataclass(kw_only=True)
-class SageMakerConfig:
-    """Reusable SageMaker settings for predictors and foundation models.
-
-    Pass this as ``backend=`` to a cloud predictor or foundation model. Each
-    object creates its own backend and jobs; sharing this config does not share
-    execution state. Resource sizes and other operation settings remain named
-    arguments to ``fit()``, ``predict()`` and ``deploy()``.
-
-    Parameters
-    ----------
-    region
-        AWS region. If omitted, use the region in ``~/.autogluon/cloud.yaml``,
-        then the boto3 default region.
-    role_arn
-        SageMaker execution role ARN. If omitted, use the saved role, then the
-        role of the current AWS identity.
-    vpc_config
-        Networking for training jobs and models, as
-        ``{"subnets": [...], "security_group_ids": [...]}``.
-    output_kms_key
-        KMS key for training artifacts, batch transform outputs, and repacked
-        or cached model artifacts in S3.
-    volume_kms_key
-        KMS key for training, batch transform and realtime endpoint storage
-        volumes. Leave unset for instance types with local NVMe storage.
-    tags
-        Tags added to every SageMaker resource created by this backend.
-    """
-
-    name: ClassVar[str] = "sagemaker"
-    region: Optional[str] = None
-    role_arn: Optional[str] = None
-    vpc_config: Optional[Dict[str, List[str]]] = None
-    output_kms_key: Optional[str] = None
-    volume_kms_key: Optional[str] = None
-    tags: Dict[str, str] = field(default_factory=dict)
 
 
 def get_config_dir() -> Path:

@@ -124,7 +124,7 @@ def test_execution_role_without_iam_access_falls_back_to_sts_arn(role_name, expe
 
 def test_execution_role_rejects_iam_users():
     session, _ = _session_with_caller("arn:aws:iam::123456789012:user/alice")
-    with pytest.raises(ValueError, match="SageMakerConfig\\(role_arn="):
+    with pytest.raises(ValueError, match="role=<arn>"):
         get_execution_role(session)
 
 

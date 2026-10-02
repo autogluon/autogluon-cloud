@@ -7,7 +7,6 @@ from unittest import mock
 import pandas as pd
 import pytest
 
-from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.model import FoundationModel
 
 
@@ -20,7 +19,7 @@ def _stub_aws(monkeypatch):
     )
     monkeypatch.setattr(
         "autogluon.cloud.backend.backend_factory.BackendFactory.get_backend",
-        lambda **kwargs: mock.MagicMock(role_arn="arn:aws:iam::0:role/stub", config=kwargs["config"]),
+        lambda **kwargs: mock.MagicMock(role_arn="arn:aws:iam::0:role/stub"),
     )
 
 
@@ -47,7 +46,7 @@ def test_to_dict_excludes_runtime_context():
     fm = FoundationModel(
         "chronos-2",
         cloud_output_path="s3://my-bucket/runs/",
-        backend=SageMakerConfig(role_arn="arn:aws:iam::0:role/runtime"),
+        role="arn:aws:iam::0:role/runtime",
     )
     d = fm.to_dict()
     assert "role" not in d
@@ -137,7 +136,7 @@ def test_deploy_passes_artifact_uri_and_overrides_model_path_to_container_dir():
     assert call.kwargs["repack"] is False
     serve_cfg = call.kwargs["fm_serve_config"]
     assert serve_cfg["hyperparameters"]["model_path"] == "/opt/ml/model/weights"
-    assert call.kwargs["extra_tags"] == {"autogluon-cloud-model-id": "chronos-2"}
+    assert {"Key": "autogluon-cloud-model-id", "Value": "chronos-2"} in call.kwargs["extra_tags"]
 
 
 def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
@@ -150,7 +149,7 @@ def test_deploy_without_artifact_passes_none_predictor_path_and_source_uri():
     assert call.kwargs["repack"] is False
     serve_cfg = call.kwargs["fm_serve_config"]
     assert serve_cfg["hyperparameters"]["model_path"] == "autogluon/chronos-2"
-    assert call.kwargs["extra_tags"] == {"autogluon-cloud-model-id": "chronos-2"}
+    assert {"Key": "autogluon-cloud-model-id", "Value": "chronos-2"} in call.kwargs["extra_tags"]
 
 
 def test_tabular_deploy_uses_tabular_fm_handler_and_returns_tabular_endpoint():
@@ -214,8 +213,7 @@ def test_cache_model_artifact_uploads_with_version_metadata(monkeypatch):
     """On cache miss, upload_file runs with the version metadata key — that's the cache-invalidation contract."""
     from autogluon.cloud.version import __version__
 
-    backend_config = SageMakerConfig(region="eu-west-1", output_kms_key="output-key", tags={"team": "ts"})
-    fm = FoundationModel("chronos-2", cloud_output_path="s3://b", backend=backend_config)
+    fm = FoundationModel("chronos-2", cloud_output_path="s3://b")
     s3 = mock.MagicMock()
     fm._backend.sagemaker_session.boto_session.client.return_value = s3
     monkeypatch.setattr("autogluon.cloud.model.foundation_model._s3_head_or_none", lambda *_: None)
@@ -228,12 +226,9 @@ def test_cache_model_artifact_uploads_with_version_metadata(monkeypatch):
     new_fm = fm.cache_model_artifact("s3://b/cache")
 
     assert new_fm.model_artifact_uri == "s3://b/cache/chronos-2/model.tar.gz"
-    assert new_fm._backend.config == fm._backend.config == backend_config
     s3.upload_file.assert_called_once()
     metadata = s3.upload_file.call_args.kwargs["ExtraArgs"]["Metadata"]
     assert metadata == {"autogluon-cloud-version": __version__}
-    assert s3.upload_file.call_args.kwargs["ExtraArgs"]["SSEKMSKeyId"] == "output-key"
-    assert s3.upload_file.call_args.kwargs["ExtraArgs"]["ServerSideEncryption"] == "aws:kms"
 
 
 def test_cache_model_artifact_raises_on_stale_version_without_overwrite():

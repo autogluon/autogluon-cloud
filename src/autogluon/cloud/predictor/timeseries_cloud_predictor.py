@@ -51,13 +51,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 100,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        use_spot_instances: bool = False,
-        max_wait: Optional[int] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
         **kwargs,
     ) -> TimeSeriesCloudPredictor:
         """
@@ -94,7 +91,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Training container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
             If None, CloudPredictor creates one with prefix ``ag-cloud-timeseries``.
@@ -105,21 +102,14 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
-        image_uri: Optional[str], default = None
+        custom_image_uri: Optional[str], default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        environment: Optional[Dict[str, str]], default = None
-            Environment variables set in the training container.
-        use_spot_instances: bool, default = False
-            Whether to train on managed spot instances.
-        max_wait: Optional[int], default = None
-            Maximum seconds to wait for spot capacity plus training time. Requires ``use_spot_instances=True``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw ``CreateTrainingJob`` request fields under the ``"create_training_job"`` key. See
-            :meth:`TabularCloudPredictor.fit` for details.
+            Raw SageMaker request fields under ``"create_training_job"``. See :meth:`TabularCloudPredictor.fit`.
 
         Returns
         -------
@@ -128,11 +118,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         assert not self.backend.is_fit, (
             "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         )
-        # `extra_ag_args` is an internal channel for `fit_predict`, not part of the public signature.
+        # `extra_ag_args` is an internal channel for `fit_predict`; it is intentionally not part of the public signature.
         extra_ag_args = kwargs.pop("extra_ag_args", None)
         if kwargs:
             raise TypeError(f"fit() got unexpected keyword arguments: {sorted(kwargs)}")
-
         predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
         data_channels = {
             "train_data": train_data,
@@ -160,11 +149,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             instance_type=instance_type,
             instance_count=instance_count,
             volume_size=volume_size,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
-            environment=environment,
-            use_spot_instances=use_spot_instances,
-            max_wait=max_wait,
             backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
         )
@@ -232,12 +218,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         download: bool = True,
         persist: bool = True,
         save_path: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.DataFrame]:
         """
@@ -266,7 +251,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Inference container version of autogluon.
             If `latest`, will use the latest available container version.
             If provided a specific version, will use this version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
             If None, CloudPredictor creates one with prefix ``ag-cloud-timeseries``.
@@ -277,9 +262,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        image_uri: Optional[str], default = None
-            Custom inference container image. If set, ``framework_version`` is ignored.
-        download, persist, save_path, environment, backend_overrides:
+        download, persist, save_path, backend_overrides:
             Same as in :meth:`TabularCloudPredictor.predict`.
         """
         return self.backend.predict(
@@ -291,12 +274,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             job_name=job_name,
             instance_type=instance_type,
             instance_count=instance_count,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
             download=download,
             persist=persist,
             save_path=save_path,
-            environment=environment,
             backend_overrides=backend_overrides,
         )
 
@@ -326,11 +308,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 100,
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        environment: Optional[Dict[str, str]] = None,
-        use_spot_instances: bool = False,
-        max_wait: Optional[int] = None,
         backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[pd.DataFrame]:
         """
@@ -371,7 +350,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
         framework_version: str, default = `latest`
             Training container version of autogluon. If `latest`, will use the latest available container version.
-            If `image_uri` is set, this argument will be ignored.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-timeseries``.
         instance_type: str, default = 'ml.m5.2xlarge'
@@ -380,12 +359,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Number of instances used to fit the predictor.
         volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
-        image_uri: Optional[str], default = None
+        custom_image_uri: Optional[str], default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        environment, use_spot_instances, max_wait, backend_overrides:
-            Same as in :meth:`fit`.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Raw SageMaker request fields, same as in :meth:`fit`.
 
         Returns
         -------
@@ -409,11 +388,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             instance_type=instance_type,
             instance_count=instance_count,
             volume_size=volume_size,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
-            environment=environment,
-            use_spot_instances=use_spot_instances,
-            max_wait=max_wait,
             backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
         )

@@ -59,7 +59,7 @@ def retail_sales_dataset():
 def _deploy_kwargs(test_helper, framework_version: str) -> dict:
     return {
         "framework_version": framework_version,
-        "image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+        "custom_image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
     }
 
 
@@ -68,7 +68,7 @@ def _predict_kwargs(test_helper, framework_version: str, ds: dict) -> dict:
         "static_features": ds["static_features"],
         "known_covariates": ds["known_covariates"],
         "framework_version": framework_version,
-        "image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
+        "custom_image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
     }
 
 
@@ -102,7 +102,7 @@ def test_timeseries_train(test_helper, framework_version, shared_training_job_na
             timestamp_column=ds["timestamp_column"],
             static_features=ds["static_features"],
             framework_version=framework_version,
-            image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
             job_name=shared_training_job_name,
         )
         info = predictor.info()
@@ -255,7 +255,7 @@ def test_timeseries_fit_predict_chronos(
             id_column=ds["id_column"],
             timestamp_column=ds["timestamp_column"],
             framework_version=framework_version,
-            image_uri=training_custom_image_uri,
+            custom_image_uri=training_custom_image_uri,
             predictions_path=predictions_path,
         )
 
@@ -340,7 +340,7 @@ def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, fra
         assert cached_model.model_artifact_uri.startswith("s3://")
 
         endpoint = cached_model.deploy(
-            image_uri=inference_custom_image_uri,
+            custom_image_uri=inference_custom_image_uri,
             inference_mode="serverless",
             inference_config={"memory_size_in_mb": 6144},
         )
@@ -466,9 +466,9 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
             predictor_init_args=dict(target="target", prediction_length=_PLAIN_PREDICTION_LENGTH),
             predictor_fit_args=dict(presets="medium_quality", time_limit=60),
             framework_version=framework_version,
-            image_uri=training_custom_image_uri,
+            custom_image_uri=training_custom_image_uri,
         )
-        cloud_predictor.deploy(framework_version=framework_version, image_uri=inference_custom_image_uri)
+        cloud_predictor.deploy(framework_version=framework_version, custom_image_uri=inference_custom_image_uri)
         try:
             format_pairs = list(
                 itertools.product(
@@ -512,7 +512,7 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
             "chronos-bolt-tiny",
             cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy-{device}/{framework_version}/{timestamp}",
         )
-        endpoint = model.deploy(image_uri=inference_custom_image_uri, **deploy_kwargs)
+        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri, **deploy_kwargs)
         try:
             endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
                 "EndpointArn"

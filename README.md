@@ -35,11 +35,6 @@ bootstrap()
 
 See the [Setup tutorial](https://auto.gluon.ai/cloud/stable/tutorials/setup.html) for the full walkthrough, including how to register an existing role and bucket instead.
 
-Pass `backend=SageMakerConfig(...)` to a cloud predictor or foundation model to set the region,
-execution role, VPC, output and volume encryption keys, and resource tags. The same config can be
-reused across workflows; each object creates its own backend state. Instance sizes, container
-environment variables, and inference modes remain named arguments to individual operations.
-
 ## ⚙️ Train your own model
 
 Train an AutoGluon predictor on your data and serve it from a SageMaker endpoint — same API as local AutoGluon, all heavy lifting on AWS. Full walkthrough: [tabular](https://auto.gluon.ai/cloud/stable/tutorials/predictor-tabular.html), [time series](https://auto.gluon.ai/cloud/stable/tutorials/predictor-timeseries.html).

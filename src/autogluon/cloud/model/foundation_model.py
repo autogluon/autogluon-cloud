@@ -7,7 +7,6 @@ import logging
 import tarfile
 import tempfile
 from abc import abstractmethod
-from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -19,7 +18,6 @@ from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER, TIMESERIES_SAGEMAKER
-from ..config import SageMakerConfig
 from ..endpoint.prediction_future import JobPredictionFuture
 from ..endpoint.tabular_endpoint import TabularEndpoint
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
@@ -83,9 +81,10 @@ class FoundationModel:
         model_id: str,
         *,
         cloud_output_path: Optional[str] = None,
+        role: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         model_artifact_uri: Optional[str] = None,
-        backend: Union[str, SageMakerConfig] = SAGEMAKER,
+        backend: Literal["sagemaker"] = "sagemaker",
     ):
         """
         Parameters
@@ -103,35 +102,38 @@ class FoundationModel:
             * ``None`` (default) — use the bucket saved in ``~/.autogluon/cloud.yaml`` (set by
               :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and append a timestamped subfolder.
               Raises if no bucket is configured.
+        role
+            ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
+            ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
+            :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
         hyperparameters
             Default hyperparameters applied to inference and (when supported) training.
         model_artifact_uri
             S3 URI of a pre-bundled ``model.tar.gz`` produced by :meth:`cache_model_artifact`. When set, deploys skip
             the runtime HuggingFace download and load weights from the bundled artifact.
         backend
-            Backend name or reusable :class:`~autogluon.cloud.SageMakerConfig` with region, execution role,
-            networking, encryption and tags. ``"sagemaker"`` uses default settings.
+            Cloud backend to use.
         """
-        backend_config = BackendFactory.resolve_config(backend)
-        backend_name = self._backend_map.get(backend_config.name)
-        if backend_name is None:
-            raise ValueError(
-                f"Backend {backend_config.name!r} is not supported for {self.__class__.__name__}. "
-                f"Available: {list(self._backend_map.keys())}"
-            )
         self.model_id = model_id
         self.model_artifact_uri = model_artifact_uri
-        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend_config.name)
+        self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
         self._config = get_model_config(model_id)
         self._hyperparameter_overrides = hyperparameters or {}
         self._tmpdir = tempfile.TemporaryDirectory(prefix="ag_fm_")
+
+        backend_name = self._backend_map.get(backend)
+        if backend_name is None:
+            raise ValueError(
+                f"Backend '{backend}' is not supported for {self.__class__.__name__}. "
+                f"Available: {list(self._backend_map.keys())}"
+            )
         self._backend = BackendFactory.get_backend(
             backend=backend_name,
             local_output_path=self._tmpdir.name,
             cloud_output_path=self.cloud_output_path,
             predictor_type=self._predictor_type,
             resource_prefix=f"ag-cloud-{self.model_id}",
-            config=backend_config,
+            role=role,
         )
 
     def _get_hyperparameters(
@@ -188,11 +190,11 @@ class FoundationModel:
         endpoint_name: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         framework_version: str = "latest",
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
-        **kwargs,
+        **backend_kwargs,
     ) -> None:
         """Shared deploy logic. Subclasses call this then wrap the endpoint."""
         if inference_mode == "serverless" and instance_type is not None:
@@ -224,15 +226,15 @@ class FoundationModel:
             endpoint_name=endpoint_name,
             framework_version=framework_version,
             instance_type=instance_type,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
             entry_point=self._serve_script_path,
             fm_serve_config=fm_serve_config,
             inference_mode=inference_mode,
             inference_config=inference_config,
             repack=False,
-            extra_tags={"autogluon-cloud-model-id": self.model_id},
-            **kwargs,
+            extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            **backend_kwargs,
         )
         assert self._backend.endpoint_name is not None
 
@@ -339,14 +341,11 @@ class FoundationModel:
                     tar.add(serve_script, arcname=f"code/{serve_script.name}")
                     tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
                 logger.info(f"Uploading to {cache_key}")
-                extra_args = {"Metadata": {_AG_CLOUD_VERSION_METADATA_KEY: __version__}}
-                if self._backend.config.output_kms_key is not None:
-                    extra_args.update(ServerSideEncryption="aws:kms", SSEKMSKeyId=self._backend.config.output_kms_key)
                 s3.upload_file(
                     str(tarball),
                     bucket,
                     key,
-                    ExtraArgs=extra_args,
+                    ExtraArgs={"Metadata": {_AG_CLOUD_VERSION_METADATA_KEY: __version__}},
                 )
 
         return self.__class__(
@@ -354,11 +353,11 @@ class FoundationModel:
             hyperparameters=self._hyperparameter_overrides or None,
             model_artifact_uri=cache_key,
             cloud_output_path=self.cloud_output_path,
-            backend=self._backend.config,
+            role=self._backend.role_arn,
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize the model identity. Runtime context (``backend``, ``cloud_output_path``) is excluded so configs can
+        """Serialize the model identity. Runtime context (``role``, ``cloud_output_path``) is excluded so configs can
         be shared across users."""
         out: Dict[str, Any] = {"model_id": self.model_id}
         if self._hyperparameter_overrides:
@@ -373,7 +372,7 @@ class FoundationModel:
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any], **runtime_context: Any) -> Self:
-        """Restore from :meth:`to_dict` output. Pass ``backend`` / ``cloud_output_path`` as ``runtime_context``."""
+        """Restore from :meth:`to_dict` output. Pass ``role`` / ``cloud_output_path`` as ``runtime_context``."""
         return cls(**config, **runtime_context)
 
     @classmethod
@@ -416,13 +415,11 @@ class TimeSeriesFoundationModel(FoundationModel):
         endpoint_name: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         framework_version: str = "latest",
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        **kwargs,
+        **backend_kwargs,
     ) -> TimeSeriesEndpoint:
         """
         Deploy model to an inference endpoint.
@@ -438,7 +435,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             Model hyperparameters for inference. Overrides values passed to the constructor.
         framework_version
             Container framework version. If 'latest', uses the most recent available.
-        image_uri
+        custom_image_uri
             Custom Docker image URI for the inference container.
         wait
             Whether to block until the endpoint is ready.
@@ -447,27 +444,20 @@ class TimeSeriesFoundationModel(FoundationModel):
             (no instance management, scales to zero).
         inference_config
             Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
-        environment
-            Environment variables set in the inference container.
-        backend_overrides
-            Raw SageMaker request fields deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
-            ``"create_model"``, ``"production_variant"``, ``"create_endpoint_config"``, ``"create_endpoint"``. See
-            :meth:`autogluon.cloud.TabularCloudPredictor.deploy`.
-        **kwargs
-            Additional deployment arguments (``initial_instance_count``, ``volume_size``).
+        **backend_kwargs
+            Backend-specific arguments (e.g., ``initial_instance_count``, ``volume_size``, ``backend_overrides``; see
+            :meth:`autogluon.cloud.TabularCloudPredictor.deploy`).
         """
         self._deploy_backend(
             instance_type=instance_type,
             endpoint_name=endpoint_name,
             hyperparameters=hyperparameters,
             framework_version=framework_version,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
             inference_mode=inference_mode,
             inference_config=inference_config,
-            environment=environment,
-            backend_overrides=backend_overrides,
-            **kwargs,
+            **backend_kwargs,
         )
         return TimeSeriesEndpoint(
             endpoint_name=self._backend.endpoint_name,
@@ -512,10 +502,9 @@ class TimeSeriesFoundationModel(FoundationModel):
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        **kwargs,
+        **backend_kwargs,
     ) -> Union[pd.DataFrame, JobPredictionFuture]:
         """
         Run batch prediction for time series.
@@ -555,18 +544,15 @@ class TimeSeriesFoundationModel(FoundationModel):
             Instance type for the prediction job. If None, uses registry default.
         framework_version
             Container framework version.
-        image_uri
+        custom_image_uri
             Custom Docker image URI for the container.
         wait
             If True, block and return a DataFrame. If False, return a
             :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
             retrieve the DataFrame, or ``.status()`` to check progress.
-        backend_overrides
-            Raw provider request fields. This prediction path uses a SageMaker training job;
-            the valid key is ``"create_training_job"``. See :meth:`autogluon.cloud.TabularCloudPredictor.fit`.
-        **kwargs
-            Additional job arguments accepted by :meth:`autogluon.cloud.TimeSeriesCloudPredictor.fit` (e.g.
-            ``job_name``, ``volume_size``, ``environment``, ``use_spot_instances``).
+        **backend_kwargs
+            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
+            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
 
         Returns
         -------
@@ -601,16 +587,18 @@ class TimeSeriesFoundationModel(FoundationModel):
             timestamp_column=timestamp_column,
             framework_version=framework_version,
             instance_type=instance_type,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
-            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
-            extra_tags={"autogluon-cloud-model-id": self.model_id},
-            **kwargs,
+            extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            **backend_kwargs,
         )
 
         if not wait:
-            return self._backend.get_prediction_future()
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=self._backend.get_fit_predict_results,
+            )
 
         return self._backend.get_fit_predict_results()
 
@@ -641,13 +629,11 @@ class TabularFoundationModel(FoundationModel):
         endpoint_name: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         framework_version: str = "latest",
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
         inference_mode: Literal["realtime"] = "realtime",
         inference_config: Optional[Dict[str, Any]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        **kwargs,
+        **backend_kwargs,
     ) -> TabularEndpoint:
         """Deploy the tabular foundation model to an inference endpoint.
 
@@ -672,12 +658,10 @@ class TabularFoundationModel(FoundationModel):
             endpoint_name=endpoint_name,
             hyperparameters=hyperparameters,
             framework_version=framework_version,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
             inference_mode="realtime",
-            environment=environment,
-            backend_overrides=backend_overrides,
-            **kwargs,
+            **backend_kwargs,
         )
         return TabularEndpoint(
             endpoint_name=self._backend.endpoint_name,
@@ -698,14 +682,8 @@ class TabularFoundationModel(FoundationModel):
     def _load_results(
         self, *, include_predict: bool, predict_only: bool = False
     ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]:
-        raw = self._backend.get_fit_predict_results()
-        return self._format_results(raw, include_predict=include_predict, predict_only=predict_only)
-
-    @staticmethod
-    def _format_results(
-        raw: pd.DataFrame, *, include_predict: bool, predict_only: bool = False
-    ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]:
         # The training container writes [pred, <class>_proba...]; regression has only the pred column.
+        raw = self._backend.get_fit_predict_results()
         pred, pred_proba = split_pred_and_pred_proba(raw)
         if pred_proba is None:  # regression: proba mirrors pred, matching TabularPredictor.predict_proba
             pred_proba = pred
@@ -727,10 +705,9 @@ class TabularFoundationModel(FoundationModel):
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        **kwargs,
+        **backend_kwargs,
     ) -> Union[pd.Series, JobPredictionFuture]:
         """
         Run batch prediction for tabular tasks.
@@ -756,17 +733,14 @@ class TabularFoundationModel(FoundationModel):
             Instance type for the prediction job. If None, uses registry default.
         framework_version
             Container framework version.
-        image_uri
+        custom_image_uri
             Custom Docker image URI for the container.
         wait
             If True, block and return the predictions. If False, return a :class:`JobPredictionFuture`
             immediately — call ``.result()`` on it later to retrieve the predictions.
-        backend_overrides
-            Raw provider request fields. This prediction path uses a SageMaker training job;
-            the valid key is ``"create_training_job"``. See :meth:`autogluon.cloud.TabularCloudPredictor.fit`.
-        **kwargs
-            Additional job arguments accepted by :meth:`autogluon.cloud.TabularCloudPredictor.fit` (e.g.
-            ``job_name``, ``volume_size``, ``environment``, ``use_spot_instances``).
+        **backend_kwargs
+            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
+            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
 
         Returns
         -------
@@ -782,14 +756,14 @@ class TabularFoundationModel(FoundationModel):
             hyperparameters=hyperparameters,
             instance_type=instance_type,
             framework_version=framework_version,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
-            backend_overrides=backend_overrides,
-            **kwargs,
+            **backend_kwargs,
         )
         if not wait:
-            return self._backend.get_prediction_future(
-                result_transform=partial(self._format_results, include_predict=True, predict_only=True),
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=lambda: self._load_results(include_predict=True, predict_only=True),
             )
         pred, _ = result
         return pred
@@ -806,10 +780,9 @@ class TabularFoundationModel(FoundationModel):
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
         framework_version: str = "latest",
-        image_uri: Optional[str] = None,
+        custom_image_uri: Optional[str] = None,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        **kwargs,
+        **backend_kwargs,
     ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series], JobPredictionFuture]:
         """
         Run batch prediction returning class probabilities.
@@ -837,15 +810,13 @@ class TabularFoundationModel(FoundationModel):
             Instance type for the prediction job. If None, uses registry default.
         framework_version
             Container framework version.
-        image_uri
+        custom_image_uri
             Custom Docker image URI for the container.
         wait
             If True, block and return the result. If False, return a :class:`JobPredictionFuture` immediately.
-        backend_overrides
-            Raw provider request fields under ``"create_training_job"``. See :meth:`predict`.
-        **kwargs
-            Additional job arguments accepted by :meth:`autogluon.cloud.TabularCloudPredictor.fit` (e.g.
-            ``job_name``, ``volume_size``, ``environment``, ``use_spot_instances``).
+        **backend_kwargs
+            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
+            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
 
         Returns
         -------
@@ -864,7 +835,7 @@ class TabularFoundationModel(FoundationModel):
         extra_ag_args: Dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
-        kwargs["leaderboard"] = False
+        backend_kwargs["leaderboard"] = False
 
         self._backend.fit(
             predictor_init_args=self._build_predictor_init_args(label=label),
@@ -872,16 +843,16 @@ class TabularFoundationModel(FoundationModel):
             data_channels={"train_data": train_data, "tuning_data": tuning_data, "test_data": test_data},
             framework_version=framework_version,
             instance_type=instance_type,
-            image_uri=image_uri,
+            custom_image_uri=custom_image_uri,
             wait=wait,
-            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
-            extra_tags={"autogluon-cloud-model-id": self.model_id},
-            **kwargs,
+            extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            **backend_kwargs,
         )
 
         if not wait:
-            return self._backend.get_prediction_future(
-                result_transform=partial(self._format_results, include_predict=include_predict),
+            return JobPredictionFuture(
+                job=self._backend._fit_job,
+                result_loader=lambda: self._load_results(include_predict=include_predict),
             )
         return self._load_results(include_predict=include_predict)

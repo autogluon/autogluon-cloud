@@ -3,7 +3,6 @@ from unittest import mock
 import pandas as pd
 import pytest
 
-from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.backend.tabular_sagemaker_backend import TabularSagemakerBackend
 from autogluon.cloud.utils.dlc_utils import infer_sagemaker_ami_version
 
@@ -72,7 +71,6 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(
             local_output_path="/tmp/test",
             cloud_output_path="s3://bucket/run",
             predictor_type="tabular",
-            config=SageMakerConfig(output_kms_key="output-key"),
         )
         backend._fit_job = mock.MagicMock()
         backend._predict(
@@ -80,7 +78,7 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(
             predictor_path="s3://bucket/model.tar.gz",
             job_name="job",
             instance_type="ml.g4dn.xlarge",
-            image_uri=GPU_IMAGE_URI,
+            custom_image_uri=GPU_IMAGE_URI,
             wait=False,
             download=False,
             persist=False,
@@ -91,5 +89,3 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(
     assert_valid_request("CreateTransformJob", request)
     assert request["TransformResources"]["TransformAmiVersion"] == expected
     assert request["TransformResources"]["InstanceType"] == "ml.g4dn.xlarge"
-    assert request["TransformOutput"]["KmsKeyId"] == "output-key"
-    assert "VolumeKmsKeyId" not in request["TransformResources"]

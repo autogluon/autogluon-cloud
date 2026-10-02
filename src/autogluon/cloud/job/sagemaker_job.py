@@ -192,13 +192,6 @@ class SageMakerFitJob(SageMakerJob):
             return self._describe().get("HyperParameters")
         return None
 
-    def get_input_channels(self) -> Dict[str, str]:
-        """Map each input channel name of the training job to its S3 URI."""
-        return {
-            channel["ChannelName"]: channel["DataSource"]["S3DataSource"]["S3Uri"]
-            for channel in self._describe()["InputDataConfig"]
-        }
-
     def run(
         self,
         training_job_request: Dict[str, Any],

@@ -4,7 +4,6 @@ from unittest import mock
 
 import pytest
 
-from autogluon.cloud import SageMakerConfig
 from autogluon.cloud.backend.sagemaker_backend import SagemakerBackend
 
 GPU_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/autogluon:1.6-cu133-amzn2023"
@@ -27,10 +26,8 @@ def deploy_requests(assert_valid_request):
         )
         backend._fit_job = None  # deploy a serve-script tarball, not a fit-job artifact
 
-        def run(backend_config=None, **kwargs):
+        def run(**kwargs):
             backend.endpoint_name = None  # allow re-deploy across cases
-            if backend_config is not None:
-                backend.config = backend_config
             backend.deploy(endpoint_name="ep", entry_point="stub.py", **kwargs)
             client = backend.sagemaker_session.sagemaker_client
             requests = {
@@ -70,7 +67,7 @@ def test_when_deployed_then_model_endpoint_config_and_endpoint_are_linked(deploy
 
 
 def test_when_cuda_13_custom_image_then_inference_ami_is_inferred(deploy_requests):
-    variant = _variant(deploy_requests(instance_type="ml.g4dn.xlarge", image_uri=GPU_IMAGE_URI))
+    variant = _variant(deploy_requests(instance_type="ml.g4dn.xlarge", custom_image_uri=GPU_IMAGE_URI))
     assert variant["InferenceAmiVersion"] == "al2023-ami-sagemaker-inference-gpu-4-1"
 
 
@@ -78,7 +75,7 @@ def test_when_inference_ami_is_overridden_then_override_wins(deploy_requests):
     variant = _variant(
         deploy_requests(
             instance_type="ml.g4dn.xlarge",
-            image_uri=GPU_IMAGE_URI,
+            custom_image_uri=GPU_IMAGE_URI,
             backend_overrides={"production_variant": {"InferenceAmiVersion": "custom-ami"}},
         )
     )
@@ -119,8 +116,11 @@ def test_when_inference_mode_is_unknown_then_value_error_is_raised(deploy_reques
         deploy_requests(inference_mode="batch")
 
 
-def test_when_environment_given_then_it_reaches_the_container(deploy_requests):
-    requests = deploy_requests(instance_type="ml.m5.xlarge", environment={"FOO": "bar"})
+def test_when_container_environment_overridden_then_it_merges_with_defaults(deploy_requests):
+    requests = deploy_requests(
+        instance_type="ml.m5.xlarge",
+        backend_overrides={"create_model": {"PrimaryContainer": {"Environment": {"FOO": "bar"}}}},
+    )
     environment = requests["model"]["PrimaryContainer"]["Environment"]
     assert environment["FOO"] == "bar"
     assert environment["SAGEMAKER_MODEL_SERVER_WORKERS"] == "1"
@@ -129,19 +129,3 @@ def test_when_environment_given_then_it_reaches_the_container(deploy_requests):
 def test_when_override_targets_training_job_then_deploy_rejects_it(deploy_requests):
     with pytest.raises(ValueError, match="Unsupported `backend_overrides` key"):
         deploy_requests(backend_overrides={"create_training_job": {}})
-
-
-@pytest.mark.parametrize(
-    ("inference_mode", "volume_key"),
-    [("realtime", None), ("realtime", "volume-key"), ("serverless", "volume-key")],
-)
-def test_endpoint_volume_encryption_is_independent_of_output_encryption(deploy_requests, inference_mode, volume_key):
-    requests = deploy_requests(
-        inference_mode=inference_mode,
-        backend_config=SageMakerConfig(output_kms_key="output-key", volume_kms_key=volume_key),
-    )
-    config = requests["endpoint_config"]
-    if inference_mode == "realtime" and volume_key is not None:
-        assert config["KmsKeyId"] == volume_key
-    else:
-        assert "KmsKeyId" not in config
