@@ -655,8 +655,6 @@ class SagemakerBackend(Backend):
         assert self.endpoint_name is None, (
             "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
         )
-        if not isinstance(endpoint, str):
-            raise ValueError(f"Please provide the endpoint name as a string, got {type(endpoint).__name__}.")
         self.endpoint_name = endpoint
 
     def detach_endpoint(self) -> str:
