@@ -112,7 +112,11 @@ def retrieve_image_uri(framework_version, region, image_scope, instance_type, py
         py_version = version_info["py_versions"][0]
     os_suffix = version_info.get("os")
     cuda_version = version_info.get("cuda_version")
-    if os_suffix:
+    if version_info.get("unified"):
+        # AG 1.6+ ships a single image for training and inference, tagged e.g. 1.6.3-cpu-amzn2023 / 1.6.3-cu133-amzn2023
+        accelerator = cuda_version if processor == "gpu" else "cpu"
+        tag = f"{framework_version}-{accelerator}-{os_suffix}"
+    elif os_suffix:
         if processor == "gpu" and cuda_version:
             tag = f"{framework_version}-{processor}-{py_version}-{cuda_version}-{os_suffix}"
         else:

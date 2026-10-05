@@ -103,6 +103,11 @@ def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(
     assert request["TransformResources"]["InstanceType"] == "ml.g4dn.xlarge"
 
 
+def test_batch_transform_sets_ami_for_default_cuda_13_image(transform_request):
+    request = transform_request(instance_type="ml.g4dn.xlarge", framework_version="1.6.3")
+    assert request["TransformResources"]["TransformAmiVersion"] == "al2-ami-sagemaker-batch-gpu-535"
+
+
 def test_batch_transform_writes_results_to_predictions_path(transform_request):
     request = transform_request(predictions_path="s3://my-bucket/preds/")
     assert request["TransformOutput"]["S3OutputPath"] == "s3://my-bucket/preds"

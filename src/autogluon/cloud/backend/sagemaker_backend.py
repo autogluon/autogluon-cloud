@@ -563,12 +563,13 @@ class SagemakerBackend(Backend):
             container_environment.setdefault("METRICS_LOCATION", "/tmp")
 
         tags = self._resolve_tags(extra_tags)
+        image_uri = retrieve_image_uri(
+            framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
+        )
         model_name = self._create_model(
             model_name=endpoint_name,
             model_data=model_data,
-            image_uri=retrieve_image_uri(
-                framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
-            ),
+            image_uri=image_uri,
             entry_point=entry_point,
             environment=container_environment,
             tags=tags,
@@ -581,9 +582,7 @@ class SagemakerBackend(Backend):
             variant["InitialInstanceCount"] = initial_instance_count
             if volume_size:
                 variant["VolumeSizeInGB"] = volume_size
-            inference_ami_version = infer_sagemaker_ami_version(
-                custom_image_uri, instance_type, image_scope="inference"
-            )
+            inference_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="inference")
             if inference_ami_version is not None:
                 variant["InferenceAmiVersion"] = inference_ami_version
         else:
@@ -1293,12 +1292,13 @@ class SagemakerBackend(Backend):
         )
 
         tags = self._resolve_tags()
+        image_uri = retrieve_image_uri(
+            framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
+        )
         model_name = self._create_model(
             model_name=job_name,
             model_data=model_data,
-            image_uri=retrieve_image_uri(
-                framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
-            ),
+            image_uri=image_uri,
             entry_point=entry_point,
             environment={},
             tags=tags,
@@ -1318,7 +1318,7 @@ class SagemakerBackend(Backend):
         if assemble_with is not None:
             transform_output["AssembleWith"] = assemble_with
         transform_resources: Dict[str, Any] = {"InstanceType": instance_type, "InstanceCount": instance_count}
-        transform_ami_version = infer_sagemaker_ami_version(custom_image_uri, instance_type, image_scope="transform")
+        transform_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="transform")
         if transform_ami_version is not None:
             transform_resources["TransformAmiVersion"] = transform_ami_version
         request = {
