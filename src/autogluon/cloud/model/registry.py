@@ -106,14 +106,14 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     ),
     # TabICL, TabDPT-Turbo and Nori download weights pinned by AutoGluon / the model library at fit time, so they
     # have no weights-source hyperparameter and don't support `cache_model_artifact`.
-    "tabicl-classifier-v2": FoundationModelConfig(
+    "tabicl-v2-classifier": FoundationModelConfig(
         problem_type="multiclass",
         ag_model_key="TABICL",
         model_source_uri="jingang/TabICL",
         inference_hyperparameters={"checkpoint_version": "tabicl-classifier-v2-20260212.ckpt"},
         predict_instance_type="ml.g5.xlarge",
     ),
-    "tabicl-regressor-v2": FoundationModelConfig(
+    "tabicl-v2-regressor": FoundationModelConfig(
         problem_type="regression",
         ag_model_key="TABICL",
         model_source_uri="jingang/TabICL",
@@ -132,14 +132,14 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="Layer6/TabDPT",
         predict_instance_type="ml.g5.xlarge",
     ),
-    "nori": FoundationModelConfig(
+    "nori-regressor": FoundationModelConfig(
         problem_type="regression",
         ag_model_key="NORI",
         model_source_uri="Synthefy/Nori",
         inference_hyperparameters={"model": "nori"},
         predict_instance_type="ml.g5.xlarge",
     ),
-    "nori-30m": FoundationModelConfig(
+    "nori-30m-regressor": FoundationModelConfig(
         problem_type="regression",
         ag_model_key="NORI",
         model_source_uri="Synthefy/Nori-30M",

@@ -210,7 +210,7 @@ def test_cache_model_artifact_rejects_non_s3_path():
 
 
 def test_cache_model_artifact_rejects_models_without_weights_source_hyperparameter():
-    fm = FoundationModel("tabicl-classifier-v2", cloud_output_path="s3://b")
+    fm = FoundationModel("tabicl-v2-classifier", cloud_output_path="s3://b")
     with pytest.raises(ValueError, match="does not support cache_model_artifact"):
         fm.cache_model_artifact("s3://b/cache")
 
@@ -219,9 +219,9 @@ def test_cache_model_artifact_rejects_models_without_weights_source_hyperparamet
     "model_id, expected_hp",
     [
         ("toto-2.0-2.5b", {"model_path": "Datadog/Toto-2.0-2.5B"}),
-        ("tabicl-regressor-v2", {"checkpoint_version": "tabicl-regressor-v2-20260212.ckpt"}),
+        ("tabicl-v2-regressor", {"checkpoint_version": "tabicl-regressor-v2-20260212.ckpt"}),
         ("tabdpt-turbo-classifier", {}),
-        ("nori-30m", {"model": "nori-30m"}),
+        ("nori-30m-regressor", {"model": "nori-30m"}),
     ],
 )
 def test_inference_hyperparameters_for_new_models(model_id, expected_hp):
