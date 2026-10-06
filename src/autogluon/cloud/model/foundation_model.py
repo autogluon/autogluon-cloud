@@ -647,8 +647,7 @@ class TabularFoundationModel(FoundationModel):
     runs prediction as a managed SageMaker job, with no training required. Each ``model_id`` targets a
     single task:
 
-    * Classification: ``mitra-classifier``, ``mitra-classifier-2``, ``tabicl-classifier-v2``,
-      ``tabdpt-turbo-classifier``.
+    * Classification: ``mitra-classifier``, ``tabicl-classifier-v2``, ``tabdpt-turbo-classifier``.
     * Regression: ``mitra-regressor``, ``tabicl-regressor-v2``, ``tabdpt-turbo-regressor``,
       ``nori``, ``nori-30m``.
 

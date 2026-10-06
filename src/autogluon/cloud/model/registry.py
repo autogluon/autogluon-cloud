@@ -104,16 +104,6 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         predict_instance_type="ml.m5.4xlarge",
         deploy_instance_type="ml.m5.4xlarge",
     ),
-    # autogluon/mitra-regressor-2 is not included: its distributional head is not supported by AutoGluon's MITRA model.
-    "mitra-classifier-2": FoundationModelConfig(
-        problem_type="multiclass",
-        ag_model_key="MITRA",
-        model_source_uri="autogluon/mitra-classifier-2",
-        model_source_hyperparameter="hf_cls_model",
-        inference_hyperparameters={"fine_tune": False},
-        predict_instance_type="ml.m5.4xlarge",
-        deploy_instance_type="ml.m5.4xlarge",
-    ),
     # TabICL, TabDPT-Turbo and Nori download weights pinned by AutoGluon / the model library at fit time, so they
     # have no weights-source hyperparameter and don't support `cache_model_artifact`.
     "tabicl-classifier-v2": FoundationModelConfig(

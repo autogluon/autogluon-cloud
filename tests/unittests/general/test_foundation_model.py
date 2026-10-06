@@ -219,7 +219,6 @@ def test_cache_model_artifact_rejects_models_without_weights_source_hyperparamet
     "model_id, expected_hp",
     [
         ("toto-2.0-2.5b", {"model_path": "Datadog/Toto-2.0-2.5B"}),
-        ("mitra-classifier-2", {"hf_cls_model": "autogluon/mitra-classifier-2", "fine_tune": False}),
         ("tabicl-regressor-v2", {"checkpoint_version": "tabicl-regressor-v2-20260212.ckpt"}),
         ("tabdpt-turbo-classifier", {}),
         ("nori-30m", {"model": "nori-30m"}),
