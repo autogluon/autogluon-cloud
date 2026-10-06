@@ -40,6 +40,7 @@ class MultiModalEndpoint(Endpoint):
 
     def _predict(self, data: DataInput, inference_kwargs: dict[str, Any]) -> tuple[pd.Series, Prediction]:
         inference_kwargs = dict(inference_kwargs)
+        self._pop_as_pandas(inference_kwargs)
         data, content_type = self._load_data(data, image_column=inference_kwargs.pop("image_column", None))
         raw = invoke_endpoint(
             self._endpoint_name,

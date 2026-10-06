@@ -116,6 +116,18 @@ def test_image_column_is_encoded_and_not_forwarded(make_endpoint, invoke_endpoin
     assert payload.inference_kwargs == {}
 
 
+@pytest.mark.parametrize(
+    "train_data, label", [(None, None), (pd.DataFrame({"feature": [0], "label": ["a"]}), "label")]
+)
+def test_as_pandas_is_not_forwarded(make_endpoint, invoke_endpoint, train_data, label):
+    # The serve scripts pass as_pandas=True themselves; forwarding it raises a duplicate-keyword TypeError.
+    endpoint = make_endpoint(pd.DataFrame({"label": ["a"], "a_proba": [1.0]}))
+
+    endpoint.predict(pd.DataFrame({"feature": [1]}), train_data, label, as_pandas=True, model="LightGBM")
+
+    assert "as_pandas" not in invoke_endpoint.call_args.args[2].inference_kwargs
+
+
 def test_delete_endpoint_removes_model_endpoint_and_config(make_endpoint, invoke_endpoint):
     endpoint = make_endpoint(pd.DataFrame())
     with mock.patch("autogluon.cloud.endpoint.endpoint.delete_endpoint") as delete_endpoint:

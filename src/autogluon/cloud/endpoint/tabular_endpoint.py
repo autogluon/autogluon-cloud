@@ -43,6 +43,7 @@ class TabularEndpoint(Endpoint):
     ) -> tuple[pd.Series, Prediction]:
         data = self._load_data(data)
         inference_kwargs = dict(inference_kwargs or {})
+        self._pop_as_pandas(inference_kwargs)
         image_column = inference_kwargs.pop("image_column", None)
 
         if (train_data is None) != (label is None):

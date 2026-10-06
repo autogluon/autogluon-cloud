@@ -1,7 +1,12 @@
+import logging
+from typing import Any
+
 import boto3
 
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.sagemaker_api import delete_endpoint
+
+logger = logging.getLogger(__name__)
 
 
 class Endpoint:
@@ -24,6 +29,12 @@ class Endpoint:
     @property
     def endpoint_name(self) -> str:
         return self._endpoint_name
+
+    @staticmethod
+    def _pop_as_pandas(inference_kwargs: dict[str, Any]) -> None:
+        # The serve scripts always pass as_pandas=True, so forwarding it would raise a duplicate-keyword TypeError.
+        if inference_kwargs.pop("as_pandas", True) is not True:
+            logger.warning("as_pandas must be True for real-time prediction; ignoring it.")
 
     def delete_endpoint(self) -> None:
         """Delete the endpoint and its backing model + endpoint config.
