@@ -163,9 +163,9 @@ class SageMakerFitJob(SageMakerJob):
         obj = cls(session=session)
         obj._job_name = job_name
         obj._wait_until_completed()
-        obj._framework_version = infer_framework_version_from_image_uri(
-            obj._describe()["AlgorithmSpecification"]["TrainingImage"]
-        )
+        # Jobs created from an algorithm resource (AlgorithmName) have no TrainingImage
+        training_image = obj._describe()["AlgorithmSpecification"].get("TrainingImage")
+        obj._framework_version = infer_framework_version_from_image_uri(training_image) if training_image else None
         return obj
 
     @property

@@ -21,7 +21,7 @@ _INFERENCE_AMI_INSTANCE_PREFIXES = (
     "ml.p5e.",
     "ml.p5en.",
 )
-_BATCH_AMI_INSTANCE_PREFIXES = ("ml.g4dn.", "ml.g5.", "ml.g6.")
+_BATCH_AMI_INSTANCE_PREFIXES = ("ml.g4dn.", "ml.g5.", "ml.g6.", "ml.g6e.")
 _CUDA_13_AMI_VERSIONS = {
     "inference": "al2023-ami-sagemaker-inference-gpu-4-1",
     "transform": "al2-ami-sagemaker-batch-gpu-535",
@@ -38,16 +38,14 @@ def _is_gpu_instance(instance_type):
 
 
 def infer_sagemaker_ami_version(image_uri, instance_type, image_scope):
-    """Infer the SageMaker host AMI required by a custom GPU image."""
+    """Infer the SageMaker host AMI required by a CUDA 13 GPU image."""
     assert image_scope in _CUDA_13_AMI_VERSIONS
     instance_prefixes = (
         _INFERENCE_AMI_INSTANCE_PREFIXES if image_scope == "inference" else _BATCH_AMI_INSTANCE_PREFIXES
     )
-    if not image_uri or not instance_type.startswith(instance_prefixes):
+    if not image_uri or not re.search(r"(?:^|-)cu13\d*(?:-|$)", image_uri.rsplit(":", 1)[-1]):
         return None
-
-    image_tag = image_uri.rsplit(":", 1)[-1]
-    if re.search(r"(?:^|-)cu13\d*(?:-|$)", image_tag):
+    if instance_type.startswith(instance_prefixes):
         return _CUDA_13_AMI_VERSIONS[image_scope]
     return None
 
