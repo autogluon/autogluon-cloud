@@ -24,7 +24,7 @@ from ..utils.ag_sagemaker import (
     upload_training_code,
 )
 from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
-from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, LOCAL_MODE, LOCAL_MODE_GPU, VALID_ACCEPT
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE, LOCAL_MODE, LOCAL_MODE_GPU, VALID_ACCEPT
 from ..utils.deserializers import PandasDeserializer
 from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version, retrieve_image_uri
 from ..utils.misc import MostRecentInsertedOrderedDict, sagemaker_timestamp, unique_name_from_base
@@ -201,7 +201,7 @@ class SagemakerBackend(Backend):
         job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int | str = 1,
-        volume_size: int = 256,
+        volume_size: int = DEFAULT_VOLUME_SIZE,
         custom_image_uri: str | None = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
@@ -239,8 +239,8 @@ class SagemakerBackend(Backend):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
-        volume_size: int, default = 256
-            Size in GB of the EBS volume to use for storing input data during training (default: 256).
+        volume_size: int, default = 100
+            Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60
             Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.

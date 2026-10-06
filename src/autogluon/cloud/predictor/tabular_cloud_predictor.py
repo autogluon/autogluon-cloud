@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER
-from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from .cloud_predictor import CloudPredictor
@@ -51,7 +51,7 @@ class TabularCloudPredictor(CloudPredictor):
         job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        volume_size: int = 256,
+        volume_size: int = DEFAULT_VOLUME_SIZE,
         custom_image_uri: str | None = None,
         wait: bool = True,
         predictions_path: str | None = None,
@@ -88,7 +88,7 @@ class TabularCloudPredictor(CloudPredictor):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instances used to fit the predictor.
-        volume_size: int, default = 256
+        volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
         custom_image_uri: str | None, default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
@@ -153,7 +153,7 @@ class TabularCloudPredictor(CloudPredictor):
         job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        volume_size: int = 256,
+        volume_size: int = DEFAULT_VOLUME_SIZE,
         custom_image_uri: str | None = None,
         wait: bool = True,
         predictions_path: str | None = None,
@@ -189,7 +189,7 @@ class TabularCloudPredictor(CloudPredictor):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instances used to fit the predictor.
-        volume_size: int, default = 256
+        volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
         custom_image_uri: str | None, default = None
             Custom container image URI. If set, ``framework_version`` is ignored.

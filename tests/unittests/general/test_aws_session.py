@@ -134,3 +134,4 @@ def test_resource_names():
     assert len(name) == 63
     assert re.fullmatch(r"a+-\d+-[0-9a-f]{4}", name)
     assert unique_name_from_base("ag") != unique_name_from_base("ag")
+    assert re.fullmatch(r"ag-cloud-toto-2-0-4m-\d+-[0-9a-f]{4}", unique_name_from_base("ag-cloud-toto-2.0-4m"))

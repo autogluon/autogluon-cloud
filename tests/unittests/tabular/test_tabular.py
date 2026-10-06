@@ -3,12 +3,14 @@ import tarfile
 import tempfile
 
 import boto3
+import numpy as np
 import pandas as pd
 import pytest
 from botocore.exceptions import ClientError
 
 from autogluon.cloud import TabularCloudPredictor
 from autogluon.cloud.model import TabularFoundationModel
+from autogluon.cloud.model.registry import FOUNDATION_MODEL_REGISTRY, get_model_config
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 _TRAIN_DATA = "tabular_train.csv"
@@ -159,35 +161,64 @@ def test_tabular_predict_trained_artifact(test_helper, framework_version, shared
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
 
 
-def test_tabular_foundation_model_predict(test_helper, framework_version):
+def _synthetic_tabular_data(problem_type: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Small train/test split with numeric and categorical features; ``label`` is numeric for regression."""
+    rng = np.random.default_rng(0)
+    data = pd.DataFrame({"num": rng.normal(size=300), "cat": rng.choice(["x", "y", "z"], size=300)})
+    if problem_type == "regression":
+        data["label"] = 2 * data["num"] + (data["cat"] == "x") + rng.normal(scale=0.1, size=300)
+    else:
+        data["label"] = np.where(data["num"] > 0, "pos", "neg")
+    return data.iloc[:200], data.iloc[200:].drop(columns="label")
+
+
+# Smallest model of each tabular foundation model family on CPU, plus one GPU run. Instance types are set explicitly
+# instead of using the registry defaults to keep CI cheap.
+_FM_PREDICT_CASES = [
+    ("mitra-classifier", "ml.m5.4xlarge"),
+    ("tabicl-v2-classifier", "ml.m5.4xlarge"),
+    ("tabdpt-turbo-classifier", "ml.m5.4xlarge"),
+    ("nori-regressor", "ml.m5.4xlarge"),
+    ("tabicl-v2-classifier", "ml.g4dn.2xlarge"),
+]
+
+
+def test_fm_predict_cases_cover_every_tabular_family():
+    covered = {get_model_config(model_id).ag_model_key for model_id, _ in _FM_PREDICT_CASES}
+    expected = {c.ag_model_key for c in FOUNDATION_MODEL_REGISTRY.values() if c.problem_type != "forecasting"}
+    assert covered == expected, f"Add a test case for the families: {sorted(expected - covered)}"
+
+
+@pytest.mark.parametrize("model_id, instance_type", _FM_PREDICT_CASES, ids=lambda v: v.removeprefix("ml."))
+def test_tabular_foundation_model_predict(test_helper, framework_version, model_id, instance_type):
     timestamp = test_helper.get_utc_timestamp_now()
+    gpu = instance_type.startswith(("ml.g", "ml.p"))
     bucket = "autogluon-cloud-ci"
-    predictions_key = f"test-tabular-fm-predict/{framework_version}/{timestamp}/custom_predictions.csv"
+    run_prefix = f"test-tabular-fm-predict/{framework_version}/{timestamp}/{model_id}-{instance_type}"
+    predictions_key = f"{run_prefix}/custom_predictions.csv"
     predictions_path = f"s3://{bucket}/{predictions_key}"
+    problem_type = get_model_config(model_id).problem_type
+    train_data, test_data = _synthetic_tabular_data(problem_type)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        test_helper.prepare_data(_TRAIN_DATA, _TEST_DATA)
-        n_test_rows = len(pd.read_csv(_TEST_DATA))
-
-        model = TabularFoundationModel(
-            "mitra-classifier",
-            cloud_output_path=f"s3://{bucket}/test-tabular-fm-predict/{framework_version}/{timestamp}",
-        )
+        model = TabularFoundationModel(model_id, cloud_output_path=f"s3://{bucket}/{run_prefix}")
         pred, pred_proba = model.predict_proba(
-            train_data=_TRAIN_DATA,
-            test_data=_TEST_DATA,
-            label="class",
+            train_data=train_data,
+            test_data=test_data,
+            label="label",
             include_predict=True,
+            instance_type=instance_type,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=gpu),
             predictions_path=predictions_path,
         )
 
         assert isinstance(pred, pd.Series)
-        assert len(pred) == n_test_rows
-        assert isinstance(pred_proba, pd.DataFrame)
-        assert len(pred_proba) == n_test_rows
+        assert len(pred) == len(test_data)
+        assert pred.notna().all()
+        assert isinstance(pred_proba, pd.Series if problem_type == "regression" else pd.DataFrame)
+        assert len(pred_proba) == len(test_data)
 
         head = boto3.client("s3").head_object(Bucket=bucket, Key=predictions_key)
         assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"

@@ -209,6 +209,26 @@ def test_cache_model_artifact_rejects_non_s3_path():
         fm.cache_model_artifact("/local/path")
 
 
+def test_cache_model_artifact_rejects_models_without_weights_source_hyperparameter():
+    fm = FoundationModel("tabicl-v2-classifier", cloud_output_path="s3://b")
+    with pytest.raises(ValueError, match="does not support cache_model_artifact"):
+        fm.cache_model_artifact("s3://b/cache")
+
+
+@pytest.mark.parametrize(
+    "model_id, expected_hp",
+    [
+        ("toto-2.0-2.5b", {"model_path": "Datadog/Toto-2.0-2.5B"}),
+        ("tabicl-v2-regressor", {"checkpoint_version": "tabicl-regressor-v2-20260212.ckpt"}),
+        ("tabdpt-turbo-classifier", {}),
+        ("nori-30m-regressor", {"model": "nori-30m"}),
+    ],
+)
+def test_inference_hyperparameters_for_new_models(model_id, expected_hp):
+    fm = FoundationModel(model_id, cloud_output_path="s3://b")
+    assert fm._get_hyperparameters("inference") == expected_hp
+
+
 def test_cache_model_artifact_uploads_with_version_metadata(monkeypatch):
     """On cache miss, upload_file runs with the version metadata key — that's the cache-invalidation contract."""
     from autogluon.cloud.version import __version__

@@ -14,6 +14,7 @@ from botocore.exceptions import ClientError
 
 from autogluon.cloud import TimeSeriesCloudPredictor
 from autogluon.cloud.model import FoundationModel
+from autogluon.cloud.model.registry import FOUNDATION_MODEL_REGISTRY, get_model_config
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 
@@ -271,15 +272,34 @@ def test_timeseries_fit_predict_chronos(
         assert info["fit_job"]["status"] == "Completed"
 
 
-def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset):
+# Smallest model of each time series foundation model family on CPU, plus one GPU run. Instance types are set
+# explicitly instead of using the registry defaults to keep CI cheap.
+_FM_PREDICT_CASES = [
+    ("chronos-bolt-tiny", "ml.m5.2xlarge"),
+    ("chronos-2-small", "ml.m5.2xlarge"),
+    ("toto-2.0-4m", "ml.m5.2xlarge"),
+    ("toto-2.0-4m", "ml.g4dn.2xlarge"),
+]
+
+
+def test_fm_predict_cases_cover_every_timeseries_family():
+    covered = {get_model_config(model_id).ag_model_key for model_id, _ in _FM_PREDICT_CASES}
+    expected = {c.ag_model_key for c in FOUNDATION_MODEL_REGISTRY.values() if c.problem_type == "forecasting"}
+    assert covered == expected, f"Add a test case for the families: {sorted(expected - covered)}"
+
+
+@pytest.mark.parametrize("model_id, instance_type", _FM_PREDICT_CASES, ids=lambda v: v.removeprefix("ml."))
+def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset, model_id, instance_type):
     """Test FoundationModel batch prediction via the fit_predict training job pattern."""
     import boto3
 
     ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
+    gpu = instance_type.startswith(("ml.g", "ml.p"))
 
     bucket = "autogluon-cloud-ci"
-    predictions_key = f"test-fm-predict/{framework_version}/{timestamp}/custom_predictions.parquet"
+    run_prefix = f"test-fm-predict/{framework_version}/{timestamp}/{model_id}-{instance_type}"
+    predictions_key = f"{run_prefix}/custom_predictions.parquet"
     predictions_path = f"s3://{bucket}/{predictions_key}"
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -287,8 +307,8 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
         expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
 
         model = FoundationModel(
-            "chronos-2",
-            cloud_output_path=f"s3://{bucket}/test-fm-predict/{framework_version}/{timestamp}",
+            model_id,
+            cloud_output_path=f"s3://{bucket}/{run_prefix}",
         )
 
         predictions = model.predict(
@@ -298,7 +318,9 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
             timestamp_column=ds["timestamp_column"],
             prediction_length=ds["prediction_length"],
             known_covariates=ds["known_covariates"],
-            instance_type="ml.m5.2xlarge",
+            instance_type=instance_type,
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=gpu),
             predictions_path=predictions_path,
         )
 
@@ -309,7 +331,7 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
 
         sm = boto3.client("sagemaker")
         job = sm.describe_training_job(TrainingJobName=model._backend._fit_job.job_name)
-        test_helper.assert_ag_cloud_tags(job["TrainingJobArn"], module="timeseries", model_id="chronos-2")
+        test_helper.assert_ag_cloud_tags(job["TrainingJobArn"], module="timeseries", model_id=model_id)
 
         model_artifact_uri = job["ModelArtifacts"]["S3ModelArtifacts"]
         model_bucket, model_key = s3_path_to_bucket_prefix(model_artifact_uri)

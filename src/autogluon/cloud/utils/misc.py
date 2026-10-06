@@ -1,3 +1,4 @@
+import re
 import secrets
 import time
 from collections import OrderedDict
@@ -10,7 +11,11 @@ def sagemaker_timestamp() -> str:
 
 
 def unique_name_from_base(base: str, max_length: int = 63) -> str:
-    """Append a timestamp and a random suffix to ``base``, trimming it so the result fits in ``max_length``."""
+    """Append a timestamp and a random suffix to ``base``, trimming it so the result fits in ``max_length``.
+
+    Characters not allowed in SageMaker resource names (e.g. the ``.`` in ``toto-2.0-4m``) are replaced with ``-``.
+    """
+    base = re.sub(r"[^a-zA-Z0-9-]", "-", base)
     suffix = f"-{int(time.time())}-{secrets.token_hex(2)}"
     return base[: max_length - len(suffix)] + suffix
 

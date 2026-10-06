@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
-from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from .cloud_predictor import CloudPredictor
 
@@ -51,7 +51,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        volume_size: int = 100,
+        volume_size: int = DEFAULT_VOLUME_SIZE,
         custom_image_uri: str | None = None,
         wait: bool = True,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
@@ -334,7 +334,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        volume_size: int = 100,
+        volume_size: int = DEFAULT_VOLUME_SIZE,
         custom_image_uri: str | None = None,
         wait: bool = True,
         backend_overrides: dict[str, dict[str, Any]] | None = None,

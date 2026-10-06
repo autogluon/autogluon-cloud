@@ -53,6 +53,39 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="autogluon/chronos-2",
         model_source_hyperparameter="model_path",
     ),
+    "toto-2.0-4m": FoundationModelConfig(
+        problem_type="forecasting",
+        ag_model_key="Toto2",
+        model_source_uri="Datadog/Toto-2.0-4m",
+        model_source_hyperparameter="model_path",
+    ),
+    "toto-2.0-22m": FoundationModelConfig(
+        problem_type="forecasting",
+        ag_model_key="Toto2",
+        model_source_uri="Datadog/Toto-2.0-22m",
+        model_source_hyperparameter="model_path",
+    ),
+    "toto-2.0-313m": FoundationModelConfig(
+        problem_type="forecasting",
+        ag_model_key="Toto2",
+        model_source_uri="Datadog/Toto-2.0-313m",
+        model_source_hyperparameter="model_path",
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "toto-2.0-1b": FoundationModelConfig(
+        problem_type="forecasting",
+        ag_model_key="Toto2",
+        model_source_uri="Datadog/Toto-2.0-1B",
+        model_source_hyperparameter="model_path",
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "toto-2.0-2.5b": FoundationModelConfig(
+        problem_type="forecasting",
+        ag_model_key="Toto2",
+        model_source_uri="Datadog/Toto-2.0-2.5B",
+        model_source_hyperparameter="model_path",
+        predict_instance_type="ml.g5.xlarge",
+    ),
     "mitra-classifier": FoundationModelConfig(
         problem_type="multiclass",
         ag_model_key="MITRA",
@@ -70,6 +103,48 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         inference_hyperparameters={"fine_tune": False},
         predict_instance_type="ml.m5.4xlarge",
         deploy_instance_type="ml.m5.4xlarge",
+    ),
+    # TabICL, TabDPT-Turbo and Nori download weights pinned by AutoGluon / the model library at fit time, so they
+    # have no weights-source hyperparameter and don't support `cache_model_artifact`.
+    "tabicl-v2-classifier": FoundationModelConfig(
+        problem_type="multiclass",
+        ag_model_key="TABICL",
+        model_source_uri="jingang/TabICL",
+        inference_hyperparameters={"checkpoint_version": "tabicl-classifier-v2-20260212.ckpt"},
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "tabicl-v2-regressor": FoundationModelConfig(
+        problem_type="regression",
+        ag_model_key="TABICL",
+        model_source_uri="jingang/TabICL",
+        inference_hyperparameters={"checkpoint_version": "tabicl-regressor-v2-20260212.ckpt"},
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "tabdpt-turbo-classifier": FoundationModelConfig(
+        problem_type="multiclass",
+        ag_model_key="TABDPT-TURBO",
+        model_source_uri="Layer6/TabDPT",
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "tabdpt-turbo-regressor": FoundationModelConfig(
+        problem_type="regression",
+        ag_model_key="TABDPT-TURBO",
+        model_source_uri="Layer6/TabDPT",
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "nori-regressor": FoundationModelConfig(
+        problem_type="regression",
+        ag_model_key="NORI",
+        model_source_uri="Synthefy/Nori",
+        inference_hyperparameters={"model": "nori"},
+        predict_instance_type="ml.g5.xlarge",
+    ),
+    "nori-30m-regressor": FoundationModelConfig(
+        problem_type="regression",
+        ag_model_key="NORI",
+        model_source_uri="Synthefy/Nori-30M",
+        inference_hyperparameters={"model": "nori-30m"},
+        predict_instance_type="ml.g5.xlarge",
     ),
 }
 

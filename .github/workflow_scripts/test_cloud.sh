@@ -19,4 +19,4 @@ if [[ "$MODULE" != "general" ]]; then
 fi
 
 # Workers mostly wait on SageMaker, so run roughly one per test: wall time is then bounded by the slowest test.
-python3 -m pytest -n 16 --durations=0 --junitxml=results.xml tests/unittests/$MODULE/ --framework_version $AG_VERSION "${extra_args[@]}"
+python3 -m pytest -n 24 --durations=0 --junitxml=results.xml tests/unittests/$MODULE/ --framework_version $AG_VERSION "${extra_args[@]}"
