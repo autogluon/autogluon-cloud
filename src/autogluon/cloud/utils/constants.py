@@ -4,6 +4,9 @@ LOCAL_MODE = "local"
 LOCAL_MODE_GPU = "local_gpu"
 MODEL_ARTIFACT_NAME = "model.tar.gz"
 
+# AutoGluon container version used when `framework_version` is not specified. Bump it on each AutoGluon release.
+DEFAULT_FRAMEWORK_VERSION = "1.6"
+
 TRUST_RELATIONSHIP_ACCOUNT_PLACE_HOLDER = "ACCOUNT"
 POLICY_ACCOUNT_PLACE_HOLDER = "ACCOUNT"
 POLICY_BUCKET_PLACE_HOLDER = "CLOUD_BUCKET"

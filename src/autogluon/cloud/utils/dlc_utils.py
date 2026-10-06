@@ -1,9 +1,12 @@
 import json
+import logging
 import re
 from pathlib import Path
 
 from packaging import version
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
+
+logger = logging.getLogger(__name__)
 
 _CONFIG_PATH = Path(__file__).parent / "autogluon_dlc.json"
 _GPU_INSTANCE_PREFIXES = ("ml.p", "ml.g")
@@ -126,23 +129,56 @@ def retrieve_image_uri(framework_version, region, image_scope, instance_type, py
     return f"{registry}.dkr.ecr.{region}.amazonaws.com/{repository}:{tag}"
 
 
-def parse_framework_version(framework_version, framework_type, py_version=None, minimum_version=None):
-    if framework_version == "latest":
-        framework_version, py_versions = retrieve_latest_framework_version(framework_type)
-        py_version = py_versions[0]
-    else:
-        if minimum_version is not None and Version(framework_version) < Version(minimum_version):
-            raise ValueError("Cloud module only supports 0.6+ containers.")
-        valid_options = retrieve_available_framework_versions(framework_type)
-        assert framework_version in valid_options, (
-            f"{framework_version} is not a valid option. Options are: {valid_options}"
-        )
+def resolve_framework_version(framework_version, framework_type="training"):
+    """Resolve ``framework_version`` to a version that has an official AutoGluon DLC image.
 
-        valid_py_versions = retrieve_py_versions(framework_version, framework_type)
-        if py_version is not None:
-            assert py_version in valid_py_versions, (
-                f"{py_version} is no a valid option. Options are {valid_py_versions}"
-            )
-        else:
-            py_version = valid_py_versions[0]
+    Accepts ``"latest"``, ``"x.y"`` or ``"x.y.z"``. ``"x.y"`` resolves to the newest patch release of ``x.y`` with an
+    image. ``"x.y.z"`` without an image falls back to the newest patch release of ``x.y``, since patch releases of
+    AutoGluon are compatible with each other.
+    """
+    available = sorted(retrieve_available_framework_versions(framework_type), key=version.parse)
+    if framework_version == "latest":
+        return available[-1]
+    if framework_version in available:
+        return framework_version
+    supported_minors = sorted({".".join(v.split(".")[:2]) for v in available}, key=version.parse)
+    try:
+        requested = Version(framework_version)
+    except InvalidVersion:
+        raise ValueError(
+            f"Invalid framework_version={framework_version!r}. Use 'latest' or one of {supported_minors}."
+        ) from None
+    same_minor = [
+        v for v in available if len(requested.release) >= 2 and Version(v).release[:2] == requested.release[:2]
+    ]
+    if not same_minor:
+        raise ValueError(
+            f"No AutoGluon container available for framework_version={framework_version!r}. "
+            f"Supported versions: {supported_minors}."
+        )
+    resolved = same_minor[-1]
+    if len(requested.release) > 2:
+        logger.warning(f"No AutoGluon container available for version {framework_version}, using {resolved} instead.")
+    return resolved
+
+
+def infer_framework_version_from_image_uri(image_uri):
+    """Return the AutoGluon version of an official DLC training image URI, or None for any other image."""
+    repository, _, tag = image_uri.rsplit("/", 1)[-1].partition(":")
+    framework_version = tag.split("-", 1)[0]
+    version_info = _load_config()["training"]["versions"].get(framework_version)
+    if version_info is None or version_info["repository"] != repository:
+        return None
+    return framework_version
+
+
+def parse_framework_version(framework_version, framework_type, py_version=None, minimum_version=None):
+    framework_version = resolve_framework_version(framework_version, framework_type)
+    if minimum_version is not None and Version(framework_version) < Version(minimum_version):
+        raise ValueError(f"Cloud module only supports {minimum_version}+ containers.")
+    valid_py_versions = retrieve_py_versions(framework_version, framework_type)
+    if py_version is not None:
+        assert py_version in valid_py_versions, f"{py_version} is no a valid option. Options are {valid_py_versions}"
+    else:
+        py_version = valid_py_versions[0]
     return framework_version, py_version

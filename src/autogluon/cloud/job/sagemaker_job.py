@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, Union
 
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import MODEL_ARTIFACT_NAME
+from ..utils.dlc_utils import infer_framework_version_from_image_uri
 from ..utils.job_logs import TRAINING_JOB_LOG_GROUP, TRANSFORM_JOB_LOG_GROUP, wait_for_job
 from ..utils.sagemaker_api import delete_quietly
 from .remote_job import RemoteJob
@@ -159,10 +160,12 @@ class SageMakerFitJob(SageMakerJob):
 
     @classmethod
     def attach(cls, job_name, session=None):
-        # FIXME: find a way to recover framework version
         obj = cls(session=session)
         obj._job_name = job_name
         obj._wait_until_completed()
+        obj._framework_version = infer_framework_version_from_image_uri(
+            obj._describe()["AlgorithmSpecification"]["TrainingImage"]
+        )
         return obj
 
     @property

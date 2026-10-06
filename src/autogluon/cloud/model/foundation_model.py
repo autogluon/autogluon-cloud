@@ -23,6 +23,7 @@ from ..endpoint.tabular_endpoint import TabularEndpoint
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from ..version import __version__
@@ -189,7 +190,7 @@ class FoundationModel:
         instance_type: Optional[str] = None,
         endpoint_name: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
@@ -414,7 +415,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         instance_type: Optional[str] = None,
         endpoint_name: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
@@ -434,7 +435,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         hyperparameters
             Model hyperparameters for inference. Overrides values passed to the constructor.
         framework_version
-            Container framework version. If 'latest', uses the most recent available.
+            AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri
             Custom Docker image URI for the inference container.
         wait
@@ -501,7 +502,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
@@ -543,7 +544,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         instance_type
             Instance type for the prediction job. If None, uses registry default.
         framework_version
-            Container framework version.
+            AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri
             Custom Docker image URI for the container.
         wait
@@ -628,7 +629,7 @@ class TabularFoundationModel(FoundationModel):
         instance_type: Optional[str] = None,
         endpoint_name: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         inference_mode: Literal["realtime"] = "realtime",
@@ -704,7 +705,7 @@ class TabularFoundationModel(FoundationModel):
         predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
@@ -732,7 +733,7 @@ class TabularFoundationModel(FoundationModel):
         instance_type
             Instance type for the prediction job. If None, uses registry default.
         framework_version
-            Container framework version.
+            AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri
             Custom Docker image URI for the container.
         wait
@@ -779,7 +780,7 @@ class TabularFoundationModel(FoundationModel):
         predictions_path: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         instance_type: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         custom_image_uri: Optional[str] = None,
         wait: bool = True,
         **backend_kwargs,
@@ -809,7 +810,7 @@ class TabularFoundationModel(FoundationModel):
         instance_type
             Instance type for the prediction job. If None, uses registry default.
         framework_version
-            Container framework version.
+            AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri
             Custom Docker image URI for the container.
         wait
