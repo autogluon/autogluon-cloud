@@ -99,7 +99,12 @@ class TabularCloudPredictor(CloudPredictor):
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw SageMaker request fields, same as in :meth:`fit`.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -109,8 +114,8 @@ class TabularCloudPredictor(CloudPredictor):
 
         SageMaker API
         -------------
-        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs one training job on
-        ``instance_type``, limited by the ``<instance_type> for training job usage`` Service Quota.
+        * :sm-api:`CreateTrainingJob`: trains the predictor and predicts in the same job on ``instance_count`` x
+          ``instance_type``. Predictions are written to ``predictions_path``.
         """
         result = self.fit_predict_proba(
             train_data=train_data,
@@ -157,8 +162,8 @@ class TabularCloudPredictor(CloudPredictor):
         """
         Fit and predict probabilities in a single SageMaker training job.
 
-        Identical to :meth:`fit_predict` but returns class probabilities. For regression the probabilities are
-        identical to the predictions (same as :meth:`predict_proba`).
+        Fits a ``TabularPredictor`` on ``train_data`` and predicts class probabilities for ``test_data`` inside the
+        same training container. For regression the probabilities are identical to the predictions.
 
         Parameters
         ----------
@@ -194,7 +199,12 @@ class TabularCloudPredictor(CloudPredictor):
             S3 URL where predictions will be written by the training container. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw SageMaker request fields, same as in :meth:`fit`.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -205,8 +215,8 @@ class TabularCloudPredictor(CloudPredictor):
 
         SageMaker API
         -------------
-        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs one training job on
-        ``instance_type``, limited by the ``<instance_type> for training job usage`` Service Quota.
+        * :sm-api:`CreateTrainingJob`: trains the predictor and predicts in the same job on ``instance_count`` x
+          ``instance_type``. Predictions are written to ``predictions_path``.
         """
         extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:

@@ -86,13 +86,13 @@ class TabularEndpoint:
     ) -> pd.Series:
         """Fit the foundation model on ``train_data`` and predict ``data``.
 
-        The serialized request includes both ``train_data`` and ``data`` and must not exceed SageMaker's
-        6 MiB real-time invocation payload limit. Use
-        :meth:`autogluon.cloud.TabularFoundationModel.predict` for larger inputs.
+        The request includes both ``train_data`` and ``data``. Use
+        :meth:`autogluon.cloud.TabularFoundationModel.predict` for inputs above the payload limit.
 
         SageMaker API
         -------------
-        Sends one :sm-runtime-api:`InvokeEndpoint` request.
+        * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
+          limited to 6 MB.
         """
         pred, _ = self._predict(
             data=data,
@@ -115,13 +115,13 @@ class TabularEndpoint:
 
         For regression, the probability result is identical to the prediction.
 
-        The serialized request includes both ``train_data`` and ``data`` and must not exceed SageMaker's
-        6 MiB real-time invocation payload limit. Use
-        :meth:`autogluon.cloud.TabularFoundationModel.predict_proba` for larger inputs.
+        The request includes both ``train_data`` and ``data``. Use
+        :meth:`autogluon.cloud.TabularFoundationModel.predict_proba` for inputs above the payload limit.
 
         SageMaker API
         -------------
-        Sends one :sm-runtime-api:`InvokeEndpoint` request.
+        * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
+          limited to 6 MB.
         """
         pred, pred_proba = self._predict(
             data=data,
@@ -138,6 +138,7 @@ class TabularEndpoint:
 
         SageMaker API
         -------------
-        Calls :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`.
+        * :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`: delete the endpoint and
+          the endpoint config and model created with it.
         """
         delete_endpoint(self._endpoint_name, self._session)

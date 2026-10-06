@@ -446,21 +446,26 @@ class TimeSeriesFoundationModel(FoundationModel):
         inference_config
             Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
         **backend_kwargs
-            Backend-specific arguments (e.g., ``initial_instance_count``, ``volume_size``, ``backend_overrides``; see
-            :meth:`autogluon.cloud.TabularCloudPredictor.deploy`).
+            Additional SageMaker arguments:
+
+            * ``initial_instance_count``: Number of instances for the endpoint. Defaults to 1. Ignored when
+              ``inference_mode="serverless"``.
+            * ``volume_size``: Size in GB of the EBS volume to use for the endpoint. Ignored for GPU instances.
+            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
+
+              * Keys: request names from the *SageMaker API* section below.
+              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+              * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
 
         SageMaker API
         -------------
-        Requests (also the ``backend_overrides`` keys):
+        * :sm-api:`CreateModel`: registers the model artifact and inference image as a SageMaker model.
+        * :sm-api:`CreateEndpointConfig`: defines the endpoint's single :sm-api:`ProductionVariant`: instance type and
+          count, or the serverless settings.
+        * :sm-api:`CreateEndpoint`: launches the endpoint.
 
-        * :sm-api:`CreateModel`
-        * :sm-api:`CreateEndpointConfig`
-        * :sm-api:`ProductionVariant`, the endpoint config's single production variant
-        * :sm-api:`CreateEndpoint`
-
-        A real-time endpoint is limited by the ``<instance_type> for endpoint usage`` Service Quota, a serverless
-        endpoint by ``Maximum total concurrency that can be allocated across all serverless endpoints``. The endpoint
-        is billed until :meth:`TimeSeriesEndpoint.delete_endpoint` deletes it.
+        The endpoint is billed until :meth:`TimeSeriesEndpoint.delete_endpoint` deletes it.
         """
         self._deploy_backend(
             instance_type=instance_type,
@@ -565,8 +570,16 @@ class TimeSeriesFoundationModel(FoundationModel):
             :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
             retrieve the DataFrame, or ``.status()`` to check progress.
         **backend_kwargs
-            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
-            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
+            Additional SageMaker arguments:
+
+            * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
+            * ``volume_size``: Size in GB of the EBS volume to use for the job. Defaults to 100.
+            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
+
+              * Keys: request names from the *SageMaker API* section below.
+              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+              * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -575,9 +588,8 @@ class TimeSeriesFoundationModel(FoundationModel):
 
         SageMaker API
         -------------
-        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs as a training job (not
-        a batch transform job) on ``instance_type``, limited by the ``<instance_type> for training job usage`` Service
-        Quota.
+        * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
+          ``instance_type``. Predictions are written to ``predictions_path``.
         """
         if instance_type is None:
             instance_type = self._config.predict_instance_type
@@ -663,17 +675,44 @@ class TabularFoundationModel(FoundationModel):
         Only real-time inference is supported. Tabular foundation models such as Mitra require a
         provisioned instance and cannot be deployed with SageMaker Serverless Inference.
 
+        Parameters
+        ----------
+        instance_type
+            Instance type for the endpoint. Defaults to the model registry value.
+        endpoint_name
+            Custom endpoint name. If None, will auto-generate a unique name.
+        hyperparameters
+            Model hyperparameters for inference. Overrides values passed to the constructor.
+        framework_version
+            AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
+        custom_image_uri
+            Custom Docker image URI for the inference container.
+        wait
+            Whether to block until the endpoint is ready.
+        inference_mode
+            Endpoint type. Only ``"realtime"`` is supported.
+        inference_config
+            Not supported; must be None.
+        **backend_kwargs
+            Additional SageMaker arguments:
+
+            * ``initial_instance_count``: Number of instances for the endpoint. Defaults to 1.
+            * ``volume_size``: Size in GB of the EBS volume to use for the endpoint. Ignored for GPU instances.
+            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
+
+              * Keys: request names from the *SageMaker API* section below.
+              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+              * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
+
         SageMaker API
         -------------
-        Requests (also the ``backend_overrides`` keys):
+        * :sm-api:`CreateModel`: registers the model artifact and inference image as a SageMaker model.
+        * :sm-api:`CreateEndpointConfig`: defines the endpoint's single :sm-api:`ProductionVariant`: instance type and
+          count.
+        * :sm-api:`CreateEndpoint`: launches the endpoint.
 
-        * :sm-api:`CreateModel`
-        * :sm-api:`CreateEndpointConfig`
-        * :sm-api:`ProductionVariant`, the endpoint config's single production variant
-        * :sm-api:`CreateEndpoint`
-
-        The endpoint is limited by the ``<instance_type> for endpoint usage`` Service Quota and billed until
-        :meth:`TabularEndpoint.delete_endpoint` deletes it.
+        The endpoint is billed until :meth:`TabularEndpoint.delete_endpoint` deletes it.
         """
         if inference_mode != "realtime":
             raise ValueError(
@@ -771,8 +810,16 @@ class TabularFoundationModel(FoundationModel):
             If True, block and return the predictions. If False, return a :class:`JobPredictionFuture`
             immediately — call ``.result()`` on it later to retrieve the predictions.
         **backend_kwargs
-            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
-            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
+            Additional SageMaker arguments:
+
+            * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
+            * ``volume_size``: Size in GB of the EBS volume to use for the job. Defaults to 256.
+            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
+
+              * Keys: request names from the *SageMaker API* section below.
+              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+              * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -781,9 +828,8 @@ class TabularFoundationModel(FoundationModel):
 
         SageMaker API
         -------------
-        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs as a training job (not
-        a batch transform job) on ``instance_type``, limited by the ``<instance_type> for training job usage`` Service
-        Quota.
+        * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
+          ``instance_type``. Predictions are written to ``predictions_path``.
         """
         result = self.predict_proba(
             test_data,
@@ -825,8 +871,9 @@ class TabularFoundationModel(FoundationModel):
         """
         Run batch prediction returning class probabilities.
 
-        Identical to :meth:`predict` but returns class probabilities. For regression the probabilities are
-        identical to the predictions.
+        For tabular foundation models (e.g., Mitra), ``train_data`` provides the few-shot context and
+        ``test_data`` contains the rows to predict on. For regression the probabilities are identical to the
+        predictions.
 
         Parameters
         ----------
@@ -853,8 +900,16 @@ class TabularFoundationModel(FoundationModel):
         wait
             If True, block and return the result. If False, return a :class:`JobPredictionFuture` immediately.
         **backend_kwargs
-            Additional backend-specific arguments (e.g., ``job_name``, ``volume_size``, ``backend_overrides``; this
-            prediction runs as a SageMaker training job, see :meth:`autogluon.cloud.TabularCloudPredictor.fit`).
+            Additional SageMaker arguments:
+
+            * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
+            * ``volume_size``: Size in GB of the EBS volume to use for the job. Defaults to 256.
+            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
+
+              * Keys: request names from the *SageMaker API* section below.
+              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+              * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -864,9 +919,8 @@ class TabularFoundationModel(FoundationModel):
 
         SageMaker API
         -------------
-        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs as a training job (not
-        a batch transform job) on ``instance_type``, limited by the ``<instance_type> for training job usage`` Service
-        Quota.
+        * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
+          ``instance_type``. Predictions are written to ``predictions_path``.
         """
         if instance_type is None:
             instance_type = self._config.predict_instance_type

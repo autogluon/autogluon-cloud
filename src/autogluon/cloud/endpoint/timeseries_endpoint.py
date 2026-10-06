@@ -80,8 +80,8 @@ class TimeSeriesEndpoint:
 
         SageMaker API
         -------------
-        Sends one :sm-runtime-api:`InvokeEndpoint` request. The payload is limited to 6 MB (4 MB for serverless
-        endpoints).
+        * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
+          limited to 6 MB (4 MB for serverless endpoints).
         """
         if isinstance(data, str):
             data = load_pd.load(data)
@@ -119,6 +119,7 @@ class TimeSeriesEndpoint:
 
         SageMaker API
         -------------
-        Calls :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`.
+        * :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`: delete the endpoint and
+          the endpoint config and model created with it.
         """
         delete_endpoint(self._endpoint_name, self._session)

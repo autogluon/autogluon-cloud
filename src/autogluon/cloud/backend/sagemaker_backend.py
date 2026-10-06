@@ -249,8 +249,8 @@ class SagemakerBackend(Backend):
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw ``CreateTrainingJob`` request fields (SageMaker API / boto3 PascalCase names) under the
-            ``"CreateTrainingJob"`` key, deep-merged over the request built by AutoGluon-Cloud.
+            Raw SageMaker request fields keyed by request name (see ``FIT_OVERRIDE_KEYS``). User-facing docs are on
+            :meth:`CloudPredictor.fit`.
         extra_ag_args: Optional[Dict[str, Any]], default = None
             Additional entries to merge into ``ag_args.json``. Use this to ship caller-specific metadata to the
             train script (e.g. ``predict_after_fit``, ``save_predictor``, or ``id_column`` /
@@ -471,9 +471,8 @@ class SagemakerBackend(Backend):
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
-            AutoGluon-Cloud. Valid keys: ``"CreateModel"``, ``"ProductionVariant"``,
-            ``"CreateEndpointConfig"``, ``"CreateEndpoint"``.
+            Raw SageMaker request fields keyed by request name (see ``DEPLOY_OVERRIDE_KEYS``). User-facing docs are on
+            :meth:`CloudPredictor.deploy`.
         entry_point: Optional[str], default = None
             Serve script to use instead of the predictor type's default.
         fm_serve_config: Optional[Dict[str, Any]], default = None
@@ -845,8 +844,8 @@ class SagemakerBackend(Backend):
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
-            AutoGluon-Cloud. Valid keys: ``"CreateModel"``, ``"CreateTransformJob"``.
+            Raw SageMaker request fields keyed by request name (see ``BATCH_PREDICT_OVERRIDE_KEYS``). User-facing docs
+            are on :meth:`CloudPredictor.predict`.
 
         Returns
         -------
@@ -925,8 +924,8 @@ class SagemakerBackend(Backend):
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
-            AutoGluon-Cloud. Valid keys: ``"CreateModel"``, ``"CreateTransformJob"``.
+            Raw SageMaker request fields keyed by request name (see ``BATCH_PREDICT_OVERRIDE_KEYS``). User-facing docs
+            are on :meth:`CloudPredictor.predict`.
 
 
         Returns
