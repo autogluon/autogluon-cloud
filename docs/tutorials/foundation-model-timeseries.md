@@ -33,7 +33,7 @@ The rest of the tutorial reuses this `model` object.
 
 ### Available models
 
-The following `model_id` values are currently supported. Chronos-2 models natively support covariates and cross-learning across items, while Chronos-Bolt is univariate-only.
+The following `model_id` values are currently supported. Chronos-2 models natively support covariates and cross-learning across items, while Chronos-Bolt and Toto-2.0 are univariate-only.
 
 | Model ID | Documentation | Weights |
 |----------|---------------|---------|
@@ -42,6 +42,11 @@ The following `model_id` values are currently supported. Chronos-2 models native
 | `chronos-bolt-tiny` | [ChronosModel](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.ChronosModel) | [autogluon/chronos-bolt-tiny](https://huggingface.co/autogluon/chronos-bolt-tiny) |
 | `chronos-bolt-small` | [ChronosModel](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.ChronosModel) | [autogluon/chronos-bolt-small](https://huggingface.co/autogluon/chronos-bolt-small) |
 | `chronos-bolt-base` | [ChronosModel](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.ChronosModel) | [autogluon/chronos-bolt-base](https://huggingface.co/autogluon/chronos-bolt-base) |
+| `toto-2.0-4m` | [Toto2Model](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.Toto2Model) | [Datadog/Toto-2.0-4m](https://huggingface.co/Datadog/Toto-2.0-4m) |
+| `toto-2.0-22m` | [Toto2Model](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.Toto2Model) | [Datadog/Toto-2.0-22m](https://huggingface.co/Datadog/Toto-2.0-22m) |
+| `toto-2.0-313m` | [Toto2Model](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.Toto2Model) | [Datadog/Toto-2.0-313m](https://huggingface.co/Datadog/Toto-2.0-313m) |
+| `toto-2.0-1b` | [Toto2Model](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.Toto2Model) | [Datadog/Toto-2.0-1B](https://huggingface.co/Datadog/Toto-2.0-1B) |
+| `toto-2.0-2.5b` | [Toto2Model](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-model-zoo.html#autogluon.timeseries.models.Toto2Model) | [Datadog/Toto-2.0-2.5B](https://huggingface.co/Datadog/Toto-2.0-2.5B) |
 
 `chronos-2` is the recommended model — it supports covariates, cross-learning across items, and context lengths up to 8192 time steps. For background on Chronos models, see the [Forecasting with Chronos-2](https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-chronos.html) tutorial.
 

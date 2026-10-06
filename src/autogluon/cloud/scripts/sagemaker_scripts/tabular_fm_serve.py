@@ -92,8 +92,9 @@ def transform_fn(model_config, request_body, input_content_type, output_content_
     problem_type = model_config["problem_type"]
 
     with tempfile.TemporaryDirectory(prefix="ag_tabular_fm_") as temp_dir:
-        # Duplicate one tuning row so AutoGluon/Mitra do not hold out any rows from the prediction context.
-        tuning_data = train_data.iloc[[0]].copy()
+        # Duplicate two tuning rows so AutoGluon does not hold out any rows from the prediction context. Two rather
+        # than one, since some models (e.g. Nori) return a 0-d array when predicting a single row.
+        tuning_data = train_data.iloc[:2].copy()
         predictor = TabularPredictor(
             label=label,
             problem_type=problem_type,

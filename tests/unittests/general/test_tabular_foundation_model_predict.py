@@ -62,7 +62,7 @@ def test_predict_launches_predict_after_fit_job():
     assert "predictions_path" not in extra_ag_args  # not passed -> backend fills in a default
     assert fit_kwargs["leaderboard"] is False
     pd.testing.assert_frame_equal(fit_kwargs["data_channels"]["train_data"], TRAIN_DATA)
-    pd.testing.assert_frame_equal(fit_kwargs["data_channels"]["tuning_data"], TRAIN_DATA.iloc[[0]])
+    pd.testing.assert_frame_equal(fit_kwargs["data_channels"]["tuning_data"], TRAIN_DATA.iloc[:2])
 
 
 @pytest.mark.parametrize(

@@ -307,6 +307,11 @@ class FoundationModel:
 
         if not cache_path.startswith("s3://"):
             raise ValueError(f"cache_path must be an s3:// URI, got: {cache_path!r}")
+        if self._config.model_source_hyperparameter is None:
+            raise ValueError(
+                f"Model '{self.model_id}' does not support cache_model_artifact: its weights are downloaded by "
+                f"AutoGluon at runtime and cannot be loaded from a bundled artifact."
+            )
 
         source_uri = self._config.model_source_uri
         cache_key = f"{cache_path.rstrip('/')}/{self.model_id}/model.tar.gz"
@@ -640,7 +645,12 @@ class TabularFoundationModel(FoundationModel):
 
     Wraps pretrained tabular models like `Mitra <https://huggingface.co/autogluon/mitra-classifier>`_ and
     runs prediction as a managed SageMaker job, with no training required. Each ``model_id`` targets a
-    single task — ``mitra-classifier`` for classification and ``mitra-regressor`` for regression.
+    single task:
+
+    * Classification: ``mitra-classifier``, ``mitra-classifier-2``, ``tabicl-classifier-v2``,
+      ``tabdpt-turbo-classifier``.
+    * Regression: ``mitra-regressor``, ``tabicl-regressor-v2``, ``tabdpt-turbo-regressor``,
+      ``nori``, ``nori-30m``.
 
     Predictions can be produced in batch mode with :meth:`predict` / :meth:`predict_proba`, or through a
     real-time endpoint created with :meth:`deploy`. In both modes, labeled ``train_data`` provides the
@@ -927,8 +937,9 @@ class TabularFoundationModel(FoundationModel):
 
         if isinstance(train_data, (str, Path)):
             train_data = load_pd.load(str(train_data))
-        # Duplicate one tuning row so AutoGluon/Mitra do not hold out any rows from the prediction context.
-        tuning_data = train_data.iloc[[0]].copy()
+        # Duplicate two tuning rows so AutoGluon does not hold out any rows from the prediction context. Two rather
+        # than one, since some models (e.g. Nori) return a 0-d array when predicting a single row.
+        tuning_data = train_data.iloc[:2].copy()
 
         extra_ag_args: dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
         if predictions_path is not None:
