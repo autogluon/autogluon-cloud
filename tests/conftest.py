@@ -14,29 +14,6 @@ CI_RUN_TAG = "autogluon-cloud-ci-run"
 
 
 class CloudTestHelper:
-    cpu_training_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-training:cpu-latest"
-    gpu_training_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-training:gpu-latest"
-    cpu_inference_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-inference:cpu-latest"
-    gpu_inference_image = "369469875935.dkr.ecr.us-east-1.amazonaws.com/autogluon-nightly-inference:gpu-latest"
-
-    @staticmethod
-    def get_custom_image_uri(framework_version="source", type="training", gpu=False):
-        assert type in ["training", "inference"]
-        if type == "training":
-            if gpu:
-                custom_image_uri = CloudTestHelper.gpu_training_image
-            else:
-                custom_image_uri = CloudTestHelper.cpu_training_image
-        else:
-            if gpu:
-                custom_image_uri = CloudTestHelper.gpu_inference_image
-            else:
-                custom_image_uri = CloudTestHelper.cpu_inference_image
-        if framework_version != "source":
-            custom_image_uri = None
-
-        return custom_image_uri
-
     @staticmethod
     def prepare_data(*args):
         # TODO: make this handle more general structured directory format
@@ -116,7 +93,7 @@ class CloudTestHelper:
 
 
 def pytest_addoption(parser):
-    parser.addoption("--framework_version", action="store", default="source")
+    parser.addoption("--framework_version", action="store", default="latest")
 
 
 @pytest.fixture(scope="session")
