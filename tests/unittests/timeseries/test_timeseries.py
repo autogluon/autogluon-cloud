@@ -324,6 +324,35 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
             assert archived_files == [], f"predict job unexpectedly uploaded predictor files: {archived_files}"
 
 
+# Smallest model of each foundation model family not covered by the tests above (Chronos).
+@pytest.mark.parametrize("model_id", ["toto-2.0-4m"])
+def test_foundation_model_family_predict(test_helper, framework_version, retail_sales_dataset, model_id):
+    """Batch prediction with a CPU instance works for every foundation model family in the registry."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+    cloud_prefix = f"s3://autogluon-cloud-ci/test-fm-family-predict/{framework_version}"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        model = FoundationModel(
+            model_id,
+            cloud_output_path=f"{cloud_prefix}/{timestamp}/{model_id}",
+        )
+        predictions = model.predict(
+            data=ds["train_data"],
+            target=ds["target"],
+            id_column=ds["id_column"],
+            timestamp_column=ds["timestamp_column"],
+            prediction_length=ds["prediction_length"],
+            instance_type="ml.m5.2xlarge",
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+        )
+        expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
+        _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
+        assert predictions["mean"].notna().all()
+
+
 def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, framework_version, retail_sales_dataset):
     """Cache model artifact to S3, deploy to a serverless endpoint, and verify predictions."""
     ds = retail_sales_dataset

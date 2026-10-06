@@ -3,12 +3,14 @@ import tarfile
 import tempfile
 
 import boto3
+import numpy as np
 import pandas as pd
 import pytest
 from botocore.exceptions import ClientError
 
 from autogluon.cloud import TabularCloudPredictor
 from autogluon.cloud.model import TabularFoundationModel
+from autogluon.cloud.model.registry import get_model_config
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 _TRAIN_DATA = "tabular_train.csv"
@@ -204,6 +206,39 @@ def test_tabular_foundation_model_predict(test_helper, framework_version):
             with tarfile.open(model_artifact_path, "r:gz") as model_archive:
                 archived_files = [member.name for member in model_archive.getmembers() if member.isfile()]
             assert archived_files == [], f"predict job unexpectedly uploaded predictor files: {archived_files}"
+
+
+# Smallest model of each foundation model family not covered by the tests above (Mitra).
+@pytest.mark.parametrize("model_id", ["tabicl-v2-classifier", "tabdpt-turbo-classifier", "nori-regressor"])
+def test_tabular_foundation_model_family_predict(test_helper, framework_version, model_id):
+    """Batch prediction with a CPU instance works for every tabular foundation model family in the registry."""
+    rng = np.random.default_rng(0)
+    data = pd.DataFrame({"num": rng.normal(size=300), "cat": rng.choice(["x", "y", "z"], size=300)})
+    if get_model_config(model_id).problem_type == "regression":
+        data["label"] = 2 * data["num"] + (data["cat"] == "x") + rng.normal(scale=0.1, size=300)
+    else:
+        data["label"] = np.where(data["num"] > 0, "pos", "neg")
+    train_data, test_data = data.iloc[:200], data.iloc[200:].drop(columns="label")
+    timestamp = test_helper.get_utc_timestamp_now()
+    cloud_prefix = f"s3://autogluon-cloud-ci/test-tabular-fm-family-predict/{framework_version}"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        model = TabularFoundationModel(
+            model_id,
+            cloud_output_path=f"{cloud_prefix}/{timestamp}/{model_id}",
+        )
+        pred = model.predict(
+            test_data=test_data,
+            train_data=train_data,
+            label="label",
+            instance_type="ml.m5.2xlarge",
+            framework_version=framework_version,
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+        )
+        assert isinstance(pred, pd.Series)
+        assert len(pred) == len(test_data)
+        assert pred.notna().all()
 
 
 def test_tabular_foundation_model_deploy(test_helper, framework_version):
