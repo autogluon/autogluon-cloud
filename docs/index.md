@@ -34,26 +34,58 @@ Train and Deploy AutoGluon in the Cloud
 
 ::::::
 
-AutoGluon-Cloud lets you train and deploy state-of-the-art ML models in the cloud in a few lines of code. Run [AutoGluon](https://auto.gluon.ai/stable/index.html) on [Amazon SageMaker](https://aws.amazon.com/sagemaker/) without worrying about infrastructure, dependencies, or a heavy local ML environment. It supports two workflows:
+AutoGluon-Cloud lets you train and deploy state-of-the-art ML models for classification, regression, and time series forecasting on [Amazon SageMaker](https://aws.amazon.com/sagemaker/). All it takes is a few lines of code; AutoGluon-Cloud handles the infrastructure, dependencies, and glue code for you.
 
-- **[Train your own predictor](tutorials/predictor-tabular.md)** — the same `fit → deploy → predict` workflow as local AutoGluon, with all the heavy lifting offloaded to SageMaker.
-- **[Run pretrained foundation models](tutorials/foundation-model-timeseries.md)** — deploy state-of-the-art pretrained models like [Chronos-2](https://huggingface.co/amazon/chronos-2) for zero-shot inference, with no training required.
+## {octicon}`light-bulb` Why AutoGluon-Cloud?
+
+- **Works like local [AutoGluon](https://auto.gluon.ai/stable/index.html).** Pass in DataFrames, get predictions back — as convenient as working locally, with the compute handled by AWS.
+- **No boilerplate.** No training scripts, inference handlers, or serialization code to write and maintain.
+- **Official AWS containers.** Everything runs in the [AutoGluon Deep Learning Containers](https://aws.github.io/deep-learning-containers/), maintained and security-patched by AWS.
+- **Sensible defaults, fully configurable.** Under the hood it's just SageMaker running in your AWS account, so you stay in full control.
 
 ## {octicon}`package` Installation
 
 ```bash
 pip install autogluon.cloud
+autogluon-cloud bootstrap  # one-time setup for IAM role and S3 bucket
 ```
 
-Before running any of the snippets below, follow the [Setup tutorial](tutorials/setup.md) to register the IAM role and S3 bucket that SageMaker will use.
+See the [Setup tutorial](tutorials/setup.md) for more details.
 
-## {octicon}`gear` Train AutoGluon predictors in the cloud
+## {octicon}`rocket` Foundation models
 
-Full walkthrough: [Tabular](tutorials/predictor-tabular.md), [Time Series](tutorials/predictor-timeseries.md).
+:::{dropdown} Time Series (Chronos-2)
+:animate: fade-in-slide-down
+:open:
+:color: primary
+
+Zero-shot forecasts with a pretrained model — no training required.
+
+```python
+from autogluon.cloud import TimeSeriesFoundationModel
+
+# `data` can be a local path, S3 URL, or pandas DataFrame
+data = "https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv"
+
+model = TimeSeriesFoundationModel("chronos-2")
+
+# Batch prediction
+predictions = model.predict(data=data, target="target", prediction_length=24)
+
+# Real-time inference endpoint
+endpoint = model.deploy()
+predictions = endpoint.predict(data=data, target="target", prediction_length=24)
+endpoint.delete_endpoint()
+```
+
+→ [Full walkthrough](tutorials/foundation-model-timeseries.md)
+:::
+
+
+## {octicon}`gear` Train your own predictor
 
 :::{dropdown} Tabular
 :animate: fade-in-slide-down
-:open:
 :color: primary
 
 Train a classification or regression model on tabular data.
@@ -73,14 +105,16 @@ cloud_predictor.fit(
     predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
 )
 
+# Batch prediction
+result = cloud_predictor.predict(test_data)
+
 # Real-time inference endpoint
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(test_data)
 cloud_predictor.cleanup_deployment()
-
-# Batch prediction
-result = cloud_predictor.predict(test_data)
 ```
+
+→ [Full walkthrough](tutorials/predictor-tabular.md)
 :::
 
 
@@ -104,51 +138,16 @@ cloud_predictor.fit(
     predictor_fit_args={"time_limit": 120},  # passed to TimeSeriesPredictor.fit()
 )
 
+# Batch prediction
+result = cloud_predictor.predict(data)
+
 # Real-time inference endpoint
 cloud_predictor.deploy()
 result = cloud_predictor.predict_real_time(data)
 cloud_predictor.cleanup_deployment()
-
-# Batch prediction
-result = cloud_predictor.predict(data)
 ```
-:::
 
-
-## {octicon}`rocket` Run pretrained foundation models
-
-Full walkthrough: [Time Series](tutorials/foundation-model-timeseries.md).
-
-:::{dropdown} Time Series (Chronos-2)
-:animate: fade-in-slide-down
-:color: primary
-
-Zero-shot forecasts with a pretrained model — no training required.
-
-```python
-from autogluon.cloud import TimeSeriesFoundationModel
-
-# `data` can be a local path, S3 URL, or pandas DataFrame
-data = "https://autogluon.s3.amazonaws.com/datasets/timeseries/m4_hourly_tiny/train.csv"
-
-model = TimeSeriesFoundationModel("chronos-2")
-
-# Batch prediction
-predictions = model.predict(
-    data=data,
-    target="target",
-    prediction_length=24,
-)
-
-# Real-time inference endpoint
-endpoint = model.deploy()
-predictions = endpoint.predict(
-    data=data,
-    target="target",
-    prediction_length=24,
-)
-endpoint.delete_endpoint()
-```
+→ [Full walkthrough](tutorials/predictor-timeseries.md)
 :::
 
 
