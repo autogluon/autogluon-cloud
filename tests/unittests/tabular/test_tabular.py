@@ -171,6 +171,9 @@ _FM_PREDICT_CASES = [
     ("nori-regressor", "ml.m5.4xlarge"),
     ("tabicl-v2-classifier", "ml.g4dn.2xlarge"),
 ]
+_TABULAR_MODEL_IDS = [m for m, c in FOUNDATION_MODEL_REGISTRY.items() if c.problem_type != "forecasting"]
+# Pre-release run (`-m release`): every model on its registry default instance.
+_RELEASE_CASES = [pytest.param(model_id, None, marks=pytest.mark.release) for model_id in _TABULAR_MODEL_IDS]
 
 
 def test_fm_predict_cases_cover_every_tabular_family():
@@ -179,7 +182,9 @@ def test_fm_predict_cases_cover_every_tabular_family():
     assert covered == expected, f"Add a test case for the families: {sorted(expected - covered)}"
 
 
-@pytest.mark.parametrize("model_id, instance_type", _FM_PREDICT_CASES, ids=lambda v: v.removeprefix("ml."))
+@pytest.mark.parametrize(
+    "model_id, instance_type", _FM_PREDICT_CASES + _RELEASE_CASES, ids=lambda v: str(v).removeprefix("ml.")
+)
 def test_tabular_foundation_model_predict(test_helper, framework_version, model_id, instance_type):
     timestamp = test_helper.get_utc_timestamp_now()
     bucket = "autogluon-cloud-ci"
@@ -267,5 +272,30 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
             )
             assert isinstance(pred, pd.Series)
             assert len(pred) == n_test_rows
+        finally:
+            endpoint.delete_endpoint()
+
+
+@pytest.mark.release
+@pytest.mark.parametrize("model_id", _TABULAR_MODEL_IDS)
+def test_tabular_foundation_model_deploy_release(test_helper, framework_version, model_id):
+    """Deploy every tabular foundation model to its registry default instance and predict."""
+    config = get_model_config(model_id)
+    train_data, test_data = _synthetic_tabular_data(config.problem_type)
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        model = TabularFoundationModel(
+            model_id,
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-fm-deploy/{framework_version}/{timestamp}/{model_id}",
+        )
+        endpoint = model.deploy(framework_version=framework_version)
+        try:
+            pred, pred_proba = endpoint.predict_proba(data=test_data, train_data=train_data, label="label")
+            assert isinstance(pred, pd.Series)
+            assert len(pred) == len(test_data)
+            assert pred.notna().all()
+            assert len(pred_proba) == len(test_data)
         finally:
             endpoint.delete_endpoint()

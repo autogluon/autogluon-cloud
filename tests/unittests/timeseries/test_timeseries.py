@@ -268,6 +268,9 @@ _FM_PREDICT_CASES = [
     ("toto-2.0-4m", "ml.m5.2xlarge"),
     ("toto-2.0-4m", "ml.g4dn.2xlarge"),
 ]
+_TIMESERIES_MODEL_IDS = [m for m, c in FOUNDATION_MODEL_REGISTRY.items() if c.problem_type == "forecasting"]
+# Pre-release run (`-m release`): every model on its registry default instance.
+_RELEASE_CASES = [pytest.param(model_id, None, marks=pytest.mark.release) for model_id in _TIMESERIES_MODEL_IDS]
 
 
 def test_fm_predict_cases_cover_every_timeseries_family():
@@ -276,7 +279,9 @@ def test_fm_predict_cases_cover_every_timeseries_family():
     assert covered == expected, f"Add a test case for the families: {sorted(expected - covered)}"
 
 
-@pytest.mark.parametrize("model_id, instance_type", _FM_PREDICT_CASES, ids=lambda v: v.removeprefix("ml."))
+@pytest.mark.parametrize(
+    "model_id, instance_type", _FM_PREDICT_CASES + _RELEASE_CASES, ids=lambda v: str(v).removeprefix("ml.")
+)
 def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset, model_id, instance_type):
     """Test FoundationModel batch prediction via the fit_predict training job pattern."""
     import boto3
@@ -496,10 +501,16 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
             cloud_predictor.cleanup_deployment()
 
 
-@pytest.mark.parametrize("gpu", [True, False], ids=["gpu", "cpu"])
-def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset, plain_dataset, gpu):
-    """Deploy a FoundationModel to a real-time endpoint (default GPU instance, or CPU), predict via the SDK, then
-    probe every supported (Content-Type, Accept) combination against the same endpoint."""
+@pytest.mark.parametrize(
+    "model_id, instance_type",
+    [("chronos-bolt-tiny", "ml.g4dn.xlarge"), ("chronos-bolt-tiny", "ml.m5.2xlarge")] + _RELEASE_CASES,
+    ids=lambda v: str(v).removeprefix("ml."),
+)
+def test_foundation_model_deploy(
+    test_helper, framework_version, retail_sales_dataset, plain_dataset, model_id, instance_type
+):
+    """Deploy a FoundationModel to a real-time endpoint, predict via the SDK, then probe every supported
+    (Content-Type, Accept) combination against the same endpoint."""
     ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
     expected_item_ids = sorted(plain_dataset["item_id"].unique())
@@ -507,19 +518,17 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        deploy_kwargs = {} if gpu else {"instance_type": "ml.m5.2xlarge"}
-        device = "gpu" if gpu else "cpu"
 
         model = FoundationModel(
-            "chronos-bolt-tiny",
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy-{device}/{framework_version}/{timestamp}",
+            model_id,
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy/{framework_version}/{timestamp}/{model_id}-{instance_type}",
         )
-        endpoint = model.deploy(framework_version=framework_version, **deploy_kwargs)
+        endpoint = model.deploy(instance_type=instance_type, framework_version=framework_version)
         try:
             endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
                 "EndpointArn"
             ]
-            test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id="chronos-bolt-tiny")
+            test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id=model_id)
 
             predictions = endpoint.predict(
                 data=ds["train_data"],
