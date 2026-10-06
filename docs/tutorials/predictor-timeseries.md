@@ -99,7 +99,7 @@ forecasts = endpoint.predict(
 # ...
 ```
 
-The prediction length and quantiles are the ones set at fit time. The endpoint stays active — and billed — until you delete it:
+The prediction length, quantiles, and target are the ones set at fit time; requests that set them to different values are rejected. The endpoint stays active — and billed — until you delete it:
 
 ```python
 endpoint.delete_endpoint()
@@ -160,7 +160,7 @@ payload = {
     "data": df_to_b64(train_data),
     "known_covariates": df_to_b64(known_covariates),
     "static_features": df_to_b64(static_features),
-    "inference_kwargs": {},  # prediction_length / quantile_levels are baked in at fit time
+    "inference_kwargs": {},  # prediction_length / quantile_levels / target are fixed at fit time
 }
 
 client = boto3.client("sagemaker-runtime")

@@ -34,15 +34,36 @@ def model_fn(model_dir):
     return model
 
 
+def _check_fit_time_args(model, inference_kwargs):
+    """Reject requests asking for a different prediction_length / quantile_levels / target than the predictor was
+    fit with. These are fixed at fit time, so silently ignoring them would return a different forecast than asked for.
+    """
+    fit_time_values = {
+        "prediction_length": model.prediction_length,
+        "quantile_levels": sorted(model.quantile_levels),
+        "target": model.target,
+    }
+    for key, fit_time_value in fit_time_values.items():
+        if key not in inference_kwargs:
+            continue
+        value = inference_kwargs[key]
+        if key == "quantile_levels":
+            value = sorted(value)
+        if value != fit_time_value:
+            raise ValueError(
+                f"This endpoint serves a predictor fit with {key}={fit_time_value!r}, but the request has "
+                f"{key}={value!r}. Omit `{key}` from the request, or fit a new predictor."
+            )
+
+
 def transform_fn(model, request_body, input_content_type, output_content_type="application/json"):
-    # prediction_length / quantile_levels are baked into the predictor at fit time, so
-    # any "parameters" block in a JumpStart payload is parsed but not applied.
-    tsdf, known_covariates, _ = parse_payload(
+    tsdf, known_covariates, inference_kwargs = parse_payload(
         request_body,
         input_content_type,
         id_column=model._id_column,
         timestamp_column=model._timestamp_column,
         target_column=model.target,
     )
+    _check_fit_time_args(model, inference_kwargs)
     predictions = model.predict(tsdf, known_covariates=known_covariates)
     return render_response(predictions, output_content_type)

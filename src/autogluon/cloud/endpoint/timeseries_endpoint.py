@@ -18,7 +18,7 @@ class TimeSeriesEndpoint(Endpoint):
     by name.
 
     * **Trained predictor endpoints** (:meth:`TimeSeriesCloudPredictor.deploy`) use the ``prediction_length``,
-      ``quantile_levels``, and ``target`` set at fit time.
+      ``quantile_levels``, and ``target`` set at fit time, and reject requests that set them to different values.
     * **Foundation model endpoints** (:meth:`TimeSeriesFoundationModel.deploy`) read them from each request.
     """
 
@@ -47,20 +47,24 @@ class TimeSeriesEndpoint(Endpoint):
         static_features: str | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
         prediction_length: int | None, default = None
-            Foundation model endpoints only. Forecast horizon: how many time steps into the future the model should
-            predict. Defaults to 1.
+            Forecast horizon: how many time steps into the future the model should predict. Defaults to 1 on
+            foundation model endpoints; trained predictor endpoints use the value set at fit time.
         target: str | None, default = None
-            Foundation model endpoints only. Name of the column that contains the target values to forecast.
-            Defaults to ``"target"``.
+            Name of the column that contains the target values to forecast. Defaults to ``"target"`` on foundation
+            model endpoints; trained predictor endpoints use the value set at fit time.
         id_column: str | None, default = None
-            Name of the column with the unique identifier of each time series (item). Defaults to the column used at
-            fit time for trained predictor endpoints, and to ``"item_id"`` for foundation model endpoints.
+            Name of the column with the unique identifier of each time series (item). Defaults to ``"item_id"`` on
+            foundation model endpoints; trained predictor endpoints use the column set at fit time.
         timestamp_column: str | None, default = None
-            Name of the column with the observation timestamps. Defaults to the column used at fit time for trained
-            predictor endpoints, and to ``"timestamp"`` for foundation model endpoints.
+            Name of the column with the observation timestamps. Defaults to ``"timestamp"`` on foundation model
+            endpoints; trained predictor endpoints use the column set at fit time.
         quantile_levels: list[float] | None, default = None
-            Foundation model endpoints only. List of increasing decimals between 0 and 1 specifying which quantiles
-            to estimate. Defaults to ``[0.1, 0.2, ..., 0.9]``.
+            List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults to
+            ``[0.1, 0.2, ..., 0.9]`` on foundation model endpoints; trained predictor endpoints use the value set at
+            fit time.
+
+        Trained predictor endpoints raise an error if ``prediction_length``, ``target``, or ``quantile_levels`` is
+        set to a value different from the one used at fit time.
 
         Returns
         -------
