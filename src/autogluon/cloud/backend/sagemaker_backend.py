@@ -249,8 +249,8 @@ class SagemakerBackend(Backend):
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw ``CreateTrainingJob`` request fields (SageMaker API / boto3 PascalCase names) under the
-            ``"create_training_job"`` key, deep-merged over the request built by AutoGluon-Cloud.
+            Raw SageMaker request fields keyed by request name (see ``FIT_OVERRIDE_KEYS``). User-facing docs are on
+            :meth:`CloudPredictor.fit`.
         extra_ag_args: Optional[Dict[str, Any]], default = None
             Additional entries to merge into ``ag_args.json``. Use this to ship caller-specific metadata to the
             train script (e.g. ``predict_after_fit``, ``save_predictor``, or ``id_column`` /
@@ -357,7 +357,7 @@ class SagemakerBackend(Backend):
             "ProfilerConfig": {"DisableProfiler": True},
             "Tags": self._resolve_tags(extra_tags),
         }
-        request = deep_merge(request, overrides.get("create_training_job", {}))
+        request = deep_merge(request, overrides.get("CreateTrainingJob", {}))
 
         self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
         self._fit_job.run(training_job_request=request, framework_version=framework_version, wait=wait)
@@ -397,7 +397,7 @@ class SagemakerBackend(Backend):
             "ExecutionRoleArn": self.role_arn,
             "Tags": tags,
         }
-        request = deep_merge(request, overrides.get("create_model", {}))
+        request = deep_merge(request, overrides.get("CreateModel", {}))
         logger.log(20, "Creating inference model...")
         self.sagemaker_session.sagemaker_client.create_model(**request)
         logger.log(20, "Inference model created successfully")
@@ -471,9 +471,8 @@ class SagemakerBackend(Backend):
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
-            AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"production_variant"``,
-            ``"create_endpoint_config"``, ``"create_endpoint"``.
+            Raw SageMaker request fields keyed by request name (see ``DEPLOY_OVERRIDE_KEYS``). User-facing docs are on
+            :meth:`CloudPredictor.deploy`.
         entry_point: Optional[str], default = None
             Serve script to use instead of the predictor type's default.
         fm_serve_config: Optional[Dict[str, Any]], default = None
@@ -596,21 +595,21 @@ class SagemakerBackend(Backend):
                 variant["InferenceAmiVersion"] = inference_ami_version
         else:
             variant["ServerlessConfig"] = serverless_config
-        variant = deep_merge(variant, overrides.get("production_variant", {}))
+        variant = deep_merge(variant, overrides.get("ProductionVariant", {}))
 
         endpoint_config_request: Dict[str, Any] = {
             "EndpointConfigName": endpoint_name,
             "ProductionVariants": [variant],
             "Tags": tags,
         }
-        endpoint_config_request = deep_merge(endpoint_config_request, overrides.get("create_endpoint_config", {}))
+        endpoint_config_request = deep_merge(endpoint_config_request, overrides.get("CreateEndpointConfig", {}))
         endpoint_request = deep_merge(
             {
                 "EndpointName": endpoint_name,
                 "EndpointConfigName": endpoint_config_request["EndpointConfigName"],
                 "Tags": tags,
             },
-            overrides.get("create_endpoint", {}),
+            overrides.get("CreateEndpoint", {}),
         )
 
         logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
@@ -845,8 +844,8 @@ class SagemakerBackend(Backend):
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
-            AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
+            Raw SageMaker request fields keyed by request name (see ``BATCH_PREDICT_OVERRIDE_KEYS``). User-facing docs
+            are on :meth:`CloudPredictor.predict`.
 
         Returns
         -------
@@ -925,8 +924,8 @@ class SagemakerBackend(Backend):
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw request fields (SageMaker API / boto3 PascalCase names) deep-merged over the requests built by
-            AutoGluon-Cloud. Valid keys: ``"create_model"``, ``"create_transform_job"``.
+            Raw SageMaker request fields keyed by request name (see ``BATCH_PREDICT_OVERRIDE_KEYS``). User-facing docs
+            are on :meth:`CloudPredictor.predict`.
 
 
         Returns
@@ -1344,7 +1343,7 @@ class SagemakerBackend(Backend):
             "MaxConcurrentTransforms": 1,
             "Tags": tags,
         }
-        request = deep_merge(request, overrides.get("create_transform_job", {}))
+        request = deep_merge(request, overrides.get("CreateTransformJob", {}))
 
         batch_transform_job = SageMakerBatchTransformationJob(session=self.sagemaker_session)
         batch_transform_job.run(transform_job_request=request, model_name=model_name, wait=wait)

@@ -218,14 +218,21 @@ class CloudPredictor(ABC):
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Escape hatch for SageMaker settings without a dedicated argument. Maps ``"create_training_job"`` to raw
-            `CreateTrainingJob <https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateTrainingJob.html>`_
-            request fields in the PascalCase format of the SageMaker API and boto3, which are deep-merged over the
-            request built by AutoGluon-Cloud, e.g. ``{"create_training_job": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``.
-            Nested dicts merge recursively; other values, including lists, replace the generated ones.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
+
         Returns
         -------
         `CloudPredictor` object. Returns self.
+
+        SageMaker API
+        -------------
+        * :sm-api:`CreateTrainingJob`: trains the predictor on ``instance_count`` x ``instance_type`` and writes the
+          artifact to ``cloud_output_path``.
         """  # noqa: E501
         assert not self.backend.is_fit, (
             "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
@@ -281,6 +288,10 @@ class CloudPredictor(ABC):
         ----------
         job_name: str
             The name of the job being attached
+
+        SageMaker API
+        -------------
+        * :sm-api:`DescribeTrainingJob`: polled until the job finishes.
         """
         self.backend.attach_job(job_name)
 
@@ -293,6 +304,10 @@ class CloudPredictor(ABC):
         -------
         str,
         Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+
+        SageMaker API
+        -------------
+        * :sm-api:`DescribeTrainingJob`: reads the job status.
         """
         return self.backend.get_fit_job_status()
 
@@ -419,13 +434,21 @@ class CloudPredictor(ABC):
         inference_config: Optional[Dict[str, Any]], default = None
             Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
-            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
-            ``"create_model"``, ``"production_variant"`` (the endpoint config's single production variant),
-            ``"create_endpoint_config"`` and ``"create_endpoint"``, e.g.
-            ``{"production_variant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``.
-            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
-            resources created by AutoGluon-Cloud are cleaned up.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
+
+        SageMaker API
+        -------------
+        * :sm-api:`CreateModel`: registers the model artifact and inference image as a SageMaker model.
+        * :sm-api:`CreateEndpointConfig`: defines the endpoint's single :sm-api:`ProductionVariant`: instance type and
+          count, or the serverless settings.
+        * :sm-api:`CreateEndpoint`: launches the endpoint.
+
+        The endpoint is billed until :meth:`cleanup_deployment` deletes it.
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
@@ -497,6 +520,11 @@ class CloudPredictor(ABC):
         -------
         Pandas.Series
         Predict results in Series
+
+        SageMaker API
+        -------------
+        * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
+          limited to 6 MB (4 MB for serverless endpoints).
         """
         self._validate_inference_kwargs(inference_kwargs=kwargs)
         return self.backend.predict_real_time(
@@ -534,6 +562,11 @@ class CloudPredictor(ABC):
         -------
         Pandas.DataFrame or Pandas.Series
             Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+
+        SageMaker API
+        -------------
+        * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
+          limited to 6 MB (4 MB for serverless endpoints).
         """
         self._validate_inference_kwargs(inference_kwargs=kwargs)
         return self.backend.predict_proba_real_time(
@@ -589,18 +622,27 @@ class CloudPredictor(ABC):
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
-            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
-            ``"create_model"`` and ``"create_transform_job"``, e.g.
-            ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
-            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
-            resources created by AutoGluon-Cloud are cleaned up.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
 
         Returns
         -------
         Optional Pandas.Series
             Predict results in Series if `wait` is True
             None if `wait` is False
+
+        SageMaker API
+        -------------
+        * :sm-api:`CreateModel`: registers the predictor artifact and inference image as a SageMaker model.
+        * :sm-api:`CreateTransformJob`: runs batch inference on ``instance_count`` x ``instance_type``. Results are
+          written to ``predictions_path``.
+
+        The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
+        :sm-api:`DeleteModel`.
         """
         return self.backend.predict(
             test_data=test_data,
@@ -669,12 +711,12 @@ class CloudPredictor(ABC):
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Escape hatch for SageMaker settings without a dedicated argument: raw request fields in the PascalCase
-            format of the SageMaker API and boto3, deep-merged over the requests built by AutoGluon-Cloud. Valid keys:
-            ``"create_model"`` and ``"create_transform_job"``, e.g.
-            ``{"create_transform_job": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``.
-            Nested dicts merge recursively; other values, including lists, replace the generated ones. Only
-            resources created by AutoGluon-Cloud are cleaned up.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
 
         Returns
         -------
@@ -683,6 +725,15 @@ class CloudPredictor(ABC):
             If `wait` is True and `include_predict` is True,
             will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
             or a Pandas.Series that's identical to prediction when it's a regression problem.
+
+        SageMaker API
+        -------------
+        * :sm-api:`CreateModel`: registers the predictor artifact and inference image as a SageMaker model.
+        * :sm-api:`CreateTransformJob`: runs batch inference on ``instance_count`` x ``instance_type``. Results are
+          written to ``predictions_path``.
+
+        The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
+        :sm-api:`DeleteModel`.
         """
         return self.backend.predict_proba(
             test_data=test_data,
@@ -721,12 +772,21 @@ class CloudPredictor(ABC):
         -------
         str,
         Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+
+        SageMaker API
+        -------------
+        * :sm-api:`DescribeTransformJob`: reads the job status.
         """
         return self.backend.get_batch_inference_job_status(job_name)
 
     def cleanup_deployment(self) -> None:
         """
         Delete the deployed endpoint and other artifacts
+
+        SageMaker API
+        -------------
+        * :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`: delete the endpoint and
+          the endpoint config and model created with it.
         """
         self.backend.cleanup_deployment()
 

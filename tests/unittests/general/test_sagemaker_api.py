@@ -23,14 +23,14 @@ def test_deep_merge_merges_dicts_and_replaces_other_values():
 
 
 def test_check_override_keys_rejects_unknown_keys():
-    with pytest.raises(ValueError, match="create_model"):
-        check_override_keys({"create_model": {}}, ("create_training_job",))
-    assert check_override_keys(None, ("create_training_job",)) == {}
+    with pytest.raises(ValueError, match="CreateModel"):
+        check_override_keys({"CreateModel": {}}, ("CreateTrainingJob",))
+    assert check_override_keys(None, ("CreateTrainingJob",)) == {}
 
 
 def test_check_override_keys_rejects_resource_references():
     with pytest.raises(ValueError, match="ModelName"):
-        check_override_keys({"production_variant": {"ModelName": "other"}}, ("production_variant",))
+        check_override_keys({"ProductionVariant": {"ModelName": "other"}}, ("ProductionVariant",))
 
 
 def test_reject_legacy_kwargs_points_to_replacement():
@@ -123,7 +123,7 @@ def test_fit_builds_script_mode_training_job(fit_request):
 
 def test_fit_applies_overrides(fit_request):
     request = fit_request(
-        backend_overrides={"create_training_job": {"RetryStrategy": {"MaximumRetryAttempts": 2}}},
+        backend_overrides={"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}},
     )
     assert request["RetryStrategy"] == {"MaximumRetryAttempts": 2}
 
@@ -137,4 +137,4 @@ def test_misspelled_override_field_fails_request_validation(fit_request):
     from botocore.exceptions import ParamValidationError
 
     with pytest.raises(ParamValidationError, match="RetryStrategyy"):
-        fit_request(backend_overrides={"create_training_job": {"RetryStrategyy": {"MaximumRetryAttempts": 2}}})
+        fit_request(backend_overrides={"CreateTrainingJob": {"RetryStrategyy": {"MaximumRetryAttempts": 2}}})

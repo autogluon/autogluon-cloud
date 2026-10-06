@@ -9,28 +9,28 @@ from .aws_utils import AwsSession
 
 logger = logging.getLogger(__name__)
 
-# Requests that each method sends, i.e. the valid `backend_overrides` keys, named after the boto3 client methods.
-# `production_variant` is the single variant inside `create_endpoint_config`'s `ProductionVariants`.
-FIT_OVERRIDE_KEYS = ("create_training_job",)
-DEPLOY_OVERRIDE_KEYS = ("create_model", "production_variant", "create_endpoint_config", "create_endpoint")
-BATCH_PREDICT_OVERRIDE_KEYS = ("create_model", "create_transform_job")
+# Requests that each method sends, i.e. the valid `backend_overrides` keys, named after the SageMaker API actions.
+# `ProductionVariant` is the single variant inside `CreateEndpointConfig`'s `ProductionVariants`.
+FIT_OVERRIDE_KEYS = ("CreateTrainingJob",)
+DEPLOY_OVERRIDE_KEYS = ("CreateModel", "ProductionVariant", "CreateEndpointConfig", "CreateEndpoint")
+BATCH_PREDICT_OVERRIDE_KEYS = ("CreateModel", "CreateTransformJob")
 # Fields that link the resources AutoGluon-Cloud creates to each other. Overriding them would point a request at a
 # resource we didn't create, which cleanup would then delete.
 _RESERVED_OVERRIDE_FIELDS = {
-    "production_variant": ("ModelName",),
-    "create_endpoint_config": ("ProductionVariants",),
-    "create_endpoint": ("EndpointConfigName",),
-    "create_transform_job": ("ModelName",),
+    "ProductionVariant": ("ModelName",),
+    "CreateEndpointConfig": ("ProductionVariants",),
+    "CreateEndpoint": ("EndpointConfigName",),
+    "CreateTransformJob": ("ModelName",),
 }
 
 _REMOVED_KWARGS = {
     "backend_kwargs": "`backend_overrides` (and `predictions_path` to choose where `predict()` writes results)",
-    "autogluon_sagemaker_estimator_kwargs": "`backend_overrides={'create_training_job': ...}`",
-    "fit_kwargs": "`backend_overrides={'create_training_job': ...}`",
-    "model_kwargs": "`backend_overrides={'create_model': ...}`",
-    "deploy_kwargs": "`backend_overrides={'production_variant': ..., 'create_endpoint_config': ...}`",
-    "transformer_kwargs": "`backend_overrides={'create_transform_job': ...}`",
-    "transform_kwargs": "`backend_overrides={'create_transform_job': ...}`",
+    "autogluon_sagemaker_estimator_kwargs": "`backend_overrides={'CreateTrainingJob': ...}`",
+    "fit_kwargs": "`backend_overrides={'CreateTrainingJob': ...}`",
+    "model_kwargs": "`backend_overrides={'CreateModel': ...}`",
+    "deploy_kwargs": "`backend_overrides={'ProductionVariant': ..., 'CreateEndpointConfig': ...}`",
+    "transformer_kwargs": "`backend_overrides={'CreateTransformJob': ...}`",
+    "transform_kwargs": "`backend_overrides={'CreateTransformJob': ...}`",
 }
 
 

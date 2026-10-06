@@ -108,11 +108,21 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw SageMaker request fields under ``"create_training_job"``. See :meth:`TabularCloudPredictor.fit`.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
         `TimeSeriesCloudPredictor` object. Returns self.
+
+        SageMaker API
+        -------------
+        * :sm-api:`CreateTrainingJob`: trains the predictor on ``instance_count`` x ``instance_type`` and writes the
+          artifact to ``cloud_output_path``.
         """
         assert not self.backend.is_fit, (
             "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
@@ -191,6 +201,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         -------
         Pandas.DataFrame
         Predict results in DataFrame
+
+        SageMaker API
+        -------------
+        * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
+          limited to 6 MB (4 MB for serverless endpoints).
         """
         return self.backend.predict_real_time(
             test_data=data,
@@ -258,8 +273,25 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        predictions_path, backend_overrides:
-            Same as in :meth:`TabularCloudPredictor.predict`.
+        predictions_path: Optional[str], default = None
+            S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
+            Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
+        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
+
+        SageMaker API
+        -------------
+        * :sm-api:`CreateModel`: registers the predictor artifact and inference image as a SageMaker model.
+        * :sm-api:`CreateTransformJob`: runs batch inference on ``instance_count`` x ``instance_type``. Results are
+          written to ``predictions_path``.
+
+        The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
+        :sm-api:`DeleteModel`.
         """
         return self.backend.predict(
             test_data=data,
@@ -358,12 +390,22 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         wait: bool, default = True
             Whether the call should wait until the job completes.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw SageMaker request fields, same as in :meth:`fit`.
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
         Optional[pd.DataFrame]
             Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
+
+        SageMaker API
+        -------------
+        * :sm-api:`CreateTrainingJob`: trains the predictor and predicts in the same job on ``instance_count`` x
+          ``instance_type``. Predictions are written to ``predictions_path``.
         """
         extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:

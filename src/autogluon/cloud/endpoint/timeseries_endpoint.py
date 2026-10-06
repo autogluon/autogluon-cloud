@@ -77,6 +77,11 @@ class TimeSeriesEndpoint:
         Returns
         -------
         pd.DataFrame
+
+        SageMaker API
+        -------------
+        * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
+          limited to 6 MB (4 MB for serverless endpoints).
         """
         if isinstance(data, str):
             data = load_pd.load(data)
@@ -110,5 +115,11 @@ class TimeSeriesEndpoint:
         )
 
     def delete_endpoint(self) -> None:
-        """Delete the endpoint and its backing model + endpoint config."""
+        """Delete the endpoint and its backing model + endpoint config.
+
+        SageMaker API
+        -------------
+        * :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`: delete the endpoint and
+          the endpoint config and model created with it.
+        """
         delete_endpoint(self._endpoint_name, self._session)

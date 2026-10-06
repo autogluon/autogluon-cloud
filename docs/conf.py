@@ -26,7 +26,13 @@ extensions = [
 # Usage in markdown: {repo-file}`src/autogluon/cloud/templates/ag_cloud_sagemaker.yaml`
 extlinks = {
     "repo-file": (f"https://github.com/autogluon/autogluon-cloud/blob/v{release}/%s", "%s"),
+    # Usage in docstrings: :sm-api:`CreateTrainingJob`
+    "sm-api": ("https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_%s.html", "%s"),
+    "sm-runtime-api": ("https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_runtime_%s.html", "%s"),
 }
+
+# Docstring section listing the SageMaker requests a method sends (rendered like "Notes").
+napoleon_custom_sections = ["SageMaker API"]
 
 # See https://myst-parser.readthedocs.io/en/latest/syntax/optional.html
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "html_image", "substitution"]
