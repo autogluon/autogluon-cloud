@@ -76,7 +76,7 @@ def test_when_inference_ami_is_overridden_then_override_wins(deploy_requests):
         deploy_requests(
             instance_type="ml.g4dn.xlarge",
             custom_image_uri=GPU_IMAGE_URI,
-            backend_overrides={"production_variant": {"InferenceAmiVersion": "custom-ami"}},
+            backend_overrides={"ProductionVariant": {"InferenceAmiVersion": "custom-ami"}},
         )
     )
     assert variant["InferenceAmiVersion"] == "custom-ami"
@@ -119,7 +119,7 @@ def test_when_inference_mode_is_unknown_then_value_error_is_raised(deploy_reques
 def test_when_container_environment_overridden_then_it_merges_with_defaults(deploy_requests):
     requests = deploy_requests(
         instance_type="ml.m5.xlarge",
-        backend_overrides={"create_model": {"PrimaryContainer": {"Environment": {"FOO": "bar"}}}},
+        backend_overrides={"CreateModel": {"PrimaryContainer": {"Environment": {"FOO": "bar"}}}},
     )
     environment = requests["model"]["PrimaryContainer"]["Environment"]
     assert environment["FOO"] == "bar"
@@ -128,7 +128,7 @@ def test_when_container_environment_overridden_then_it_merges_with_defaults(depl
 
 def test_when_override_targets_training_job_then_deploy_rejects_it(deploy_requests):
     with pytest.raises(ValueError, match="Unsupported `backend_overrides` key"):
-        deploy_requests(backend_overrides={"create_training_job": {}})
+        deploy_requests(backend_overrides={"CreateTrainingJob": {}})
 
 
 def test_when_endpoint_creation_fails_then_model_and_config_are_deleted(deploy_requests):

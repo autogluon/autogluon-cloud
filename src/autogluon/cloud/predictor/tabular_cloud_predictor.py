@@ -106,6 +106,11 @@ class TabularCloudPredictor(CloudPredictor):
         Optional[pd.Series]
             Predictions as a Series. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_results()``.
+
+        SageMaker API
+        -------------
+        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs one training job on
+        ``instance_type``, limited by the ``<instance_type> for training job usage`` Service Quota.
         """
         result = self.fit_predict_proba(
             train_data=train_data,
@@ -197,6 +202,11 @@ class TabularCloudPredictor(CloudPredictor):
             If ``include_predict`` is True, returns ``(prediction, predict_probability)``; otherwise just
             ``predict_probability``. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_proba_results()``.
+
+        SageMaker API
+        -------------
+        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs one training job on
+        ``instance_type``, limited by the ``<instance_type> for training job usage`` Service Quota.
         """
         extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:

@@ -88,7 +88,7 @@ def transform_request(assert_valid_request):
     ("backend_overrides", "expected"),
     [
         (None, "al2-ami-sagemaker-batch-gpu-535"),
-        ({"create_transform_job": {"TransformResources": {"TransformAmiVersion": "custom-ami"}}}, "custom-ami"),
+        ({"CreateTransformJob": {"TransformResources": {"TransformAmiVersion": "custom-ami"}}}, "custom-ami"),
     ],
 )
 def test_batch_transform_job_sets_inferred_ami_without_overriding_user_value(

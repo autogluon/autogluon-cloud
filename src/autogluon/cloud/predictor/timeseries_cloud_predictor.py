@@ -108,11 +108,16 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
         backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
-            Raw SageMaker request fields under ``"create_training_job"``. See :meth:`TabularCloudPredictor.fit`.
+            Raw SageMaker request fields under ``"CreateTrainingJob"``. See :meth:`TabularCloudPredictor.fit`.
 
         Returns
         -------
         `TimeSeriesCloudPredictor` object. Returns self.
+
+        SageMaker API
+        -------------
+        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs one training job on
+        ``instance_type``, limited by the ``<instance_type> for training job usage`` Service Quota.
         """
         assert not self.backend.is_fit, (
             "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
@@ -191,6 +196,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         -------
         Pandas.DataFrame
         Predict results in DataFrame
+
+        SageMaker API
+        -------------
+        Sends one :sm-runtime-api:`InvokeEndpoint` request. The payload is limited to 6 MB (4 MB for serverless
+        endpoints).
         """
         return self.backend.predict_real_time(
             test_data=data,
@@ -260,6 +270,17 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
         predictions_path, backend_overrides:
             Same as in :meth:`TabularCloudPredictor.predict`.
+
+        SageMaker API
+        -------------
+        Requests (also the ``backend_overrides`` keys):
+
+        * :sm-api:`CreateModel`
+        * :sm-api:`CreateTransformJob`
+
+        Runs one batch transform job on ``instance_count`` x ``instance_type``, limited by the
+        ``<instance_type> for transform job usage`` Service Quota. The model is deleted once the job finishes; with
+        ``wait=False`` it is kept and must be deleted with :sm-api:`DeleteModel`.
         """
         return self.backend.predict(
             test_data=data,
@@ -364,6 +385,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         -------
         Optional[pd.DataFrame]
             Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
+
+        SageMaker API
+        -------------
+        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs one training job on
+        ``instance_type``, limited by the ``<instance_type> for training job usage`` Service Quota.
         """
         extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:

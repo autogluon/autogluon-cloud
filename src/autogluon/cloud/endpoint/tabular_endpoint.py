@@ -89,6 +89,10 @@ class TabularEndpoint:
         The serialized request includes both ``train_data`` and ``data`` and must not exceed SageMaker's
         6 MiB real-time invocation payload limit. Use
         :meth:`autogluon.cloud.TabularFoundationModel.predict` for larger inputs.
+
+        SageMaker API
+        -------------
+        Sends one :sm-runtime-api:`InvokeEndpoint` request.
         """
         pred, _ = self._predict(
             data=data,
@@ -114,6 +118,10 @@ class TabularEndpoint:
         The serialized request includes both ``train_data`` and ``data`` and must not exceed SageMaker's
         6 MiB real-time invocation payload limit. Use
         :meth:`autogluon.cloud.TabularFoundationModel.predict_proba` for larger inputs.
+
+        SageMaker API
+        -------------
+        Sends one :sm-runtime-api:`InvokeEndpoint` request.
         """
         pred, pred_proba = self._predict(
             data=data,
@@ -126,5 +134,10 @@ class TabularEndpoint:
         return pred_proba
 
     def delete_endpoint(self) -> None:
-        """Delete the endpoint and its backing model + endpoint config."""
+        """Delete the endpoint and its backing model + endpoint config.
+
+        SageMaker API
+        -------------
+        Calls :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`.
+        """
         delete_endpoint(self._endpoint_name, self._session)

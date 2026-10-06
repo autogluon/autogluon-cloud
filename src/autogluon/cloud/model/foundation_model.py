@@ -448,6 +448,19 @@ class TimeSeriesFoundationModel(FoundationModel):
         **backend_kwargs
             Backend-specific arguments (e.g., ``initial_instance_count``, ``volume_size``, ``backend_overrides``; see
             :meth:`autogluon.cloud.TabularCloudPredictor.deploy`).
+
+        SageMaker API
+        -------------
+        Requests (also the ``backend_overrides`` keys):
+
+        * :sm-api:`CreateModel`
+        * :sm-api:`CreateEndpointConfig`
+        * :sm-api:`ProductionVariant`, the endpoint config's single production variant
+        * :sm-api:`CreateEndpoint`
+
+        A real-time endpoint is limited by the ``<instance_type> for endpoint usage`` Service Quota, a serverless
+        endpoint by ``Maximum total concurrency that can be allocated across all serverless endpoints``. The endpoint
+        is billed until :meth:`TimeSeriesEndpoint.delete_endpoint` deletes it.
         """
         self._deploy_backend(
             instance_type=instance_type,
@@ -559,6 +572,12 @@ class TimeSeriesFoundationModel(FoundationModel):
         -------
         pd.DataFrame or JobPredictionFuture
             DataFrame if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
+
+        SageMaker API
+        -------------
+        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs as a training job (not
+        a batch transform job) on ``instance_type``, limited by the ``<instance_type> for training job usage`` Service
+        Quota.
         """
         if instance_type is None:
             instance_type = self._config.predict_instance_type
@@ -643,6 +662,18 @@ class TabularFoundationModel(FoundationModel):
 
         Only real-time inference is supported. Tabular foundation models such as Mitra require a
         provisioned instance and cannot be deployed with SageMaker Serverless Inference.
+
+        SageMaker API
+        -------------
+        Requests (also the ``backend_overrides`` keys):
+
+        * :sm-api:`CreateModel`
+        * :sm-api:`CreateEndpointConfig`
+        * :sm-api:`ProductionVariant`, the endpoint config's single production variant
+        * :sm-api:`CreateEndpoint`
+
+        The endpoint is limited by the ``<instance_type> for endpoint usage`` Service Quota and billed until
+        :meth:`TabularEndpoint.delete_endpoint` deletes it.
         """
         if inference_mode != "realtime":
             raise ValueError(
@@ -747,6 +778,12 @@ class TabularFoundationModel(FoundationModel):
         -------
         pd.Series or JobPredictionFuture
             Predictions as a Series if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
+
+        SageMaker API
+        -------------
+        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs as a training job (not
+        a batch transform job) on ``instance_type``, limited by the ``<instance_type> for training job usage`` Service
+        Quota.
         """
         result = self.predict_proba(
             test_data,
@@ -824,6 +861,12 @@ class TabularFoundationModel(FoundationModel):
         (pd.Series, pd.DataFrame | pd.Series) or (pd.DataFrame | pd.Series) or JobPredictionFuture
             If ``include_predict`` is True, returns ``(prediction, predict_probability)``; otherwise just
             ``predict_probability``. Returns a :class:`JobPredictionFuture` when ``wait=False``.
+
+        SageMaker API
+        -------------
+        Sends one :sm-api:`CreateTrainingJob` request, also the ``backend_overrides`` key. Runs as a training job (not
+        a batch transform job) on ``instance_type``, limited by the ``<instance_type> for training job usage`` Service
+        Quota.
         """
         if instance_type is None:
             instance_type = self._config.predict_instance_type
