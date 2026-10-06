@@ -578,7 +578,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             Additional SageMaker arguments:
 
             * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 64.
+            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 100.
             * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
 
               * Keys: request names from the *SageMaker API* section below.
@@ -822,7 +822,7 @@ class TabularFoundationModel(FoundationModel):
             Additional SageMaker arguments:
 
             * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 64.
+            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 100.
             * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
 
               * Keys: request names from the *SageMaker API* section below.
@@ -912,7 +912,7 @@ class TabularFoundationModel(FoundationModel):
             Additional SageMaker arguments:
 
             * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 64.
+            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 100.
             * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
 
               * Keys: request names from the *SageMaker API* section below.

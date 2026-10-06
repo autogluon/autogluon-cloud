@@ -208,7 +208,7 @@ class CloudPredictor(ABC):
         instance_count: int | str, default = "auto"
             Number of instances used to fit the predictor.
             If "auto", the backend decides the instance count.
-        volume_size: int, default = 64
+        volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60

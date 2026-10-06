@@ -239,7 +239,7 @@ class SagemakerBackend(Backend):
             Instance type the predictor will be trained on with SageMaker.
         instance_count: int, default = 1
             Number of instance used to fit the predictor.
-        volume_size: int, default = 64
+        volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
         timeout: int, default = 24*60*60
