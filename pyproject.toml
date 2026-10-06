@@ -100,5 +100,7 @@ known-first-party = ["autogluon"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers"
+# Release tests are slow and expensive; run them with `-m release` (see .github/workflows/release_tests.yml).
+addopts = "--strict-markers -m 'not release'"
+markers = ["release: pre-release test that runs every registry model on its default instance"]
 xfail_strict = true

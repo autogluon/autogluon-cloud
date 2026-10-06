@@ -57,19 +57,11 @@ def retail_sales_dataset():
     }
 
 
-def _deploy_kwargs(test_helper, framework_version: str) -> dict:
-    return {
-        "framework_version": framework_version,
-        "custom_image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
-    }
-
-
-def _predict_kwargs(test_helper, framework_version: str, ds: dict) -> dict:
+def _predict_kwargs(framework_version: str, ds: dict) -> dict:
     return {
         "static_features": ds["static_features"],
         "known_covariates": ds["known_covariates"],
         "framework_version": framework_version,
-        "custom_image_uri": test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
     }
 
 
@@ -103,7 +95,6 @@ def test_timeseries_train(test_helper, framework_version, shared_training_job_na
             timestamp_column=ds["timestamp_column"],
             static_features=ds["static_features"],
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
             job_name=shared_training_job_name,
         )
         info = predictor.info()
@@ -127,7 +118,7 @@ def test_timeseries_endpoint_lifecycle(test_helper, framework_version, shared_tr
             job_name=shared_training_job_name,
             test_name="endpoint-lifecycle",
         )
-        predictor.deploy(**_deploy_kwargs(test_helper, framework_version))
+        predictor.deploy(framework_version=framework_version)
         endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=predictor.endpoint_name)["EndpointArn"]
         test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries")
         test_helper.test_timeseries_endpoint(
@@ -160,7 +151,7 @@ def test_timeseries_batch_predict(test_helper, framework_version, shared_trainin
         )
         predictions = predictor.predict(
             ds["train_data"],
-            **_predict_kwargs(test_helper, framework_version, ds),
+            **_predict_kwargs(framework_version, ds),
         )
         assert isinstance(predictions, pd.DataFrame)
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
@@ -181,7 +172,7 @@ def test_timeseries_deploy_trained_artifact(
             local_output_path="test_timeseries_deploy_trained_artifact",
         )
 
-        predictor.deploy(predictor_path=artifact_path, **_deploy_kwargs(test_helper, framework_version))
+        predictor.deploy(predictor_path=artifact_path, framework_version=framework_version)
         test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
         predictor.cleanup_deployment()
 
@@ -204,7 +195,7 @@ def test_timeseries_predict_trained_artifact(
         predictions = predictor.predict(
             ds["train_data"],
             predictor_path=artifact_path,
-            **_predict_kwargs(test_helper, framework_version, ds),
+            **_predict_kwargs(framework_version, ds),
         )
         assert isinstance(predictions, pd.DataFrame)
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
@@ -239,8 +230,6 @@ def test_timeseries_fit_predict_chronos(
         os.chdir(temp_dir)
         expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
 
-        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
-
         cloud_predictor = TimeSeriesCloudPredictor(
             cloud_output_path=(
                 f"s3://{bucket}/test-timeseries-fit-predict-{model_name}/{framework_version}/{timestamp}"
@@ -256,7 +245,6 @@ def test_timeseries_fit_predict_chronos(
             id_column=ds["id_column"],
             timestamp_column=ds["timestamp_column"],
             framework_version=framework_version,
-            custom_image_uri=training_custom_image_uri,
             predictions_path=predictions_path,
         )
 
@@ -280,6 +268,9 @@ _FM_PREDICT_CASES = [
     ("toto-2.0-4m", "ml.m5.2xlarge"),
     ("toto-2.0-4m", "ml.g4dn.2xlarge"),
 ]
+_TIMESERIES_MODEL_IDS = [m for m, c in FOUNDATION_MODEL_REGISTRY.items() if c.problem_type == "forecasting"]
+# Pre-release run (`-m release`): every model on its registry default instance.
+_RELEASE_CASES = [pytest.param(model_id, None, marks=pytest.mark.release) for model_id in _TIMESERIES_MODEL_IDS]
 
 
 def test_fm_predict_cases_cover_every_timeseries_family():
@@ -288,14 +279,15 @@ def test_fm_predict_cases_cover_every_timeseries_family():
     assert covered == expected, f"Add a test case for the families: {sorted(expected - covered)}"
 
 
-@pytest.mark.parametrize("model_id, instance_type", _FM_PREDICT_CASES, ids=lambda v: v.removeprefix("ml."))
+@pytest.mark.parametrize(
+    "model_id, instance_type", _FM_PREDICT_CASES + _RELEASE_CASES, ids=lambda v: str(v).removeprefix("ml.")
+)
 def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset, model_id, instance_type):
     """Test FoundationModel batch prediction via the fit_predict training job pattern."""
     import boto3
 
     ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
-    gpu = instance_type.startswith(("ml.g", "ml.p"))
 
     bucket = "autogluon-cloud-ci"
     run_prefix = f"test-fm-predict/{framework_version}/{timestamp}/{model_id}-{instance_type}"
@@ -320,7 +312,6 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
             known_covariates=ds["known_covariates"],
             instance_type=instance_type,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=gpu),
             predictions_path=predictions_path,
         )
 
@@ -353,8 +344,6 @@ def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, fra
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
-
         cloud_output_path = f"s3://autogluon-cloud-ci/test-fm-cache-serverless/{framework_version}/{timestamp}"
         model = FoundationModel("chronos-bolt-tiny", cloud_output_path=cloud_output_path)
         cached_model = model.cache_model_artifact(f"{cloud_output_path}/cache")
@@ -362,7 +351,7 @@ def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, fra
         assert cached_model.model_artifact_uri.startswith("s3://")
 
         endpoint = cached_model.deploy(
-            custom_image_uri=inference_custom_image_uri,
+            framework_version=framework_version,
             inference_mode="serverless",
             inference_config={"memory_size_in_mb": 6144},
         )
@@ -480,17 +469,14 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
             cloud_output_path=f"s3://autogluon-cloud-ci/test-ts-formats/{framework_version}/{timestamp}",
             local_output_path="test_ts_formats_cloud_predictor",
         )
-        training_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="training", gpu=False)
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
 
         cloud_predictor.fit(
             train_data=plain_dataset,
             predictor_init_args=dict(target="target", prediction_length=_PLAIN_PREDICTION_LENGTH),
             predictor_fit_args=dict(presets="medium_quality", time_limit=60),
             framework_version=framework_version,
-            custom_image_uri=training_custom_image_uri,
         )
-        cloud_predictor.deploy(framework_version=framework_version, custom_image_uri=inference_custom_image_uri)
+        cloud_predictor.deploy(framework_version=framework_version)
         try:
             format_pairs = list(
                 itertools.product(
@@ -515,10 +501,16 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
             cloud_predictor.cleanup_deployment()
 
 
-@pytest.mark.parametrize("gpu", [True, False], ids=["gpu", "cpu"])
-def test_foundation_model_deploy(test_helper, framework_version, retail_sales_dataset, plain_dataset, gpu):
-    """Deploy a FoundationModel to a real-time endpoint (default GPU instance, or CPU), predict via the SDK, then
-    probe every supported (Content-Type, Accept) combination against the same endpoint."""
+@pytest.mark.parametrize(
+    "model_id, instance_type",
+    [("chronos-bolt-tiny", "ml.g4dn.xlarge"), ("chronos-bolt-tiny", "ml.m5.2xlarge")] + _RELEASE_CASES,
+    ids=lambda v: str(v).removeprefix("ml."),
+)
+def test_foundation_model_deploy(
+    test_helper, framework_version, retail_sales_dataset, plain_dataset, model_id, instance_type
+):
+    """Deploy a FoundationModel to a real-time endpoint, predict via the SDK, then probe every supported
+    (Content-Type, Accept) combination against the same endpoint."""
     ds = retail_sales_dataset
     timestamp = test_helper.get_utc_timestamp_now()
     expected_item_ids = sorted(plain_dataset["item_id"].unique())
@@ -526,20 +518,17 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=gpu)
-        deploy_kwargs = {} if gpu else {"instance_type": "ml.m5.2xlarge"}
-        device = "gpu" if gpu else "cpu"
 
         model = FoundationModel(
-            "chronos-bolt-tiny",
-            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy-{device}/{framework_version}/{timestamp}",
+            model_id,
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-fm-deploy/{framework_version}/{timestamp}/{model_id}-{instance_type}",
         )
-        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri, **deploy_kwargs)
+        endpoint = model.deploy(instance_type=instance_type, framework_version=framework_version)
         try:
             endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
                 "EndpointArn"
             ]
-            test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id="chronos-bolt-tiny")
+            test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries", model_id=model_id)
 
             predictions = endpoint.predict(
                 data=ds["train_data"],
@@ -567,3 +556,46 @@ def test_foundation_model_deploy(test_helper, framework_version, retail_sales_da
             )
         finally:
             endpoint.delete_endpoint()
+
+
+@pytest.mark.release
+def test_timeseries_cloud_predictor_gpu_release(test_helper, framework_version, retail_sales_dataset):
+    """Fit, deploy and batch predict a TimeSeriesCloudPredictor on GPU instances (regular CI only covers CPU)."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        predictor = TimeSeriesCloudPredictor(
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries-gpu/{framework_version}/{timestamp}",
+            local_output_path="test_timeseries_gpu",
+        )
+        predictor.fit(
+            train_data=ds["train_data"],
+            predictor_init_args={
+                "target": ds["target"],
+                "prediction_length": ds["prediction_length"],
+                "known_covariates_names": ds["known_covariates_names"],
+            },
+            predictor_fit_args={"presets": "medium_quality", "time_limit": 60},
+            id_column=ds["id_column"],
+            timestamp_column=ds["timestamp_column"],
+            static_features=ds["static_features"],
+            instance_type="ml.g4dn.2xlarge",
+            framework_version=framework_version,
+        )
+
+        predictor.deploy(
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
+        predictor.cleanup_deployment()
+
+        predictions = predictor.predict(
+            ds["train_data"],
+            static_features=ds["static_features"],
+            known_covariates=ds["known_covariates"],
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        assert isinstance(predictions, pd.DataFrame)

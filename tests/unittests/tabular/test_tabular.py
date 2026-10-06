@@ -49,7 +49,6 @@ def test_tabular_train(test_helper, framework_version, shared_training_job_name)
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
             job_name=shared_training_job_name,
         )
         info = predictor.info()
@@ -74,10 +73,7 @@ def test_tabular_endpoint_lifecycle(test_helper, framework_version, shared_train
             test_name="endpoint-lifecycle",
         )
 
-        predictor.deploy(
-            framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
-        )
+        predictor.deploy(framework_version=framework_version)
         endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=predictor.endpoint_name)["EndpointArn"]
         test_helper.assert_ag_cloud_tags(endpoint_arn, module="tabular")
         test_helper.test_endpoint(predictor, _TEST_DATA, inference_kwargs=dict(model="LightGBM"))
@@ -105,11 +101,7 @@ def test_tabular_batch_predict(test_helper, framework_version, shared_training_j
             test_name="batch-predict",
         )
 
-        pred, pred_proba = predictor.predict_proba(
-            _TEST_DATA,
-            framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
-        )
+        pred, pred_proba = predictor.predict_proba(_TEST_DATA, framework_version=framework_version)
         assert isinstance(pred, pd.Series)
         assert isinstance(pred_proba, pd.DataFrame)
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
@@ -131,7 +123,6 @@ def test_tabular_deploy_trained_artifact(test_helper, framework_version, shared_
         predictor.deploy(
             predictor_path=artifact_path,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
         )
         test_helper.test_endpoint(predictor, _TEST_DATA)
         predictor.cleanup_deployment()
@@ -154,7 +145,6 @@ def test_tabular_predict_trained_artifact(test_helper, framework_version, shared
             _TEST_DATA,
             predictor_path=artifact_path,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False),
         )
         assert isinstance(pred, pd.Series)
         assert isinstance(pred_proba, pd.DataFrame)
@@ -181,6 +171,9 @@ _FM_PREDICT_CASES = [
     ("nori-regressor", "ml.m5.4xlarge"),
     ("tabicl-v2-classifier", "ml.g4dn.2xlarge"),
 ]
+_TABULAR_MODEL_IDS = [m for m, c in FOUNDATION_MODEL_REGISTRY.items() if c.problem_type != "forecasting"]
+# Pre-release run (`-m release`): every model on its registry default instance.
+_RELEASE_CASES = [pytest.param(model_id, None, marks=pytest.mark.release) for model_id in _TABULAR_MODEL_IDS]
 
 
 def test_fm_predict_cases_cover_every_tabular_family():
@@ -189,10 +182,11 @@ def test_fm_predict_cases_cover_every_tabular_family():
     assert covered == expected, f"Add a test case for the families: {sorted(expected - covered)}"
 
 
-@pytest.mark.parametrize("model_id, instance_type", _FM_PREDICT_CASES, ids=lambda v: v.removeprefix("ml."))
+@pytest.mark.parametrize(
+    "model_id, instance_type", _FM_PREDICT_CASES + _RELEASE_CASES, ids=lambda v: str(v).removeprefix("ml.")
+)
 def test_tabular_foundation_model_predict(test_helper, framework_version, model_id, instance_type):
     timestamp = test_helper.get_utc_timestamp_now()
-    gpu = instance_type.startswith(("ml.g", "ml.p"))
     bucket = "autogluon-cloud-ci"
     run_prefix = f"test-tabular-fm-predict/{framework_version}/{timestamp}/{model_id}-{instance_type}"
     predictions_key = f"{run_prefix}/custom_predictions.csv"
@@ -210,7 +204,6 @@ def test_tabular_foundation_model_predict(test_helper, framework_version, model_
             include_predict=True,
             instance_type=instance_type,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=gpu),
             predictions_path=predictions_path,
         )
 
@@ -252,13 +245,11 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
         test_helper.prepare_data(train_data, test_data)
         n_test_rows = len(pd.read_csv(test_data))
 
-        inference_custom_image_uri = test_helper.get_custom_image_uri(framework_version, type="inference", gpu=False)
-
         model = TabularFoundationModel(
             "mitra-classifier",
             cloud_output_path=(f"s3://autogluon-cloud-ci/test-tabular-fm-deploy/{framework_version}/{timestamp}"),
         )
-        endpoint = model.deploy(custom_image_uri=inference_custom_image_uri)
+        endpoint = model.deploy(framework_version=framework_version)
         try:
             endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)[
                 "EndpointArn"
@@ -283,3 +274,64 @@ def test_tabular_foundation_model_deploy(test_helper, framework_version):
             assert len(pred) == n_test_rows
         finally:
             endpoint.delete_endpoint()
+
+
+@pytest.mark.release
+@pytest.mark.parametrize("model_id", _TABULAR_MODEL_IDS)
+def test_tabular_foundation_model_deploy_release(test_helper, framework_version, model_id):
+    """Deploy every tabular foundation model to its registry default instance and predict."""
+    config = get_model_config(model_id)
+    train_data, test_data = _synthetic_tabular_data(config.problem_type)
+    timestamp = test_helper.get_utc_timestamp_now()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        model = TabularFoundationModel(
+            model_id,
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-fm-deploy/{framework_version}/{timestamp}/{model_id}",
+        )
+        endpoint = model.deploy(framework_version=framework_version)
+        try:
+            pred, pred_proba = endpoint.predict_proba(data=test_data, train_data=train_data, label="label")
+            assert isinstance(pred, pd.Series)
+            assert len(pred) == len(test_data)
+            assert pred.notna().all()
+            assert len(pred_proba) == len(test_data)
+        finally:
+            endpoint.delete_endpoint()
+
+
+@pytest.mark.release
+def test_tabular_cloud_predictor_gpu_release(test_helper, framework_version):
+    """Fit, deploy and batch predict a TabularCloudPredictor on GPU instances (regular CI only covers CPU)."""
+    timestamp = test_helper.get_utc_timestamp_now()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        _prepare_data(test_helper)
+        predictor = TabularCloudPredictor(
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-gpu/{framework_version}/{timestamp}",
+            local_output_path="test_tabular_gpu",
+        )
+        predictor.fit(
+            train_data=_TRAIN_DATA,
+            tuning_data=_TUNE_DATA,
+            predictor_init_args=dict(label="class"),
+            predictor_fit_args=dict(time_limit=60),
+            instance_type="ml.g4dn.2xlarge",
+            framework_version=framework_version,
+        )
+
+        predictor.deploy(
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        test_helper.test_endpoint(predictor, _TEST_DATA)
+        predictor.cleanup_deployment()
+
+        pred, pred_proba = predictor.predict_proba(
+            _TEST_DATA,
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        assert isinstance(pred, pd.Series)
+        assert isinstance(pred_proba, pd.DataFrame)
