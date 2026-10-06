@@ -556,3 +556,46 @@ def test_foundation_model_deploy(
             )
         finally:
             endpoint.delete_endpoint()
+
+
+@pytest.mark.release
+def test_timeseries_cloud_predictor_gpu_release(test_helper, framework_version, retail_sales_dataset):
+    """Fit, deploy and batch predict a TimeSeriesCloudPredictor on GPU instances (regular CI only covers CPU)."""
+    ds = retail_sales_dataset
+    timestamp = test_helper.get_utc_timestamp_now()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        predictor = TimeSeriesCloudPredictor(
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-timeseries-gpu/{framework_version}/{timestamp}",
+            local_output_path="test_timeseries_gpu",
+        )
+        predictor.fit(
+            train_data=ds["train_data"],
+            predictor_init_args={
+                "target": ds["target"],
+                "prediction_length": ds["prediction_length"],
+                "known_covariates_names": ds["known_covariates_names"],
+            },
+            predictor_fit_args={"presets": "medium_quality", "time_limit": 60},
+            id_column=ds["id_column"],
+            timestamp_column=ds["timestamp_column"],
+            static_features=ds["static_features"],
+            instance_type="ml.g4dn.2xlarge",
+            framework_version=framework_version,
+        )
+
+        predictor.deploy(
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
+        predictor.cleanup_deployment()
+
+        predictions = predictor.predict(
+            ds["train_data"],
+            static_features=ds["static_features"],
+            known_covariates=ds["known_covariates"],
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        assert isinstance(predictions, pd.DataFrame)

@@ -299,3 +299,39 @@ def test_tabular_foundation_model_deploy_release(test_helper, framework_version,
             assert len(pred_proba) == len(test_data)
         finally:
             endpoint.delete_endpoint()
+
+
+@pytest.mark.release
+def test_tabular_cloud_predictor_gpu_release(test_helper, framework_version):
+    """Fit, deploy and batch predict a TabularCloudPredictor on GPU instances (regular CI only covers CPU)."""
+    timestamp = test_helper.get_utc_timestamp_now()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.chdir(temp_dir)
+        _prepare_data(test_helper)
+        predictor = TabularCloudPredictor(
+            cloud_output_path=f"s3://autogluon-cloud-ci/test-tabular-gpu/{framework_version}/{timestamp}",
+            local_output_path="test_tabular_gpu",
+        )
+        predictor.fit(
+            train_data=_TRAIN_DATA,
+            tuning_data=_TUNE_DATA,
+            predictor_init_args=dict(label="class"),
+            predictor_fit_args=dict(time_limit=60),
+            instance_type="ml.g4dn.2xlarge",
+            framework_version=framework_version,
+        )
+
+        predictor.deploy(
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        test_helper.test_endpoint(predictor, _TEST_DATA)
+        predictor.cleanup_deployment()
+
+        pred, pred_proba = predictor.predict_proba(
+            _TEST_DATA,
+            instance_type="ml.g4dn.xlarge",
+            framework_version=framework_version,
+        )
+        assert isinstance(pred, pd.Series)
+        assert isinstance(pred_proba, pd.DataFrame)
