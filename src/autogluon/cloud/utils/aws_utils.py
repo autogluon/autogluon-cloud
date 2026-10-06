@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import boto3
 from botocore.config import Config
@@ -15,7 +15,7 @@ from .misc import sagemaker_timestamp
 logger = logging.getLogger(__name__)
 
 
-def _resolve_sagemaker_region() -> Optional[str]:
+def _resolve_sagemaker_region() -> str | None:
     """Return the SageMaker region persisted in ``~/.autogluon/cloud.yaml``, or ``None`` if no
     config / no region is set. ``None`` lets the boto3 default chain (env vars, shared config)
     take over."""
@@ -42,10 +42,10 @@ class AwsSession:
         self.s3_client = boto_session.client("s3")
 
     @property
-    def boto_region_name(self) -> Optional[str]:
+    def boto_region_name(self) -> str | None:
         return self.boto_session.region_name
 
-    def upload_data(self, path: str, bucket: str, key_prefix: str, extra_args: Optional[Dict[str, Any]] = None) -> str:
+    def upload_data(self, path: str, bucket: str, key_prefix: str, extra_args: dict[str, Any] | None = None) -> str:
         """Upload a local file or directory under ``s3://bucket/key_prefix``.
 
         A file is uploaded to ``{key_prefix}/{filename}`` and its S3 URI is returned. A directory is uploaded
@@ -63,7 +63,7 @@ class AwsSession:
         self.s3_client.upload_file(path, bucket, key, ExtraArgs=extra_args)
         return f"s3://{bucket}/{key}"
 
-    def download_data(self, path: str, bucket: str, key_prefix: str) -> List[str]:
+    def download_data(self, path: str, bucket: str, key_prefix: str) -> list[str]:
         """Download every object under ``s3://bucket/key_prefix`` into the local directory ``path``.
 
         Objects keep their key relative to ``key_prefix``; if ``key_prefix`` is a single object, it is saved under
@@ -93,7 +93,7 @@ class AwsSession:
 _ASSUMED_ROLE_ARN = re.compile(r"^arn:([^:]+):sts::(\d+):assumed-role/([^/]+)/.+$")
 
 
-def get_execution_role(session: Optional[AwsSession] = None) -> str:
+def get_execution_role(session: AwsSession | None = None) -> str:
     """Return the IAM role whose credentials ``session`` (default: a new session) uses, e.g. the execution role
     inside SageMaker.
 
@@ -123,7 +123,7 @@ def get_execution_role(session: Optional[AwsSession] = None) -> str:
         return role_arn
 
 
-def resolve_execution_role(role: Optional[str], backend_name: str, *, session: Optional[AwsSession] = None) -> str:
+def resolve_execution_role(role: str | None, backend_name: str, *, session: AwsSession | None = None) -> str:
     """Resolve the SageMaker execution role ARN.
 
     Resolution order:
@@ -144,7 +144,7 @@ def resolve_execution_role(role: Optional[str], backend_name: str, *, session: O
     return get_execution_role(session)
 
 
-def resolve_cloud_output_path(path: Optional[str], backend_name: str) -> Optional[str]:
+def resolve_cloud_output_path(path: str | None, backend_name: str) -> str | None:
     """Resolve the S3 location where AutoGluon-Cloud will read/write artifacts.
 
     Resolution order for the bucket:
@@ -220,11 +220,11 @@ def get_latest_amazon_linux_ami(region="us-east-1", version="al2023"):
 
 
 def setup_sagemaker_session(
-    boto_session: Optional[boto3.Session] = None,
-    config: Optional[Config] = None,
+    boto_session: boto3.Session | None = None,
+    config: Config | None = None,
     connect_timeout: int = 60,
     read_timeout: int = 60,
-    retries: Optional[dict] = None,
+    retries: dict | None = None,
     **kwargs,
 ) -> AwsSession:
     """

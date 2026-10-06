@@ -1,6 +1,5 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Union
 
 import pandas as pd
 
@@ -44,7 +43,7 @@ class FormatConverter(ABC):
             raise ValueError(f"{ext} file type is not supported.")
         return data
 
-    def convert(self, data: Union[str, pd.DataFrame], output_path: str, filename: str) -> str:
+    def convert(self, data: str | pd.DataFrame, output_path: str, filename: str) -> str:
         """
         Convert a tabular file to another format.
         If the file does not need conversion, will return the original path.

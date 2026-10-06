@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import pandas as pd
 
 
-def dumps_ag_args(config: Dict[str, Any]) -> str:
+def dumps_ag_args(config: dict[str, Any]) -> str:
     """Serialize the remote-training config to JSON, raising a user-facing error on failure.
 
     The config carries the user's predictor init/fit arguments. Some objects (search spaces,
@@ -56,8 +56,8 @@ class Backend(ABC):
         self,
         local_output_path: str,
         predictor_type: str,
-        cloud_output_path: Optional[str] = None,
-        resource_prefix: Optional[str] = None,
+        cloud_output_path: str | None = None,
+        resource_prefix: str | None = None,
         **kwargs,
     ) -> None:
         """Initialize the backend."""
@@ -66,7 +66,7 @@ class Backend(ABC):
         self.predictor_type = predictor_type
         self.resource_prefix = resource_prefix or f"ag-cloud-{predictor_type}"
         self.original_features = None
-        self.endpoint_name: Optional[str] = None
+        self.endpoint_name: str | None = None
 
     @abstractmethod
     def attach_job(self, job_name: str) -> None:
@@ -101,7 +101,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_fit_job_info(self) -> Dict[str, Any]:
+    def get_fit_job_info(self) -> dict[str, Any]:
         """
         Get general info of the training job.
         """
@@ -153,17 +153,17 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def predict_real_time(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+    def predict_real_time(self, test_data: str | pd.DataFrame, **kwargs) -> pd.DataFrame | pd.Series:
         """Realtime prediction with the endpoint"""
         raise NotImplementedError
 
     @abstractmethod
-    def predict_proba_real_time(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+    def predict_proba_real_time(self, test_data: str | pd.DataFrame, **kwargs) -> pd.DataFrame | pd.Series:
         """Realtime prediction probability with the endpoint"""
         raise NotImplementedError
 
     @abstractmethod
-    def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_batch_inference_job_info(self, job_name: str | None = None) -> dict[str, Any]:
         """
         Get general info of the batch inference job.
         If job_name not specified, return the info of the most recent batch inference job
@@ -171,7 +171,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
+    def get_batch_inference_job_status(self, job_name: str | None = None) -> str:
         """
         Get general status of the batch inference job.
         If job_name not specified, return the info of the most recent batch inference job
@@ -179,17 +179,17 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_batch_inference_jobs(self) -> List[str]:
+    def get_batch_inference_jobs(self) -> list[str]:
         """Get a list of names of all batch inference jobs"""
         raise NotImplementedError
 
     @abstractmethod
-    def predict(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+    def predict(self, test_data: str | pd.DataFrame, **kwargs) -> pd.DataFrame | pd.Series:
         """Batch inference"""
         raise NotImplementedError
 
     @abstractmethod
-    def predict_proba(self, test_data: Union[str, pd.DataFrame], **kwargs) -> Union[pd.DataFrame, pd.Series]:
+    def predict_proba(self, test_data: str | pd.DataFrame, **kwargs) -> pd.DataFrame | pd.Series:
         """Batch inference probability"""
         raise NotImplementedError
 

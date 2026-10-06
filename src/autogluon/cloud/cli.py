@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
-from typing import Optional
 
 import boto3
 import click
@@ -46,7 +45,7 @@ def _template_url(backend: str) -> str:
     )
 
 
-def _make_session(aws_profile: Optional[str], region: Optional[str]) -> Optional[boto3.Session]:
+def _make_session(aws_profile: str | None, region: str | None) -> boto3.Session | None:
     """Build a boto3.Session honoring optional --aws-profile and --region. Returns None if neither given."""
     if not aws_profile and not region:
         return None
@@ -92,9 +91,9 @@ def cli() -> None:
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 def bootstrap(
     backend: str,
-    region: Optional[str],
-    stack_name: Optional[str],
-    aws_profile: Optional[str],
+    region: str | None,
+    stack_name: str | None,
+    aws_profile: str | None,
     yes: bool,
 ) -> None:
     """One-time setup to run AutoGluon-Cloud on AWS."""
@@ -151,10 +150,10 @@ def bootstrap(
 @click.option("--stack-name", default=None, help="CloudFormation stack name (for teardown to find later).")
 def register(
     backend: str,
-    role: Optional[str],
-    bucket: Optional[str],
-    region: Optional[str],
-    stack_name: Optional[str],
+    role: str | None,
+    bucket: str | None,
+    region: str | None,
+    stack_name: str | None,
 ) -> None:
     """Use your own IAM role and S3 bucket with AutoGluon-Cloud."""
     role = role or Prompt.ask("IAM role ARN")
@@ -177,7 +176,7 @@ def register(
 @cli.command()
 @click.option("--region", default=None, help="AWS region.")
 @click.option("--aws-profile", default=None, help="AWS profile from ~/.aws/credentials.")
-def status(region: Optional[str], aws_profile: Optional[str]) -> None:
+def status(region: str | None, aws_profile: str | None) -> None:
     """Check that configured AWS resources exist and are accessible."""
     config = load_config()
     if config is None or not config.backends:
@@ -215,9 +214,9 @@ def status(region: Optional[str], aws_profile: Optional[str]) -> None:
 @click.option("--aws-profile", default=None, help="AWS profile from ~/.aws/credentials.")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 def teardown(
-    backend: Optional[str],
-    region: Optional[str],
-    aws_profile: Optional[str],
+    backend: str | None,
+    region: str | None,
+    aws_profile: str | None,
     yes: bool,
 ) -> None:
     """Remove AWS resources created by bootstrap."""

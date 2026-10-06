@@ -3,7 +3,8 @@
 import copy
 import functools
 import logging
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any
 
 from .aws_utils import AwsSession
 
@@ -61,7 +62,7 @@ def _sets_custom_entry_point(value: Any) -> bool:
     return any(key in ("entry_point", "source_dir") or _sets_custom_entry_point(v) for key, v in value.items())
 
 
-def check_override_keys(overrides: Optional[Mapping[str, Any]], allowed_keys: Iterable[str]) -> Dict[str, Any]:
+def check_override_keys(overrides: Mapping[str, Any] | None, allowed_keys: Iterable[str]) -> dict[str, Any]:
     """Return ``overrides`` (or ``{}``), raising if it targets a request the calling method doesn't send."""
     overrides = dict(overrides or {})
     unknown = sorted(set(overrides) - set(allowed_keys))
@@ -82,7 +83,7 @@ def delete_quietly(delete: Callable[..., Any], **kwargs) -> None:
         logger.warning(f"Failed to clean up {kwargs}: {e}")
 
 
-def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
+def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
     """Merge ``override`` into a copy of ``base``: dicts merge recursively, every other value replaces."""
     merged = copy.deepcopy(dict(base))
     for key, value in override.items():
@@ -99,8 +100,8 @@ def invoke_endpoint(
     payload: Any,
     serializer,
     deserializer,
-    content_type: Optional[str] = None,
-    accept: Optional[str] = None,
+    content_type: str | None = None,
+    accept: str | None = None,
 ) -> Any:
     """Serialize ``payload``, invoke the endpoint, and deserialize the response."""
     response = session.sagemaker_runtime_client.invoke_endpoint(

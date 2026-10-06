@@ -11,8 +11,8 @@ import os
 import shutil
 import tarfile
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Dict, Iterator, Optional
 
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
@@ -36,7 +36,7 @@ def upload_training_code(entry_point: str, sagemaker_session, s3_uri_prefix: str
 
 def training_script_hyperparameters(
     entry_point: str, submit_directory: str, job_name: str, region: str
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Hyperparameters the SageMaker training toolkit uses to download and run the entry point.
 
     Values are JSON-encoded, matching what SageMaker SDK v2 sent; the toolkit JSON-decodes them.
@@ -50,7 +50,7 @@ def training_script_hyperparameters(
     }
 
 
-def script_mode_environment(entry_point: str, region: str) -> Dict[str, str]:
+def script_mode_environment(entry_point: str, region: str) -> dict[str, str]:
     """Environment variables pointing the inference toolkit at the serve script under the model's ``code/`` dir."""
     return {
         "SAGEMAKER_PROGRAM": os.path.basename(entry_point),
@@ -79,7 +79,7 @@ def repack_model_with_serving_code(
     entry_point: str,
     repacked_model_uri: str,
     sagemaker_session,
-    kms_key: Optional[str] = None,
+    kms_key: str | None = None,
 ) -> str:
     """Replace ``code/`` inside the S3 ``model_data`` tarball with ``entry_point`` + ``serving_utils/`` and upload it.
 

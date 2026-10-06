@@ -7,7 +7,7 @@ import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Literal
 
 import boto3
 import pandas as pd
@@ -35,10 +35,10 @@ class CloudPredictor(ABC):
 
     def __init__(
         self,
-        local_output_path: Optional[str] = None,
-        cloud_output_path: Optional[str] = None,
+        local_output_path: str | None = None,
+        cloud_output_path: str | None = None,
         backend: str = SAGEMAKER,
-        role: Optional[str] = None,
+        role: str | None = None,
         verbosity: int = 2,
     ) -> None:
         """
@@ -107,13 +107,13 @@ class CloudPredictor(ABC):
         return self.backend.is_fit
 
     @property
-    def endpoint_name(self) -> Optional[str]:
+    def endpoint_name(self) -> str | None:
         """
         Return the CloudPredictor deployed endpoint name
         """
         return self.backend.endpoint_name
 
-    def info(self) -> Dict[str, Any]:
+    def info(self) -> dict[str, Any]:
         """
         Return general info about CloudPredictor
         """
@@ -163,22 +163,22 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def fit(
         self,
-        train_data: Optional[Union[str, Path, pd.DataFrame]] = None,
+        train_data: str | Path | pd.DataFrame | None = None,
         *,
-        tuning_data: Optional[Union[str, Path, pd.DataFrame]] = None,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Optional[Dict[str, Any]] = None,
-        image_column: Optional[str] = None,
+        tuning_data: str | Path | pd.DataFrame | None = None,
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any] | None = None,
+        image_column: str | None = None,
         leaderboard: bool = True,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: Union[int, str] = "auto",
+        instance_count: int | str = "auto",
         volume_size: int = 256,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
         **kwargs,
     ) -> CloudPredictor:
         """
@@ -322,7 +322,7 @@ class CloudPredictor(ABC):
         """
         return self.backend.get_fit_job_output_path()
 
-    def download_trained_predictor(self, predictor_path: Optional[str] = None, save_path: Optional[str] = None) -> str:
+    def download_trained_predictor(self, predictor_path: str | None = None, save_path: str | None = None) -> str:
         """
         Download the trained predictor from the cloud.
 
@@ -357,7 +357,7 @@ class CloudPredictor(ABC):
     def _get_local_predictor_cls(self):
         raise NotImplementedError
 
-    def to_local_predictor(self, predictor_path: Optional[str] = None, save_path: Optional[str] = None, **kwargs):
+    def to_local_predictor(self, predictor_path: str | None = None, save_path: str | None = None, **kwargs):
         """
         Convert the Cloud trained predictor to a local AutoGluon Predictor.
 
@@ -384,17 +384,17 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def deploy(
         self,
-        predictor_path: Optional[str] = None,
-        endpoint_name: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        instance_type: Optional[str] = None,
+        predictor_path: str | None = None,
+        endpoint_name: str | None = None,
+        framework_version: str | None = None,
+        instance_type: str | None = None,
         initial_instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
-        volume_size: Optional[int] = None,
+        custom_image_uri: str | None = None,
+        volume_size: int | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
-        inference_config: Optional[Dict[str, Any]] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        inference_config: dict[str, Any] | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """
         Deploy a predictor to an inference endpoint.
@@ -492,8 +492,8 @@ class CloudPredictor(ABC):
 
     def predict_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
         **kwargs,
     ) -> pd.Series:
@@ -533,11 +533,11 @@ class CloudPredictor(ABC):
 
     def predict_proba_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
         **kwargs,
-    ) -> Union[pd.DataFrame, pd.Series]:
+    ) -> pd.DataFrame | pd.Series:
         """
         Predict probability with the deployed endpoint. A deployed endpoint is required.
         This is intended to provide a low latency inference.
@@ -576,18 +576,18 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def predict(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
-        predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        job_name: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
+        predictor_path: str | None = None,
+        framework_version: str | None = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[pd.Series]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> pd.Series | None:
         """
         Batch inference.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -661,19 +661,19 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def predict_proba(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         include_predict: bool = True,
-        predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        job_name: Optional[str] = None,
+        predictor_path: str | None = None,
+        framework_version: str | None = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None:
         """
         Batch inference
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -750,14 +750,14 @@ class CloudPredictor(ABC):
             backend_overrides=backend_overrides,
         )
 
-    def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_batch_inference_job_info(self, job_name: str | None = None) -> dict[str, Any]:
         """
         Get general info of the batch inference job.
         If job_name not specified, return the info of the most recent batch inference job
         """
         return self.backend.get_batch_inference_job_info(job_name)
 
-    def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
+    def get_batch_inference_job_status(self, job_name: str | None = None) -> str:
         """
         Get the status of the batch inference job.
         This is useful when the user made an asynchronous call to the `predict()` function
@@ -816,7 +816,7 @@ class CloudPredictor(ABC):
             )
 
     @classmethod
-    def load(cls, path: str, verbosity: Optional[int] = None) -> CloudPredictor:
+    def load(cls, path: str, verbosity: int | None = None) -> CloudPredictor:
         """
         Load the CloudPredictor
 

@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Literal
 
 import pandas as pd
 from typing_extensions import Self
@@ -37,7 +37,7 @@ _CONTAINER_WEIGHTS_DIR = "/opt/ml/model/weights"
 _AG_CLOUD_VERSION_METADATA_KEY = "autogluon-cloud-version"
 
 
-def _s3_head_or_none(s3_client: Any, bucket: str, key: str) -> Optional[Dict[str, Any]]:
+def _s3_head_or_none(s3_client: Any, bucket: str, key: str) -> dict[str, Any] | None:
     """Return ``head_object`` response if the key exists, ``None`` for 404. Other errors propagate."""
     from botocore.exceptions import ClientError
 
@@ -63,7 +63,7 @@ class FoundationModel:
     >>> predictions = model.predict(data, prediction_length=24)
     """
 
-    _backend_map: Dict[str, str] = {}
+    _backend_map: dict[str, str] = {}
     _predictor_type: str
 
     def __new__(cls, model_id: str, **kwargs) -> Self:
@@ -81,10 +81,10 @@ class FoundationModel:
         self,
         model_id: str,
         *,
-        cloud_output_path: Optional[str] = None,
-        role: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
-        model_artifact_uri: Optional[str] = None,
+        cloud_output_path: str | None = None,
+        role: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
+        model_artifact_uri: str | None = None,
         backend: Literal["sagemaker"] = "sagemaker",
     ):
         """
@@ -138,8 +138,8 @@ class FoundationModel:
         )
 
     def _get_hyperparameters(
-        self, context: Literal["inference", "training"], overrides: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, context: Literal["inference", "training"], overrides: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Merge registry defaults → constructor overrides → call-site overrides, defaulting the model's
         weights-source hyperparameter (``model_source_hyperparameter``) to ``model_source_uri`` if not set."""
         if context == "inference":
@@ -152,7 +152,7 @@ class FoundationModel:
         return merged
 
     @abstractmethod
-    def _build_predictor_init_args(self, **user_kwargs) -> Dict[str, Any]:
+    def _build_predictor_init_args(self, **user_kwargs) -> dict[str, Any]:
         """Build predictor_init_args dict from user-provided kwargs.
 
         Subclasses override to map their public API kwargs (e.g., prediction_length,
@@ -161,7 +161,7 @@ class FoundationModel:
         ...
 
     @abstractmethod
-    def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _build_predictor_fit_args(self, hyperparameters: dict[str, Any] | None = None) -> dict[str, Any]:
         """Build predictor_fit_args dict. Subclasses override with task-specific logic."""
         ...
 
@@ -181,20 +181,20 @@ class FoundationModel:
         ...
 
     @abstractmethod
-    def predict(self, data: Union[str, Path, pd.DataFrame], wait: bool = True, **kwargs) -> Optional[pd.DataFrame]:
+    def predict(self, data: str | Path | pd.DataFrame, wait: bool = True, **kwargs) -> pd.DataFrame | None:
         """Subclasses override with task-specific signature."""
         ...
 
     def _deploy_backend(
         self,
-        instance_type: Optional[str] = None,
-        endpoint_name: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
+        instance_type: str | None = None,
+        endpoint_name: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
-        inference_config: Optional[Dict[str, Any]] = None,
+        inference_config: dict[str, Any] | None = None,
         **backend_kwargs,
     ) -> None:
         """Shared deploy logic. Subclasses call this then wrap the endpoint."""
@@ -241,10 +241,10 @@ class FoundationModel:
 
     def fit(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
-        output_path: Optional[str] = None,
-        instance_type: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
+        train_data: str | Path | pd.DataFrame,
+        output_path: str | None = None,
+        instance_type: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
         wait: bool = True,
         **kwargs,
     ) -> Self:
@@ -357,10 +357,10 @@ class FoundationModel:
             role=self._backend.role_arn,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize the model identity. Runtime context (``role``, ``cloud_output_path``) is excluded so configs can
         be shared across users."""
-        out: Dict[str, Any] = {"model_id": self.model_id}
+        out: dict[str, Any] = {"model_id": self.model_id}
         if self._hyperparameter_overrides:
             out["hyperparameters"] = self._hyperparameter_overrides
         if self.model_artifact_uri:
@@ -372,7 +372,7 @@ class FoundationModel:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_dict(cls, config: Dict[str, Any], **runtime_context: Any) -> Self:
+    def from_dict(cls, config: dict[str, Any], **runtime_context: Any) -> Self:
         """Restore from :meth:`to_dict` output. Pass ``role`` / ``cloud_output_path`` as ``runtime_context``."""
         return cls(**config, **runtime_context)
 
@@ -412,14 +412,14 @@ class TimeSeriesFoundationModel(FoundationModel):
     @reject_legacy_kwargs
     def deploy(
         self,
-        instance_type: Optional[str] = None,
-        endpoint_name: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
+        instance_type: str | None = None,
+        endpoint_name: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
-        inference_config: Optional[Dict[str, Any]] = None,
+        inference_config: dict[str, Any] | None = None,
         **backend_kwargs,
     ) -> TimeSeriesEndpoint:
         """
@@ -483,7 +483,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             session=self._backend.sagemaker_session.boto_session,
         )
 
-    def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _build_predictor_fit_args(self, hyperparameters: dict[str, Any] | None = None) -> dict[str, Any]:
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
         return {
             "hyperparameters": {self._config.ag_model_key: merged_hp},
@@ -494,11 +494,11 @@ class TimeSeriesFoundationModel(FoundationModel):
         self,
         target: str = "target",
         prediction_length: int = 1,
-        quantile_levels: Optional[List[float]] = None,
+        quantile_levels: list[float] | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Map user kwargs to TimeSeriesPredictor init args."""
-        args: Dict[str, Any] = {
+        args: dict[str, Any] = {
             "target": target,
             "prediction_length": prediction_length,
         }
@@ -509,22 +509,22 @@ class TimeSeriesFoundationModel(FoundationModel):
     @reject_legacy_kwargs
     def predict(
         self,
-        data: Union[str, Path, pd.DataFrame],
+        data: str | Path | pd.DataFrame,
         target: str = "target",
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
-        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
-        static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
+        known_covariates: str | Path | pd.DataFrame | None = None,
+        static_features: str | Path | pd.DataFrame | None = None,
         prediction_length: int = 1,
-        quantile_levels: Optional[List[float]] = None,
-        predictions_path: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
-        instance_type: Optional[str] = None,
+        quantile_levels: list[float] | None = None,
+        predictions_path: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
+        instance_type: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Union[pd.DataFrame, JobPredictionFuture]:
+    ) -> pd.DataFrame | JobPredictionFuture:
         """
         Run batch prediction for time series.
 
@@ -607,7 +607,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             "static_features": static_features,
         }
 
-        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
+        extra_ag_args: dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
 
@@ -657,14 +657,14 @@ class TabularFoundationModel(FoundationModel):
     @reject_legacy_kwargs
     def deploy(
         self,
-        instance_type: Optional[str] = None,
-        endpoint_name: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
+        instance_type: str | None = None,
+        endpoint_name: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime"] = "realtime",
-        inference_config: Optional[Dict[str, Any]] = None,
+        inference_config: dict[str, Any] | None = None,
         **backend_kwargs,
     ) -> TabularEndpoint:
         """Deploy the tabular foundation model to an inference endpoint.
@@ -739,11 +739,11 @@ class TabularFoundationModel(FoundationModel):
             session=self._backend.sagemaker_session.boto_session,
         )
 
-    def _build_predictor_init_args(self, label: str = "target", **kwargs) -> Dict[str, Any]:
+    def _build_predictor_init_args(self, label: str = "target", **kwargs) -> dict[str, Any]:
         """Map user kwargs to TabularPredictor init args."""
         return {"label": label, "problem_type": self._config.problem_type}
 
-    def _build_predictor_fit_args(self, hyperparameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _build_predictor_fit_args(self, hyperparameters: dict[str, Any] | None = None) -> dict[str, Any]:
         merged_hp = self._get_hyperparameters("inference", hyperparameters)
         return {
             "hyperparameters": {self._config.ag_model_key: merged_hp},
@@ -752,7 +752,7 @@ class TabularFoundationModel(FoundationModel):
 
     def _load_results(
         self, *, include_predict: bool, predict_only: bool = False
-    ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]:
+    ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series:
         # The training container writes [pred, <class>_proba...]; regression has only the pred column.
         raw = self._backend.get_fit_predict_results()
         pred, pred_proba = split_pred_and_pred_proba(raw)
@@ -768,18 +768,18 @@ class TabularFoundationModel(FoundationModel):
     @reject_legacy_kwargs
     def predict(
         self,
-        test_data: Union[str, Path, pd.DataFrame],
-        train_data: Union[str, Path, pd.DataFrame],
+        test_data: str | Path | pd.DataFrame,
+        train_data: str | Path | pd.DataFrame,
         label: str,
         *,
-        predictions_path: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
-        instance_type: Optional[str] = None,
+        predictions_path: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
+        instance_type: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Union[pd.Series, JobPredictionFuture]:
+    ) -> pd.Series | JobPredictionFuture:
         """
         Run batch prediction for tabular tasks.
 
@@ -855,19 +855,19 @@ class TabularFoundationModel(FoundationModel):
     @reject_legacy_kwargs
     def predict_proba(
         self,
-        test_data: Union[str, Path, pd.DataFrame],
-        train_data: Union[str, Path, pd.DataFrame],
+        test_data: str | Path | pd.DataFrame,
+        train_data: str | Path | pd.DataFrame,
         label: str,
         *,
         include_predict: bool = True,
-        predictions_path: Optional[str] = None,
-        hyperparameters: Optional[Dict[str, Any]] = None,
-        instance_type: Optional[str] = None,
+        predictions_path: str | None = None,
+        hyperparameters: dict[str, Any] | None = None,
+        instance_type: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
         **backend_kwargs,
-    ) -> Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series], JobPredictionFuture]:
+    ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | JobPredictionFuture:
         """
         Run batch prediction returning class probabilities.
 
@@ -930,7 +930,7 @@ class TabularFoundationModel(FoundationModel):
         # Duplicate one tuning row so AutoGluon/Mitra do not hold out any rows from the prediction context.
         tuning_data = train_data.iloc[[0]].copy()
 
-        extra_ag_args: Dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
+        extra_ag_args: dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
         backend_kwargs["leaderboard"] = False

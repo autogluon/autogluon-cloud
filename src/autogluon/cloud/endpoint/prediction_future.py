@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from ..job.sagemaker_job import SageMakerFitJob
@@ -18,7 +19,7 @@ class JobPredictionFuture:
     e.g. a ``pd.DataFrame`` of forecasts, a ``pd.Series`` of predictions, or a ``(pred, proba)`` tuple.
     """
 
-    def __init__(self, job: "SageMakerFitJob", result_loader: Callable[[], Any]) -> None:
+    def __init__(self, job: SageMakerFitJob, result_loader: Callable[[], Any]) -> None:
         self._job = job
         self._result_loader = result_loader
 

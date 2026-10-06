@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 import boto3
 import pandas as pd
@@ -12,14 +12,14 @@ from ..utils.sagemaker_api import delete_endpoint, invoke_endpoint
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 from ..utils.utils import split_pred_and_pred_proba
 
-DataInput = Union[str, Path, pd.DataFrame]
-Prediction = Union[pd.DataFrame, pd.Series]
+DataInput = str | Path | pd.DataFrame
+Prediction = pd.DataFrame | pd.Series
 
 
 class TabularEndpoint:
     """High-level handle for an AutoGluon-Cloud tabular foundation-model endpoint."""
 
-    def __init__(self, endpoint_name: str, session: Optional[boto3.Session] = None):
+    def __init__(self, endpoint_name: str, session: boto3.Session | None = None):
         """
         Parameters
         ----------
@@ -47,8 +47,8 @@ class TabularEndpoint:
         data: DataInput,
         train_data: DataInput,
         label: str,
-        inference_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[pd.Series, Prediction]:
+        inference_kwargs: dict[str, Any] | None = None,
+    ) -> tuple[pd.Series, Prediction]:
         data = self._load_data(data)
         train_data = self._load_data(train_data)
 
@@ -110,7 +110,7 @@ class TabularEndpoint:
         *,
         include_predict: bool = True,
         **inference_kwargs: Any,
-    ) -> Union[Tuple[pd.Series, Prediction], Prediction]:
+    ) -> tuple[pd.Series, Prediction] | Prediction:
         """Fit the foundation model and return class probabilities.
 
         For regression, the probability result is identical to the prediction.

@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 import pandas as pd
 
@@ -21,8 +21,8 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         return MultiModalSerializer()
 
     def _load_predict_real_time_test_data(
-        self, test_data: Union[str, pd.DataFrame], test_data_image_column: str
-    ) -> Tuple[pd.DataFrame, str]:
+        self, test_data: str | pd.DataFrame, test_data_image_column: str
+    ) -> tuple[pd.DataFrame, str]:
         import numpy as np
 
         if isinstance(test_data, str):
@@ -44,10 +44,10 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
     def predict_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
-        inference_kwargs: Optional[Dict[str, Any]] = None,
+        inference_kwargs: dict[str, Any] | None = None,
         **kwargs,
     ) -> pd.Series:
         """
@@ -95,12 +95,12 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
     def predict_proba_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
-        inference_kwargs: Optional[Dict[str, Any]] = None,
+        inference_kwargs: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Union[pd.DataFrame, pd.Series]:
+    ) -> pd.DataFrame | pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -149,10 +149,10 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
     def predict(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         **kwargs,
-    ) -> Optional[pd.Series]:
+    ) -> pd.Series | None:
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -190,10 +190,10 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
     def predict_proba(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         **kwargs,
-    ) -> Optional[pd.Series]:
+    ) -> pd.Series | None:
         """
         Predict proba using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.

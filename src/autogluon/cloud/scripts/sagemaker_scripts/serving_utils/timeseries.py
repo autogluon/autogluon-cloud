@@ -3,14 +3,14 @@
 import base64
 import json
 from io import BytesIO
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
 from autogluon.timeseries import TimeSeriesDataFrame
 from autogluon.timeseries.utils.forecast import make_future_data_frame
 
-ParsedPayload = Tuple[TimeSeriesDataFrame, Optional[TimeSeriesDataFrame], Dict[str, Any]]
+ParsedPayload = tuple[TimeSeriesDataFrame, TimeSeriesDataFrame | None, dict[str, Any]]
 
 
 def parse_payload(
@@ -104,14 +104,14 @@ def _parse_jumpstart(request_body: bytes, *, target_column: str = "target") -> P
     return tsdf, known_covariates, inference_kwargs
 
 
-def _decode_parquet(b64: Optional[str]) -> Optional[pd.DataFrame]:
+def _decode_parquet(b64: str | None) -> pd.DataFrame | None:
     if b64 is None:
         return None
     else:
         return pd.read_parquet(BytesIO(base64.b64decode(b64)))
 
 
-def render_response(predictions: TimeSeriesDataFrame, accept: str) -> Tuple[Any, str]:
+def render_response(predictions: TimeSeriesDataFrame, accept: str) -> tuple[Any, str]:
     """Serialize predictions per the request's ``Accept`` header."""
     if "application/json" in accept:
         return _render_jumpstart(predictions), "application/json"

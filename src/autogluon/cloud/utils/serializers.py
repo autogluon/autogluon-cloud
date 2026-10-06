@@ -1,7 +1,7 @@
 import base64
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ def _dataframe_to_b64(df: pd.DataFrame) -> str:
     return base64.b64encode(df.to_parquet()).decode("ascii")
 
 
-def _ensure_json_serializable(inference_kwargs: Dict[str, Any]) -> None:
+def _ensure_json_serializable(inference_kwargs: dict[str, Any]) -> None:
     try:
         json.dumps(inference_kwargs)
     except (TypeError, ValueError) as e:
@@ -27,10 +27,10 @@ class AutoGluonSerializationWrapper:
     """Container for data, inference kwargs, and optional side inputs to be serialized into a single request payload."""
 
     data: pd.DataFrame
-    inference_kwargs: Dict[str, Any]
-    train_data: Optional[pd.DataFrame] = field(default=None)
-    static_features: Optional[pd.DataFrame] = field(default=None)
-    known_covariates: Optional[pd.DataFrame] = field(default=None)
+    inference_kwargs: dict[str, Any]
+    train_data: pd.DataFrame | None = field(default=None)
+    static_features: pd.DataFrame | None = field(default=None)
+    known_covariates: pd.DataFrame | None = field(default=None)
 
 
 class AutoGluonSerializer:

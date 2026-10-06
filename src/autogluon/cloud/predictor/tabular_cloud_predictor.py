@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 import pandas as pd
 
@@ -41,22 +41,22 @@ class TabularCloudPredictor(CloudPredictor):
     @reject_legacy_kwargs
     def fit_predict(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
-        test_data: Union[str, Path, pd.DataFrame],
+        train_data: str | Path | pd.DataFrame,
+        test_data: str | Path | pd.DataFrame,
         *,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Optional[Dict[str, Any]] = None,
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any] | None = None,
         leaderboard: bool = True,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 256,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[pd.Series]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> pd.Series | None:
         """
         Fit and predict in a single SageMaker training job.
 
@@ -142,23 +142,23 @@ class TabularCloudPredictor(CloudPredictor):
     @reject_legacy_kwargs
     def fit_predict_proba(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
-        test_data: Union[str, Path, pd.DataFrame],
+        train_data: str | Path | pd.DataFrame,
+        test_data: str | Path | pd.DataFrame,
         *,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Optional[Dict[str, Any]] = None,
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any] | None = None,
         include_predict: bool = True,
         leaderboard: bool = True,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 256,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None:
         """
         Fit and predict probabilities in a single SageMaker training job.
 
@@ -263,7 +263,7 @@ class TabularCloudPredictor(CloudPredictor):
         pred, _ = self.get_fit_predict_proba_results()
         return pred
 
-    def get_fit_predict_proba_results(self) -> Tuple[pd.Series, Union[pd.DataFrame, pd.Series]]:
+    def get_fit_predict_proba_results(self) -> tuple[pd.Series, pd.DataFrame | pd.Series]:
         """
         Retrieve predictions and probabilities produced by a completed ``fit_predict_proba`` job.
 

@@ -1,12 +1,11 @@
 import os
-from typing import Optional
 
 import boto3
 
 from autogluon.common.utils.s3_utils import is_s3_url, s3_path_to_bucket_prefix
 
 
-def upload_file(file_name: str, bucket: str, prefix: Optional[str] = None):
+def upload_file(file_name: str, bucket: str, prefix: str | None = None):
     """
     Upload a file to an S3 bucket
 

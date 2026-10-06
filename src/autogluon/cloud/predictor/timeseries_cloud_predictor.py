@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import pandas as pd
 
@@ -39,23 +39,23 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     @reject_legacy_kwargs
     def fit(
         self,
-        train_data: Optional[Union[str, Path, pd.DataFrame]] = None,
+        train_data: str | Path | pd.DataFrame | None = None,
         *,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Optional[Dict[str, Any]] = None,
-        tuning_data: Optional[Union[str, Path, pd.DataFrame]] = None,
-        static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any] | None = None,
+        tuning_data: str | Path | pd.DataFrame | None = None,
+        static_features: str | Path | pd.DataFrame | None = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 100,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        known_covariates: str | Path | pd.DataFrame | None = None,
         **kwargs,
     ) -> TimeSeriesCloudPredictor:
         """
@@ -168,9 +168,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     def predict_real_time(
         self,
-        data: Union[str, pd.DataFrame],
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
-        known_covariates: Optional[pd.DataFrame] = None,
+        data: str | pd.DataFrame,
+        static_features: str | pd.DataFrame | None = None,
+        known_covariates: pd.DataFrame | None = None,
         accept: str = "application/x-parquet",
         **kwargs,
     ) -> pd.DataFrame:
@@ -224,19 +224,19 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     @reject_legacy_kwargs
     def predict(
         self,
-        data: Union[str, pd.DataFrame],
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
-        predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        job_name: Optional[str] = None,
+        data: str | pd.DataFrame,
+        static_features: str | pd.DataFrame | None = None,
+        known_covariates: str | pd.DataFrame | None = None,
+        predictor_path: str | None = None,
+        framework_version: str | None = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[pd.DataFrame]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> pd.DataFrame | None:
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -311,7 +311,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     def predict_proba(
         self,
         **kwargs,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         :meta private:
         """
@@ -320,24 +320,24 @@ class TimeSeriesCloudPredictor(CloudPredictor):
     @reject_legacy_kwargs
     def fit_predict(
         self,
-        train_data: Union[str, Path, pd.DataFrame],
+        train_data: str | Path | pd.DataFrame,
         *,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Optional[Dict[str, Any]] = None,
-        known_covariates: Optional[Union[str, Path, pd.DataFrame]] = None,
-        static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any] | None = None,
+        known_covariates: str | Path | pd.DataFrame | None = None,
+        static_features: str | Path | pd.DataFrame | None = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
-        predictions_path: Optional[str] = None,
+        predictions_path: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 100,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[pd.DataFrame]:
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> pd.DataFrame | None:
         """
         Fit and predict in a single SageMaker training job.
 

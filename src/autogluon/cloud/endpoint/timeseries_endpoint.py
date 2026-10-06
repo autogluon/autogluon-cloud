@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import boto3
 import pandas as pd
@@ -20,7 +20,7 @@ class TimeSeriesEndpoint:
     pointing at the new endpoint.
     """
 
-    def __init__(self, endpoint_name: str, session: Optional[boto3.Session] = None):
+    def __init__(self, endpoint_name: str, session: boto3.Session | None = None):
         """
         Parameters
         ----------
@@ -40,14 +40,14 @@ class TimeSeriesEndpoint:
 
     def predict(
         self,
-        data: Union[str, pd.DataFrame],
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
+        data: str | pd.DataFrame,
+        known_covariates: str | pd.DataFrame | None = None,
+        static_features: str | pd.DataFrame | None = None,
         prediction_length: int = 1,
         target: str = "target",
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
-        quantile_levels: Optional[List[float]] = None,
+        quantile_levels: list[float] | None = None,
     ) -> pd.DataFrame:
         """
         Run real-time prediction on the deployed endpoint.
@@ -90,7 +90,7 @@ class TimeSeriesEndpoint:
         if isinstance(static_features, str):
             static_features = load_pd.load(static_features)
 
-        inference_kwargs: Dict[str, Any] = {
+        inference_kwargs: dict[str, Any] = {
             "prediction_length": prediction_length,
             "target": target,
             "id_column": id_column,

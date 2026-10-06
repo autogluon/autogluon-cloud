@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional
 
 DISABLE_DEFAULT_TAGS_ENV = "AG_CLOUD_DISABLE_DEFAULT_TAGS"
 
 
 def build_tags(
     module: str,
-    extra_tags: Optional[List[Dict[str, str]]] = None,
-    user_tags: Optional[List[Dict[str, str]]] = None,
-) -> List[Dict[str, str]]:
+    extra_tags: list[dict[str, str]] | None = None,
+    user_tags: list[dict[str, str]] | None = None,
+) -> list[dict[str, str]]:
     """Final tag list for a SageMaker resource: defaults + extras + user, with user winning on key collision.
 
     Defaults are skipped entirely when ``AG_CLOUD_DISABLE_DEFAULT_TAGS`` is truthy, so customers in
