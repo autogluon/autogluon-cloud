@@ -489,9 +489,6 @@ class SagemakerBackend(Backend):
             :meth:`FoundationModel.cache_model_artifact`) to skip the round-trip. Ignored when ``predictor_path`` is
             None.
         """
-        assert self.endpoint_name is None, (
-            "There is an endpoint already attached. Either detach it with `detach` or clean it up with `cleanup_deployment`"
-        )
         if inference_mode not in ("realtime", "serverless"):
             raise ValueError(f"Unsupported inference_mode={inference_mode!r}")
         overrides = check_override_keys(backend_overrides, DEPLOY_OVERRIDE_KEYS)
@@ -811,7 +808,7 @@ class SagemakerBackend(Backend):
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, use `predict_real_time()` instead.
+        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
         This method creates a SageMaker model with the trained predictor and runs a transform job with it.
 
@@ -888,7 +885,7 @@ class SagemakerBackend(Backend):
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, use `predict_real_time()` instead.
+        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
         This method creates a SageMaker model with the trained predictor and runs a transform job with it.
 
@@ -1269,7 +1266,7 @@ class SagemakerBackend(Backend):
             # either a file to a dataframe, or a file to an image
             if is_image_file(test_data):
                 logger.warning(
-                    "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `predict_real_time()` instead"
+                    "Are you sure you want to do batch inference on a single image? You might want to try `deploy()` and `endpoint.predict()` instead"
                 )
             elif original_features is not None:
                 # Loading is only needed for the column check below — skip it for predictors that don't track

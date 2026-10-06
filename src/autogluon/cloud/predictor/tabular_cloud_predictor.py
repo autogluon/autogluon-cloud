@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER
+from ..endpoint.tabular_endpoint import TabularEndpoint
 from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
@@ -24,6 +25,7 @@ class TabularCloudPredictor(CloudPredictor):
 
     predictor_file_name = "TabularCloudPredictor.pkl"
     backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
+    _endpoint_cls = TabularEndpoint
 
     @property
     def predictor_type(self):

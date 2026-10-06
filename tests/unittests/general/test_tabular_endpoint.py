@@ -77,9 +77,48 @@ def test_predict_validates_label_and_feature_columns(make_endpoint, invoke_endpo
         endpoint.predict(data=pd.DataFrame({"other": [1]}), train_data=train_data, label="label")
 
 
+def test_predict_without_train_data_sends_only_data(make_endpoint, invoke_endpoint):
+    data = pd.DataFrame({"feature": [2, 3]})
+    endpoint = make_endpoint(pd.DataFrame({"label": ["a", "b"], "a_proba": [0.8, 0.2], "b_proba": [0.2, 0.8]}))
+
+    pred = endpoint.predict(data, model="LightGBM")
+
+    assert pred.tolist() == ["a", "b"]
+    payload = invoke_endpoint.call_args.args[2]
+    pd.testing.assert_frame_equal(payload.data, data)
+    assert payload.train_data is None
+    assert payload.inference_kwargs == {"model": "LightGBM"}
+
+
+def test_predict_requires_train_data_and_label_together(make_endpoint, invoke_endpoint):
+    endpoint = make_endpoint(pd.DataFrame())
+    data = pd.DataFrame({"feature": [1]})
+
+    with pytest.raises(ValueError, match="must be passed together"):
+        endpoint.predict(data, train_data=pd.DataFrame({"feature": [0], "label": ["a"]}))
+
+    with pytest.raises(ValueError, match="must be passed together"):
+        endpoint.predict(data, label="label")
+
+    invoke_endpoint.assert_not_called()
+
+
+def test_image_column_is_encoded_and_not_forwarded(make_endpoint, invoke_endpoint):
+    endpoint = make_endpoint(pd.DataFrame({"target": [1.5]}))
+    data = pd.DataFrame({"image": ["/abs/img.png"]})
+
+    with mock.patch(f"{TE}.convert_image_path_to_encoded_bytes_in_dataframe") as convert:
+        endpoint.predict(data, image_column="image")
+
+    convert.assert_called_once_with(data, "image")
+    payload = invoke_endpoint.call_args.args[2]
+    assert payload.data is convert.return_value
+    assert payload.inference_kwargs == {}
+
+
 def test_delete_endpoint_removes_model_endpoint_and_config(make_endpoint, invoke_endpoint):
     endpoint = make_endpoint(pd.DataFrame())
-    with mock.patch(f"{TE}.delete_endpoint") as delete_endpoint:
+    with mock.patch("autogluon.cloud.endpoint.endpoint.delete_endpoint") as delete_endpoint:
         endpoint.delete_endpoint()
 
     delete_endpoint.assert_called_once_with("tabular-fm-endpoint", mock.sentinel.session)

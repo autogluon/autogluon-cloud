@@ -8,3 +8,4 @@ Multimodal
     :template: custom_class.rst
 
     MultiModalCloudPredictor
+    MultiModalEndpoint

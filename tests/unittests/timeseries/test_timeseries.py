@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 from botocore.exceptions import ClientError
 
-from autogluon.cloud import TimeSeriesCloudPredictor
+from autogluon.cloud import TimeSeriesCloudPredictor, TimeSeriesEndpoint
 from autogluon.cloud.model import FoundationModel
 from autogluon.cloud.model.registry import FOUNDATION_MODEL_REGISTRY, get_model_config
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
@@ -65,7 +65,7 @@ def _predict_kwargs(framework_version: str, ds: dict) -> dict:
     }
 
 
-def _predict_real_time_kwargs(ds: dict) -> dict:
+def _endpoint_predict_kwargs(ds: dict) -> dict:
     return {
         "static_features": ds["static_features"],
         "known_covariates": ds["known_covariates"],
@@ -107,7 +107,7 @@ def test_timeseries_train(test_helper, framework_version, shared_training_job_na
 
 
 def test_timeseries_endpoint_lifecycle(test_helper, framework_version, shared_training_job_name, retail_sales_dataset):
-    """Deploy the shared predictor and exercise detach, attach, save, and load."""
+    """Deploy the shared predictor, re-attach to the endpoint by name, and exercise the deprecated predictor methods."""
     ds = retail_sales_dataset
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
@@ -118,23 +118,21 @@ def test_timeseries_endpoint_lifecycle(test_helper, framework_version, shared_tr
             job_name=shared_training_job_name,
             test_name="endpoint-lifecycle",
         )
-        predictor.deploy(framework_version=framework_version)
-        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=predictor.endpoint_name)["EndpointArn"]
+        endpoint = predictor.deploy(framework_version=framework_version)
+        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)["EndpointArn"]
         test_helper.assert_ag_cloud_tags(endpoint_arn, module="timeseries")
+        test_helper.test_timeseries_endpoint(endpoint, ds["train_data"], **_endpoint_predict_kwargs(ds))
+
         test_helper.test_timeseries_endpoint(
-            predictor,
-            ds["train_data"],
-            **_predict_real_time_kwargs(ds),
+            TimeSeriesEndpoint(endpoint.endpoint_name), ds["train_data"], **_endpoint_predict_kwargs(ds)
         )
 
-        detached_endpoint = predictor.detach_endpoint()
-        predictor.attach_endpoint(detached_endpoint)
-        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
-
-        predictor.save()
-        predictor = TimeSeriesCloudPredictor.load(predictor.local_output_path)
-        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
-        predictor.cleanup_deployment()
+        try:
+            with pytest.warns(FutureWarning, match="predict_real_time"):
+                predictions = predictor.predict_real_time(ds["train_data"], **_endpoint_predict_kwargs(ds))
+            assert isinstance(predictions, pd.DataFrame)
+        finally:
+            endpoint.delete_endpoint()
 
 
 def test_timeseries_batch_predict(test_helper, framework_version, shared_training_job_name, retail_sales_dataset):
@@ -172,9 +170,9 @@ def test_timeseries_deploy_trained_artifact(
             local_output_path="test_timeseries_deploy_trained_artifact",
         )
 
-        predictor.deploy(predictor_path=artifact_path, framework_version=framework_version)
-        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
-        predictor.cleanup_deployment()
+        endpoint = predictor.deploy(predictor_path=artifact_path, framework_version=framework_version)
+        test_helper.test_timeseries_endpoint(endpoint, ds["train_data"], **_endpoint_predict_kwargs(ds))
+        endpoint.delete_endpoint()
 
 
 def test_timeseries_predict_trained_artifact(
@@ -476,7 +474,7 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
             predictor_fit_args=dict(presets="medium_quality", time_limit=60),
             framework_version=framework_version,
         )
-        cloud_predictor.deploy(framework_version=framework_version)
+        endpoint = cloud_predictor.deploy(framework_version=framework_version)
         try:
             format_pairs = list(
                 itertools.product(
@@ -491,14 +489,14 @@ def test_timeseries_endpoint_payload_formats(test_helper, framework_version, pla
                 )
             )
             _exercise_endpoint(
-                cloud_predictor.endpoint_name,
+                endpoint.endpoint_name,
                 bodies,
                 format_pairs,
                 expected_item_ids=expected_item_ids,
                 prediction_length=_PLAIN_PREDICTION_LENGTH,
             )
         finally:
-            cloud_predictor.cleanup_deployment()
+            endpoint.delete_endpoint()
 
 
 @pytest.mark.parametrize(
@@ -584,12 +582,12 @@ def test_timeseries_cloud_predictor_gpu_release(test_helper, framework_version, 
             framework_version=framework_version,
         )
 
-        predictor.deploy(
+        endpoint = predictor.deploy(
             instance_type="ml.g4dn.xlarge",
             framework_version=framework_version,
         )
-        test_helper.test_timeseries_endpoint(predictor, ds["train_data"], **_predict_real_time_kwargs(ds))
-        predictor.cleanup_deployment()
+        test_helper.test_timeseries_endpoint(endpoint, ds["train_data"], **_endpoint_predict_kwargs(ds))
+        endpoint.delete_endpoint()
 
         predictions = predictor.predict(
             ds["train_data"],

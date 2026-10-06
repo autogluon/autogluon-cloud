@@ -2,6 +2,7 @@ import logging
 import warnings
 
 from ..backend.constant import MULTIMODL_SAGEMAKER, SAGEMAKER
+from ..endpoint.multimodal_endpoint import MultiModalEndpoint
 from .cloud_predictor import CloudPredictor
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ class MultiModalCloudPredictor(CloudPredictor):
 
     predictor_file_name = "MultiModalCloudPredictor.pkl"
     backend_map = {SAGEMAKER: MULTIMODL_SAGEMAKER}
+    _endpoint_cls = MultiModalEndpoint
 
     def __init__(self, *args, **kwargs) -> None:
         warnings.warn(

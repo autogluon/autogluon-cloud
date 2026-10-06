@@ -156,7 +156,7 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, use `predict_real_time()` instead.
+        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
 
         Parameters
@@ -197,7 +197,7 @@ class MultiModalSagemakerBackend(SagemakerBackend):
         """
         Predict proba using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, use `predict_real_time()` instead.
+        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
 
         Parameters

@@ -77,24 +77,16 @@ A rough guideline: if you need predictions less often than once an hour and can 
 
 ### Real-time inference
 
-Deploy the predictor as a SageMaker endpoint with {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.deploy`:
+Deploy the predictor as a SageMaker endpoint with {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.deploy`, then send requests through the returned {py:class}`~autogluon.cloud.TimeSeriesEndpoint`:
 
 ```python
-cloud_predictor.deploy(
-    instance_type="ml.m5.2xlarge",
-)
+endpoint = cloud_predictor.deploy(instance_type="ml.m5.2xlarge")  # takes a few minutes
 ```
 
-Optionally, you can also attach to a deployed endpoint with {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.attach_endpoint`:
+{py:meth}`~autogluon.cloud.TimeSeriesEndpoint.predict` takes the historical observations to forecast from, plus optional `known_covariates` (required when `known_covariates_names` was set at fit time) and `static_features`. The result is a DataFrame with one row per `(item_id, future timestamp)` pair and a column for each predicted quantile (plus the `mean`):
 
 ```python
-cloud_predictor.attach_endpoint(endpoint="ENDPOINT_NAME")
-```
-
-Send requests to the endpoint with {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.predict_real_time`. It takes the historical observations to forecast from, plus optional `known_covariates` (required when `known_covariates_names` was set at fit time) and `static_features`. The result is a DataFrame with one row per `(item_id, future timestamp)` pair and a column for each predicted quantile (plus the `mean`):
-
-```python
-forecasts = cloud_predictor.predict_real_time(
+forecasts = endpoint.predict(
     "train.csv",  # historical observations — forecasts start from the last timestamp per item
     known_covariates="known_covariates.csv",  # required if known_covariates_names was set
     static_features="static_features.csv",    # optional
@@ -107,13 +99,19 @@ forecasts = cloud_predictor.predict_real_time(
 # ...
 ```
 
-Make sure you clean up the endpoint with {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.cleanup_deployment`:
+The prediction length and quantiles are the ones set at fit time. The endpoint stays active — and billed — until you delete it:
 
 ```python
-cloud_predictor.cleanup_deployment()
+endpoint.delete_endpoint()
 ```
 
-To check whether an endpoint is currently attached, call {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.info` and look for the `endpoint` key in the returned dict.
+To send requests to an endpoint that's already running (e.g. from a previous session), build a {py:class}`~autogluon.cloud.TimeSeriesEndpoint` directly from the endpoint name:
+
+```python
+from autogluon.cloud import TimeSeriesEndpoint
+
+endpoint = TimeSeriesEndpoint(endpoint_name="ENDPOINT_NAME")
+```
 
 #### Invoke the endpoint without AutoGluon-Cloud
 The deployed endpoint is a normal SageMaker endpoint, so you can invoke it from any AWS SDK. The simplest payload is the historical observations as CSV — forecasts are generated starting from the last timestamp of each item:
@@ -141,7 +139,7 @@ The CSV format only carries the historical observations. To pass `static_feature
 :animate: fade-in-slide-down
 :color: secondary
 
-**Option 1: AutoGluon-Cloud's native `application/x-autogluon` envelope.** Each DataFrame is serialized as base64-encoded parquet and bundled in a single JSON object. This is what {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.predict_real_time` sends under the hood:
+**Option 1: AutoGluon-Cloud's native `application/x-autogluon` envelope.** Each DataFrame is serialized as base64-encoded parquet and bundled in a single JSON object. This is what {py:meth}`~autogluon.cloud.TimeSeriesEndpoint.predict` sends under the hood:
 
 ```python
 import base64

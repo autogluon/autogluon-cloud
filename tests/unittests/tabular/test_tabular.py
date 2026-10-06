@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 from botocore.exceptions import ClientError
 
-from autogluon.cloud import TabularCloudPredictor
+from autogluon.cloud import TabularCloudPredictor, TabularEndpoint
 from autogluon.cloud.model import TabularFoundationModel
 from autogluon.cloud.model.registry import FOUNDATION_MODEL_REGISTRY, get_model_config
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
@@ -61,7 +61,7 @@ def test_tabular_train(test_helper, framework_version, shared_training_job_name)
 
 
 def test_tabular_endpoint_lifecycle(test_helper, framework_version, shared_training_job_name):
-    """Deploy the shared predictor and exercise detach, attach, save, and load."""
+    """Deploy the shared predictor, re-attach to the endpoint by name, and exercise the deprecated predictor methods."""
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         _prepare_data(test_helper)
@@ -73,19 +73,18 @@ def test_tabular_endpoint_lifecycle(test_helper, framework_version, shared_train
             test_name="endpoint-lifecycle",
         )
 
-        predictor.deploy(framework_version=framework_version)
-        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=predictor.endpoint_name)["EndpointArn"]
+        endpoint = predictor.deploy(framework_version=framework_version)
+        endpoint_arn = boto3.client("sagemaker").describe_endpoint(EndpointName=endpoint.endpoint_name)["EndpointArn"]
         test_helper.assert_ag_cloud_tags(endpoint_arn, module="tabular")
-        test_helper.test_endpoint(predictor, _TEST_DATA, inference_kwargs=dict(model="LightGBM"))
+        test_helper.test_endpoint(endpoint, _TEST_DATA, model="LightGBM")
 
-        detached_endpoint = predictor.detach_endpoint()
-        predictor.attach_endpoint(detached_endpoint)
-        test_helper.test_endpoint(predictor, _TEST_DATA)
+        test_helper.test_endpoint(TabularEndpoint(endpoint.endpoint_name), _TEST_DATA)
 
-        predictor.save()
-        predictor = TabularCloudPredictor.load(predictor.local_output_path)
-        test_helper.test_endpoint(predictor, _TEST_DATA)
-        predictor.cleanup_deployment()
+        try:
+            with pytest.warns(FutureWarning, match="predict_real_time"):
+                assert isinstance(predictor.predict_real_time(_TEST_DATA), pd.Series)
+        finally:
+            endpoint.delete_endpoint()
 
 
 def test_tabular_batch_predict(test_helper, framework_version, shared_training_job_name):
@@ -120,12 +119,12 @@ def test_tabular_deploy_trained_artifact(test_helper, framework_version, shared_
             local_output_path="test_tabular_deploy_trained_artifact",
         )
 
-        predictor.deploy(
+        endpoint = predictor.deploy(
             predictor_path=artifact_path,
             framework_version=framework_version,
         )
-        test_helper.test_endpoint(predictor, _TEST_DATA)
-        predictor.cleanup_deployment()
+        test_helper.test_endpoint(endpoint, _TEST_DATA)
+        endpoint.delete_endpoint()
 
 
 def test_tabular_predict_trained_artifact(test_helper, framework_version, shared_training_job_name):
@@ -321,12 +320,12 @@ def test_tabular_cloud_predictor_gpu_release(test_helper, framework_version):
             framework_version=framework_version,
         )
 
-        predictor.deploy(
+        endpoint = predictor.deploy(
             instance_type="ml.g4dn.xlarge",
             framework_version=framework_version,
         )
-        test_helper.test_endpoint(predictor, _TEST_DATA)
-        predictor.cleanup_deployment()
+        test_helper.test_endpoint(endpoint, _TEST_DATA)
+        endpoint.delete_endpoint()
 
         pred, pred_proba = predictor.predict_proba(
             _TEST_DATA,

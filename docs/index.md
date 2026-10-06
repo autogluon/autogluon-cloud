@@ -109,9 +109,9 @@ cloud_predictor.fit(
 result = cloud_predictor.predict(test_data)
 
 # Real-time inference endpoint
-cloud_predictor.deploy()
-result = cloud_predictor.predict_real_time(test_data)
-cloud_predictor.cleanup_deployment()
+endpoint = cloud_predictor.deploy()
+result = endpoint.predict(test_data)
+endpoint.delete_endpoint()
 ```
 
 → [Full walkthrough](tutorials/predictor-tabular.md)
@@ -142,9 +142,9 @@ cloud_predictor.fit(
 result = cloud_predictor.predict(data)
 
 # Real-time inference endpoint
-cloud_predictor.deploy()
-result = cloud_predictor.predict_real_time(data)
-cloud_predictor.cleanup_deployment()
+endpoint = cloud_predictor.deploy()
+result = endpoint.predict(data)
+endpoint.delete_endpoint()
 ```
 
 → [Full walkthrough](tutorials/predictor-timeseries.md)
