@@ -822,7 +822,7 @@ class TabularFoundationModel(FoundationModel):
             Additional SageMaker arguments:
 
             * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the EBS volume to use for the job. Defaults to 256.
+            * ``volume_size``: Size in GB of the EBS volume to use for the job. Defaults to 100.
             * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
 
               * Keys: request names from the *SageMaker API* section below.
@@ -912,7 +912,7 @@ class TabularFoundationModel(FoundationModel):
             Additional SageMaker arguments:
 
             * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the EBS volume to use for the job. Defaults to 256.
+            * ``volume_size``: Size in GB of the EBS volume to use for the job. Defaults to 100.
             * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
 
               * Keys: request names from the *SageMaker API* section below.
@@ -944,6 +944,8 @@ class TabularFoundationModel(FoundationModel):
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
         backend_kwargs["leaderboard"] = False
+        # Fits within the local instance storage of GPU instances like ml.g4dn.2xlarge (225 GB), which caps the volume.
+        backend_kwargs.setdefault("volume_size", 100)
 
         self._backend.fit(
             predictor_init_args=self._build_predictor_init_args(label=label),
