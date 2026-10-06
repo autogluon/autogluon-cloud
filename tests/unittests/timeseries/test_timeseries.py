@@ -271,7 +271,9 @@ def test_timeseries_fit_predict_chronos(
         assert info["fit_job"]["status"] == "Completed"
 
 
-def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset):
+# Smallest model of each foundation model family in the registry.
+@pytest.mark.parametrize("model_id", ["chronos-2-small", "toto-2.0-4m"])
+def test_foundation_model_predict(test_helper, framework_version, retail_sales_dataset, model_id):
     """Test FoundationModel batch prediction via the fit_predict training job pattern."""
     import boto3
 
@@ -279,7 +281,7 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
     timestamp = test_helper.get_utc_timestamp_now()
 
     bucket = "autogluon-cloud-ci"
-    predictions_key = f"test-fm-predict/{framework_version}/{timestamp}/custom_predictions.parquet"
+    predictions_key = f"test-fm-predict/{framework_version}/{timestamp}/{model_id}/custom_predictions.parquet"
     predictions_path = f"s3://{bucket}/{predictions_key}"
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -287,8 +289,8 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
         expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
 
         model = FoundationModel(
-            "chronos-2",
-            cloud_output_path=f"s3://{bucket}/test-fm-predict/{framework_version}/{timestamp}",
+            model_id,
+            cloud_output_path=f"s3://{bucket}/test-fm-predict/{framework_version}/{timestamp}/{model_id}",
         )
 
         predictions = model.predict(
@@ -309,7 +311,7 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
 
         sm = boto3.client("sagemaker")
         job = sm.describe_training_job(TrainingJobName=model._backend._fit_job.job_name)
-        test_helper.assert_ag_cloud_tags(job["TrainingJobArn"], module="timeseries", model_id="chronos-2")
+        test_helper.assert_ag_cloud_tags(job["TrainingJobArn"], module="timeseries", model_id=model_id)
 
         model_artifact_uri = job["ModelArtifacts"]["S3ModelArtifacts"]
         model_bucket, model_key = s3_path_to_bucket_prefix(model_artifact_uri)
@@ -322,35 +324,6 @@ def test_foundation_model_predict(test_helper, framework_version, retail_sales_d
             with tarfile.open(model_artifact_path, "r:gz") as model_archive:
                 archived_files = [member.name for member in model_archive.getmembers() if member.isfile()]
             assert archived_files == [], f"predict job unexpectedly uploaded predictor files: {archived_files}"
-
-
-# Smallest model of each foundation model family not covered by the tests above (Chronos).
-@pytest.mark.parametrize("model_id", ["toto-2.0-4m"])
-def test_foundation_model_family_predict(test_helper, framework_version, retail_sales_dataset, model_id):
-    """Batch prediction with a CPU instance works for every foundation model family in the registry."""
-    ds = retail_sales_dataset
-    timestamp = test_helper.get_utc_timestamp_now()
-    cloud_prefix = f"s3://autogluon-cloud-ci/test-fm-family-predict/{framework_version}"
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.chdir(temp_dir)
-        model = FoundationModel(
-            model_id,
-            cloud_output_path=f"{cloud_prefix}/{timestamp}/{model_id}",
-        )
-        predictions = model.predict(
-            data=ds["train_data"],
-            target=ds["target"],
-            id_column=ds["id_column"],
-            timestamp_column=ds["timestamp_column"],
-            prediction_length=ds["prediction_length"],
-            instance_type="ml.m5.2xlarge",
-            framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
-        )
-        expected_item_ids = sorted(ds["train_data"][ds["id_column"]].unique())
-        _assert_timeseries_predictions(predictions, expected_item_ids, ds["prediction_length"])
-        assert predictions["mean"].notna().all()
 
 
 def test_foundation_model_cache_artifact_then_deploy_serverless(test_helper, framework_version, retail_sales_dataset):

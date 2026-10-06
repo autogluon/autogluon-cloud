@@ -161,35 +161,49 @@ def test_tabular_predict_trained_artifact(test_helper, framework_version, shared
         assert predictor.info()["recent_batch_inference_job"]["status"] == "Completed"
 
 
-def test_tabular_foundation_model_predict(test_helper, framework_version):
+def _synthetic_tabular_data(problem_type: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Small train/test split with numeric and categorical features; ``label`` is numeric for regression."""
+    rng = np.random.default_rng(0)
+    data = pd.DataFrame({"num": rng.normal(size=300), "cat": rng.choice(["x", "y", "z"], size=300)})
+    if problem_type == "regression":
+        data["label"] = 2 * data["num"] + (data["cat"] == "x") + rng.normal(scale=0.1, size=300)
+    else:
+        data["label"] = np.where(data["num"] > 0, "pos", "neg")
+    return data.iloc[:200], data.iloc[200:].drop(columns="label")
+
+
+# Smallest model of each foundation model family in the registry.
+@pytest.mark.parametrize(
+    "model_id", ["mitra-classifier", "tabicl-v2-classifier", "tabdpt-turbo-classifier", "nori-regressor"]
+)
+def test_tabular_foundation_model_predict(test_helper, framework_version, model_id):
     timestamp = test_helper.get_utc_timestamp_now()
     bucket = "autogluon-cloud-ci"
-    predictions_key = f"test-tabular-fm-predict/{framework_version}/{timestamp}/custom_predictions.csv"
+    cloud_prefix = f"s3://{bucket}/test-tabular-fm-predict/{framework_version}/{timestamp}/{model_id}"
+    predictions_key = f"test-tabular-fm-predict/{framework_version}/{timestamp}/{model_id}/custom_predictions.csv"
     predictions_path = f"s3://{bucket}/{predictions_key}"
+    problem_type = get_model_config(model_id).problem_type
+    train_data, test_data = _synthetic_tabular_data(problem_type)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        test_helper.prepare_data(_TRAIN_DATA, _TEST_DATA)
-        n_test_rows = len(pd.read_csv(_TEST_DATA))
-
-        model = TabularFoundationModel(
-            "mitra-classifier",
-            cloud_output_path=f"s3://{bucket}/test-tabular-fm-predict/{framework_version}/{timestamp}",
-        )
+        model = TabularFoundationModel(model_id, cloud_output_path=cloud_prefix)
         pred, pred_proba = model.predict_proba(
-            train_data=_TRAIN_DATA,
-            test_data=_TEST_DATA,
-            label="class",
+            train_data=train_data,
+            test_data=test_data,
+            label="label",
             include_predict=True,
+            instance_type="ml.m5.4xlarge",  # CPU; the GPU default of most tabular FMs is not needed for 200 rows
             framework_version=framework_version,
             custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
             predictions_path=predictions_path,
         )
 
         assert isinstance(pred, pd.Series)
-        assert len(pred) == n_test_rows
-        assert isinstance(pred_proba, pd.DataFrame)
-        assert len(pred_proba) == n_test_rows
+        assert len(pred) == len(test_data)
+        assert pred.notna().all()
+        assert isinstance(pred_proba, pd.Series if problem_type == "regression" else pd.DataFrame)
+        assert len(pred_proba) == len(test_data)
 
         head = boto3.client("s3").head_object(Bucket=bucket, Key=predictions_key)
         assert head["ContentLength"] > 0, "predictions file on S3 should not be empty"
@@ -206,39 +220,6 @@ def test_tabular_foundation_model_predict(test_helper, framework_version):
             with tarfile.open(model_artifact_path, "r:gz") as model_archive:
                 archived_files = [member.name for member in model_archive.getmembers() if member.isfile()]
             assert archived_files == [], f"predict job unexpectedly uploaded predictor files: {archived_files}"
-
-
-# Smallest model of each foundation model family not covered by the tests above (Mitra).
-@pytest.mark.parametrize("model_id", ["tabicl-v2-classifier", "tabdpt-turbo-classifier", "nori-regressor"])
-def test_tabular_foundation_model_family_predict(test_helper, framework_version, model_id):
-    """Batch prediction with a CPU instance works for every tabular foundation model family in the registry."""
-    rng = np.random.default_rng(0)
-    data = pd.DataFrame({"num": rng.normal(size=300), "cat": rng.choice(["x", "y", "z"], size=300)})
-    if get_model_config(model_id).problem_type == "regression":
-        data["label"] = 2 * data["num"] + (data["cat"] == "x") + rng.normal(scale=0.1, size=300)
-    else:
-        data["label"] = np.where(data["num"] > 0, "pos", "neg")
-    train_data, test_data = data.iloc[:200], data.iloc[200:].drop(columns="label")
-    timestamp = test_helper.get_utc_timestamp_now()
-    cloud_prefix = f"s3://autogluon-cloud-ci/test-tabular-fm-family-predict/{framework_version}"
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.chdir(temp_dir)
-        model = TabularFoundationModel(
-            model_id,
-            cloud_output_path=f"{cloud_prefix}/{timestamp}/{model_id}",
-        )
-        pred = model.predict(
-            test_data=test_data,
-            train_data=train_data,
-            label="label",
-            instance_type="ml.m5.2xlarge",
-            framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
-        )
-        assert isinstance(pred, pd.Series)
-        assert len(pred) == len(test_data)
-        assert pred.notna().all()
 
 
 def test_tabular_foundation_model_deploy(test_helper, framework_version):
