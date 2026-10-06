@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from importlib import resources
-from typing import Dict, Literal, Optional
+from typing import Literal
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
@@ -41,7 +41,7 @@ class StatusReport:
 
     config: BackendConfig
     config_path: str
-    checks: Dict[str, str] = field(default_factory=dict)
+    checks: dict[str, str] = field(default_factory=dict)
 
 
 # Keep these values in sync with SUPPORTED_BACKENDS in backend/constant.py.
@@ -51,8 +51,8 @@ BackendName = Literal["sagemaker"]
 def bootstrap(
     *,
     backend: BackendName = "sagemaker",
-    stack_name: Optional[str] = None,
-    session: Optional[boto3.Session] = None,
+    stack_name: str | None = None,
+    session: boto3.Session | None = None,
 ) -> None:
     """Deploy the CloudFormation stack and persist resource identifiers.
 
@@ -62,11 +62,11 @@ def bootstrap(
 
     Parameters
     ----------
-    backend
+    backend: BackendName, default = "sagemaker"
         Which AutoGluon-Cloud backend to provision.
-    stack_name
+    stack_name: str | None, default = None
         CloudFormation stack name. Auto-generated as ``ag-cloud-<backend>`` if not given.
-    session
+    session: boto3.Session | None, default = None
         A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is constructed from the standard
         credential chain (env vars, ``~/.aws/credentials``, SSO, instance profile).
     """
@@ -102,8 +102,8 @@ def register(
     bucket: str,
     region: str,
     backend: BackendName = "sagemaker",
-    stack_name: Optional[str] = None,
-    session: Optional[boto3.Session] = None,
+    stack_name: str | None = None,
+    session: boto3.Session | None = None,
 ) -> None:
     """Persist resource identifiers to ``~/.autogluon/cloud.yaml`` under the given backend key.
 
@@ -115,20 +115,20 @@ def register(
 
     Parameters
     ----------
-    role
+    role: str
         ARN of an IAM role suitable for SageMaker to assume. Named ``role`` for consistency with the SageMaker
         Python SDK (which uses ``role`` as the parameter name).
-    bucket
+    bucket: str
         S3 bucket name where AutoGluon-Cloud will read/write artifacts.
-    region
+    region: str
         AWS region for AutoGluon-Cloud operations.
-    backend
+    backend: BackendName, default = "sagemaker"
         Which AutoGluon-Cloud backend the resources are intended for. Selects the slot in ``cloud.yaml``.
-    stack_name
+    stack_name: str | None, default = None
         Optional CloudFormation stack name. If you deployed the resources via your own CFN stack and want
         :func:`teardown` to be able to delete it later, pass the name here. Defaults to ``None``, meaning teardown
         will only remove the config entry, not touch AWS.
-    session
+    session: boto3.Session | None, default = None
         ``boto3.Session`` used to verify the bucket region. If ``None``, the default ambient session is used.
     """
     if backend not in SUPPORTED_BACKENDS:
@@ -153,8 +153,8 @@ def register(
 
 def status(
     *,
-    session: Optional[boto3.Session] = None,
-) -> Dict[str, StatusReport]:
+    session: boto3.Session | None = None,
+) -> dict[str, StatusReport]:
     """Return health snapshots keyed by backend name, one per configured backend.
 
     Each :class:`StatusReport` has:
@@ -172,10 +172,10 @@ def status(
     if config is None:
         return {}
 
-    reports: Dict[str, StatusReport] = {}
+    reports: dict[str, StatusReport] = {}
     for name, backend_config in config.backends.items():
         sess = session or boto3.Session(region_name=backend_config.region)
-        checks: Dict[str, str] = {"bucket": _check_bucket(sess, backend_config.bucket)}
+        checks: dict[str, str] = {"bucket": _check_bucket(sess, backend_config.bucket)}
         if backend_config.stack_name:
             checks["stack"] = _check_stack(sess, backend_config.stack_name)
         checks["role"] = _check_role(sess, backend_config.role_arn)
@@ -189,8 +189,8 @@ def status(
 
 def teardown(
     *,
-    backend: Optional[BackendName] = None,
-    session: Optional[boto3.Session] = None,
+    backend: BackendName | None = None,
+    session: boto3.Session | None = None,
 ) -> None:
     """Delete a backend's CloudFormation stack and remove its config entry.
 
@@ -203,9 +203,9 @@ def teardown(
 
     Parameters
     ----------
-    backend
+    backend: BackendName | None, default = None
         Which backend to tear down. ``None`` (default) tears down all configured backends.
-    session
+    session: boto3.Session | None, default = None
         A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is built from the standard
         credential chain, with each backend's saved region applied automatically.
     """
@@ -248,7 +248,7 @@ def teardown(
 # ---------------------------------------------------------------------------
 
 
-def _verified_session(session: Optional[boto3.Session]) -> tuple[boto3.Session, str]:
+def _verified_session(session: boto3.Session | None) -> tuple[boto3.Session, str]:
     """Build a default session if none given and verify it can call STS.
 
     Returns the session paired with the AWS account ID, so callers can show

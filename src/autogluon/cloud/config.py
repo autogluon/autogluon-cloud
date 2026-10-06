@@ -20,7 +20,6 @@ import os
 import stat
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
 
 import yaml
 
@@ -45,17 +44,17 @@ class BackendConfig:
     region: str
     role_arn: str
     bucket: str
-    stack_name: Optional[str] = None
+    stack_name: str | None = None
 
 
 @dataclass
 class CloudConfig:
     """Top-level config: maps backend name → BackendConfig."""
 
-    backends: Dict[str, BackendConfig] = field(default_factory=dict)
+    backends: dict[str, BackendConfig] = field(default_factory=dict)
 
 
-def load_config() -> Optional[CloudConfig]:
+def load_config() -> CloudConfig | None:
     """Load the config file, or return None if it doesn't exist or is empty."""
     path = get_config_path()
     if not path.exists():

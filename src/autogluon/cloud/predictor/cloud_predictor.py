@@ -7,7 +7,7 @@ import tarfile
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Literal
 
 import boto3
 import pandas as pd
@@ -35,23 +35,23 @@ class CloudPredictor(ABC):
 
     def __init__(
         self,
-        local_output_path: Optional[str] = None,
-        cloud_output_path: Optional[str] = None,
+        local_output_path: str | None = None,
+        cloud_output_path: str | None = None,
         backend: str = SAGEMAKER,
-        role: Optional[str] = None,
+        role: str | None = None,
         verbosity: int = 2,
     ) -> None:
         """
         Parameters
         ----------
-        local_output_path: Optional[str], default = None
+        local_output_path: str | None, default = None
             Path to directory where downloaded trained predictor, batch transform results, and intermediate outputs should be saved
             If unspecified, a time-stamped folder called "AutogluonCloudPredictor/ag-[TIMESTAMP]"
             will be created in the working directory to store all downloaded trained predictor, batch transform results, and intermediate outputs.
             Note: To call `fit()` twice and save all results of each fit,
             you must specify different `local_output_path` locations or don't specify `local_output_path` at all.
             Otherwise files from first `fit()` will be overwritten by second `fit()`.
-        cloud_output_path: Optional[str], default = None
+        cloud_output_path: str | None, default = None
             S3 location where intermediate artifacts and trained models are stored. Accepts:
 
             * ``s3://bucket`` — a unique timestamped subfolder ``ag-<timestamp>`` is appended,
@@ -64,11 +64,11 @@ class CloudPredictor(ABC):
         backend: str, default = "sagemaker"
             The backend to use. Currently only "sagemaker" is supported.
             SageMaker backend supports training, deploying and batch inference on Amazon SageMaker. Only single instance training is supported.
-        role: Optional[str], default = None
+        role: str | None, default = None
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
             :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
-        verbosity : int, default = 2
+        verbosity: int, default = 2
             Verbosity levels range from 0 to 4 and control how much information is printed.
             Higher levels correspond to more detailed print statements (you can set verbosity = 0 to suppress warnings).
             If using logging, you can alternatively control amount of information printed via `logger.setLevel(L)`,
@@ -107,13 +107,13 @@ class CloudPredictor(ABC):
         return self.backend.is_fit
 
     @property
-    def endpoint_name(self) -> Optional[str]:
+    def endpoint_name(self) -> str | None:
         """
         Return the CloudPredictor deployed endpoint name
         """
         return self.backend.endpoint_name
 
-    def info(self) -> Dict[str, Any]:
+    def info(self) -> dict[str, Any]:
         """
         Return general info about CloudPredictor
         """
@@ -163,22 +163,22 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def fit(
         self,
-        train_data: Optional[Union[str, Path, pd.DataFrame]] = None,
+        train_data: str | Path | pd.DataFrame | None = None,
         *,
-        tuning_data: Optional[Union[str, Path, pd.DataFrame]] = None,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Optional[Dict[str, Any]] = None,
-        image_column: Optional[str] = None,
+        tuning_data: str | Path | pd.DataFrame | None = None,
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any] | None = None,
+        image_column: str | None = None,
         leaderboard: bool = True,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: Union[int, str] = "auto",
+        instance_count: int | str = "auto",
         volume_size: int = 256,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
         **kwargs,
     ) -> CloudPredictor:
         """
@@ -186,13 +186,13 @@ class CloudPredictor(ABC):
 
         Parameters
         ----------
-        train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Training data, as a DataFrame or local/S3 path to a data file.
-        tuning_data: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+        train_data: str | pathlib.Path | pd.DataFrame
+            Training data, as a ``pd.DataFrame`` or local/S3 path to a data file.
+        tuning_data: str | pathlib.Path | pd.DataFrame | None, default = None
             Optional tuning data.
         predictor_init_args: dict
             Init args for the predictor.
-        predictor_fit_args: Optional[dict], default = None
+        predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to the underlying predictor's ``fit()``. Must NOT contain
             ``train_data`` or ``tuning_data`` — pass those as explicit arguments above.
         leaderboard: bool, default = True
@@ -205,7 +205,7 @@ class CloudPredictor(ABC):
             If None, CloudPredictor creates one with a predictor-specific prefix.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance type the predictor will be trained on with SageMaker.
-        instance_count: Union[int, str], default = "auto"
+        instance_count: int | str, default = "auto"
             Number of instances used to fit the predictor.
             If "auto", the backend decides the instance count.
         volume_size: int, default = 256
@@ -217,7 +217,7 @@ class CloudPredictor(ABC):
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -227,7 +227,8 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        `CloudPredictor` object. Returns self.
+        CloudPredictor
+            The fitted predictor (``self``).
 
         SageMaker API
         -------------
@@ -302,8 +303,8 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        str,
-        Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+        str
+            Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
 
         SageMaker API
         -------------
@@ -317,27 +318,27 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        str,
+        str
             Output path of the job
         """
         return self.backend.get_fit_job_output_path()
 
-    def download_trained_predictor(self, predictor_path: Optional[str] = None, save_path: Optional[str] = None) -> str:
+    def download_trained_predictor(self, predictor_path: str | None = None, save_path: str | None = None) -> str:
         """
         Download the trained predictor from the cloud.
 
         Parameters
         ----------
-        predictor_path: Optional[str], default = None
+        predictor_path: str | None, default = None
             The s3 predictor path you want to download from.
             If None, CloudPredictor will try to find the predictor that's being trained by it and will raise an error if there's none.
-        save_path: Optional[str], default = None
+        save_path: str | None, default = None
             Path to save the model.
             If None, CloudPredictor will create a folder 'AutogluonModels' for the model under `local_output_path`.
 
         Returns
         -------
-        save_path: str
+        str
             Path to the saved model.
         """
         path = predictor_path
@@ -357,24 +358,24 @@ class CloudPredictor(ABC):
     def _get_local_predictor_cls(self):
         raise NotImplementedError
 
-    def to_local_predictor(self, predictor_path: Optional[str] = None, save_path: Optional[str] = None, **kwargs):
+    def to_local_predictor(self, predictor_path: str | None = None, save_path: str | None = None, **kwargs):
         """
         Convert the Cloud trained predictor to a local AutoGluon Predictor.
 
         Parameters
         ----------
-        predictor_path: Optional[str], default = None
+        predictor_path: str | None, default = None
             The s3 predictor path you want to download from.
             If None, CloudPredictor will try to find the predictor that's being trained by it and will raise an error if there's none.
-        save_path: Optional[str], default = None
+        save_path: str | None, default = None
             Path to save the model.
             If None, CloudPredictor will create a folder for the model.
-        kwargs:
+        **kwargs: Any
             Additional args to be passed to `load` call of the underneath predictor
 
         Returns
         -------
-        AutoGluon Predictor,
+        TabularPredictor | MultiModalPredictor
             TabularPredictor or MultiModalPredictor based on `predictor_type`
         """
         predictor_cls = self._get_local_predictor_cls()
@@ -384,17 +385,17 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def deploy(
         self,
-        predictor_path: Optional[str] = None,
-        endpoint_name: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        instance_type: Optional[str] = None,
+        predictor_path: str | None = None,
+        endpoint_name: str | None = None,
+        framework_version: str | None = None,
+        instance_type: str | None = None,
         initial_instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
-        volume_size: Optional[int] = None,
+        custom_image_uri: str | None = None,
+        volume_size: int | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
-        inference_config: Optional[Dict[str, Any]] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        inference_config: dict[str, Any] | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """
         Deploy a predictor to an inference endpoint.
@@ -412,13 +413,13 @@ class CloudPredictor(ABC):
             AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
             Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
-        instance_type: Optional[str], default = None
+        instance_type: str | None, default = None
             Instance to be deployed for the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None``
             when ``inference_mode="serverless"``.
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint. Ignored when
             ``inference_mode="serverless"``.
-        custom_image_uri: Optional[str], default = None,
+        custom_image_uri: str | None, default = None,
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
             https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
@@ -431,9 +432,9 @@ class CloudPredictor(ABC):
         inference_mode: {"realtime", "serverless"}, default = "realtime"
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero).
-        inference_config: Optional[Dict[str, Any]], default = None
+        inference_config: dict[str, Any] | None, default = None
             Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -492,8 +493,8 @@ class CloudPredictor(ABC):
 
     def predict_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
         **kwargs,
     ) -> pd.Series:
@@ -504,22 +505,22 @@ class CloudPredictor(ABC):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to csv file.
         test_data_image_column: default = None
-            If provided a csv file or pandas.DataFrame as the test_data and test_data involves image modality,
+            If provided a csv file or ``pd.DataFrame`` as the test_data and test_data involves image modality,
             you must specify the column name corresponding to image paths.
             The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        kwargs:
+        **kwargs: Any
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.Series
-        Predict results in Series
+        pd.Series
+            Predict results in ``pd.Series``
 
         SageMaker API
         -------------
@@ -533,11 +534,11 @@ class CloudPredictor(ABC):
 
     def predict_proba_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
         **kwargs,
-    ) -> Union[pd.DataFrame, pd.Series]:
+    ) -> pd.DataFrame | pd.Series:
         """
         Predict probability with the deployed endpoint. A deployed endpoint is required.
         This is intended to provide a low latency inference.
@@ -546,22 +547,22 @@ class CloudPredictor(ABC):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to csv file.
         test_data_image_column: default = None
-            If provided a csv file or pandas.DataFrame as the test_data and test_data involves image modality,
+            If provided a csv file or ``pd.DataFrame`` as the test_data and test_data involves image modality,
             you must specify the column name corresponding to image paths.
             The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        kwargs:
+        **kwargs: Any
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.DataFrame or Pandas.Series
-            Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+        pd.DataFrame | pd.Series
+            Will return a ``pd.Series`` when it's a regression problem. Will return a ``pd.DataFrame`` otherwise
 
         SageMaker API
         -------------
@@ -576,18 +577,18 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def predict(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
-        predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        job_name: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
+        predictor_path: str | None = None,
+        framework_version: str | None = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[pd.Series]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> pd.Series | None:
         """
         Batch inference.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -595,8 +596,8 @@ class CloudPredictor(ABC):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to a csv.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to a csv.
         test_data_image_column: str, default = None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
@@ -618,10 +619,10 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        predictions_path: Optional[str], default = None
+        predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -631,8 +632,8 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        Optional Pandas.Series
-            Predict results in Series if `wait` is True
+        pd.Series | None
+            Predict results in ``pd.Series`` if `wait` is True
             None if `wait` is False
 
         SageMaker API
@@ -661,19 +662,19 @@ class CloudPredictor(ABC):
     @reject_legacy_kwargs
     def predict_proba(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         include_predict: bool = True,
-        predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        job_name: Optional[str] = None,
+        predictor_path: str | None = None,
+        framework_version: str | None = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None:
         """
         Batch inference
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -681,8 +682,8 @@ class CloudPredictor(ABC):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to a csv.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to a csv.
         test_data_image_column: str, default = None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
@@ -707,10 +708,10 @@ class CloudPredictor(ABC):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        predictions_path: Optional[str], default = None
+        predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -720,11 +721,11 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
+        tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None
             If `wait` is False, will return None or (None, None) if `include_predict` is True
             If `wait` is True and `include_predict` is True,
-            will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
-            or a Pandas.Series that's identical to prediction when it's a regression problem.
+            will return (prediction, predict_probability), where prediction is a ``pd.Series`` and predict_probability is a ``pd.DataFrame``
+            or a ``pd.Series`` that's identical to prediction when it's a regression problem.
 
         SageMaker API
         -------------
@@ -750,14 +751,14 @@ class CloudPredictor(ABC):
             backend_overrides=backend_overrides,
         )
 
-    def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_batch_inference_job_info(self, job_name: str | None = None) -> dict[str, Any]:
         """
         Get general info of the batch inference job.
         If job_name not specified, return the info of the most recent batch inference job
         """
         return self.backend.get_batch_inference_job_info(job_name)
 
-    def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
+    def get_batch_inference_job_status(self, job_name: str | None = None) -> str:
         """
         Get the status of the batch inference job.
         This is useful when the user made an asynchronous call to the `predict()` function
@@ -770,8 +771,8 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        str,
-        Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+        str
+            Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
 
         SageMaker API
         -------------
@@ -816,7 +817,7 @@ class CloudPredictor(ABC):
             )
 
     @classmethod
-    def load(cls, path: str, verbosity: Optional[int] = None) -> CloudPredictor:
+    def load(cls, path: str, verbosity: int | None = None) -> CloudPredictor:
         """
         Load the CloudPredictor
 
@@ -827,7 +828,8 @@ class CloudPredictor(ABC):
 
         Returns
         -------
-        `CloudPredictor` object.
+        CloudPredictor
+            The loaded predictor.
         """
         if verbosity is not None:
             set_logger_verbosity(verbosity, logger=logger)  # Reset logging after load (may be in new Python session)

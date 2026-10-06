@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
 
 
 class RemoteJob(ABC):
@@ -17,12 +16,12 @@ class RemoteJob(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def info(self) -> Dict:
+    def info(self) -> dict:
         """
         Give general information about the job.
 
-        Returns:
-        ------
+        Returns
+        -------
         dict
             A dictionary containing the general information about the job.
         """
@@ -34,14 +33,14 @@ class RemoteJob(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_job_status(self) -> Optional[str]:
+    def get_job_status(self) -> str | None:
         """
         Get job status
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_output_path(self) -> Optional[str]:
+    def get_output_path(self) -> str | None:
         """
         Get the output path of the job generated artifacts if any.
         """

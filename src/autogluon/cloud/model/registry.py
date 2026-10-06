@@ -4,7 +4,7 @@ Maps model_id to AG-compatible configuration for deploy / predict.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -13,16 +13,16 @@ class FoundationModelConfig:
     ag_model_key: str  # key in the AG hyperparameters dict (e.g. "Chronos", "Chronos2", "MITRA")
     model_source_uri: str  # where weights are downloaded from (e.g. "autogluon/chronos-2")
     # AG-model hyperparameter that `model_source_uri` is injected into (None => don't inject).
-    model_source_hyperparameter: Optional[str] = None
+    model_source_hyperparameter: str | None = None
     predict_instance_type: str = "ml.m5.2xlarge"  # batch predict
     deploy_instance_type: str = "ml.g5.xlarge"  # real-time endpoint
     fit_instance_type: str = "ml.g5.xlarge"  # fine-tuning
-    inference_hyperparameters: Dict[str, Any] = field(default_factory=dict)  # defaults for deploy() and predict()
-    training_hyperparameters: Dict[str, Any] = field(default_factory=dict)  # defaults for fit()
+    inference_hyperparameters: dict[str, Any] = field(default_factory=dict)  # defaults for deploy() and predict()
+    training_hyperparameters: dict[str, Any] = field(default_factory=dict)  # defaults for fit()
     fine_tunable: bool = False  # whether .fit() is supported
 
 
-FOUNDATION_MODEL_REGISTRY: Dict[str, FoundationModelConfig] = {
+FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
     "chronos-bolt-tiny": FoundationModelConfig(
         problem_type="forecasting",
         ag_model_key="Chronos",

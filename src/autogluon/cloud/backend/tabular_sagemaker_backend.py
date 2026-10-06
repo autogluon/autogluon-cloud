@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import pandas as pd
 
@@ -15,9 +15,9 @@ class TabularSagemakerBackend(SagemakerBackend):
     def fit(
         self,
         *,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Dict[str, Any],
-        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any],
+        data_channels: dict[str, str | pd.DataFrame | None],
         **kwargs,
     ) -> None:
         data_channels = self._validate_data_channels(
@@ -34,9 +34,9 @@ class TabularSagemakerBackend(SagemakerBackend):
     def _validate_data_channels(
         self,
         *,
-        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
-        predictor_init_args: Dict[str, Any],
-    ) -> Dict[str, Optional[pd.DataFrame]]:
+        data_channels: dict[str, str | pd.DataFrame | None],
+        predictor_init_args: dict[str, Any],
+    ) -> dict[str, pd.DataFrame | None]:
         """Validate tabular data channels client-side before launching the SageMaker job.
 
         Resolves path inputs via ``load_pd.load`` so column checks can run, and returns the loaded channel
@@ -45,7 +45,7 @@ class TabularSagemakerBackend(SagemakerBackend):
         A fused fit_predict job means a schema typo wastes the whole training run, so we check up front that
         ``test_data`` (if present) covers every training feature column (the train columns minus the label).
         """
-        loaded: Dict[str, Optional[pd.DataFrame]] = {}
+        loaded: dict[str, pd.DataFrame | None] = {}
         for name, df in data_channels.items():
             if isinstance(df, (str, os.PathLike)):
                 df = load_pd.load(str(df))

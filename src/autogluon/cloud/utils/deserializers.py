@@ -13,13 +13,17 @@ class PandasDeserializeStrategy(ABC):
 
     @abstractmethod
     def deserialize(self, stream) -> pd.DataFrame:
-        """Deserialize data from stream to a pandas.DataFrame
+        """Deserialize data from stream to a ``pd.DataFrame``
 
-        Args:
-            stream (botocore.response.StreamingBody): Data to be deserialized.
+        Parameters
+        ----------
+        stream: botocore.response.StreamingBody
+            Data to be deserialized.
 
-        Returns:
-            pandas.DataFrame: The data deserialized into a pandas DataFrame.
+        Returns
+        -------
+        pd.DataFrame
+            The data deserialized into a ``pd.DataFrame``.
         """
         raise NotImplementedError
 
@@ -68,28 +72,34 @@ class PandasDeserializeStrategyFactory:
 
 
 class PandasDeserializer:
-    """Deserialize Parquet, CSV or JSON data from an inference endpoint into a pandas dataframe."""
+    """Deserialize Parquet, CSV or JSON data from an inference endpoint into a ``pd.DataFrame``."""
 
     def __init__(self, accept=("application/x-parquet", "text/csv", "application/json")):
         """Initialize a ``PandasDeserializer`` instance.
 
-        Args:
-            accept (union[str, tuple[str]]): The MIME type (or tuple of allowable MIME types) that
-                is expected from the inference endpoint (default: ("application/x-parquet", "text/csv","application/json")).
+        Parameters
+        ----------
+        accept: str | tuple[str, ...], default = ("application/x-parquet", "text/csv", "application/json")
+            The MIME type (or tuple of allowable MIME types) that is expected from the inference endpoint.
         """
         self.accept = (accept,) if isinstance(accept, str) else tuple(accept)
 
     def deserialize(self, stream, content_type):
-        """Deserialize CSV or JSON data from an inference endpoint into a pandas dataframe.
+        """Deserialize CSV or JSON data from an inference endpoint into a ``pd.DataFrame``.
 
         If the data is JSON, the data should be formatted in the 'columns' orient.
         See https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_json.html
 
-        Args:
-            stream (botocore.response.StreamingBody): Data to be deserialized.
-            content_type (str): The MIME type of the data.
+        Parameters
+        ----------
+        stream: botocore.response.StreamingBody
+            Data to be deserialized.
+        content_type: str
+            The MIME type of the data.
 
-        Returns:
-            pandas.DataFrame: The data deserialized into a pandas DataFrame.
+        Returns
+        -------
+        pd.DataFrame
+            The data deserialized into a ``pd.DataFrame``.
         """
         return PandasDeserializeStrategyFactory.get_strategy(content_type).deserialize(stream)

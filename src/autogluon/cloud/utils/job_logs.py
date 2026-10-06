@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -25,7 +26,7 @@ class LogTailer:
         self._client = logs_client
         self._log_group = log_group
         self._prefix = job_name + "/"
-        self._next_tokens: Dict[str, Optional[str]] = {}
+        self._next_tokens: dict[str, str | None] = {}
         self._enabled = True
 
     def poll(self) -> None:
@@ -76,7 +77,7 @@ def wait_for_job(
     get_status: Callable[[], str],
     job_name: str,
     log_group: str,
-    logs_client: Optional[Any] = None,
+    logs_client: Any | None = None,
     poll: float = 10,
 ) -> str:
     """Poll ``get_status`` until the job reaches a terminal state and return that state.

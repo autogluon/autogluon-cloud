@@ -34,6 +34,9 @@ extlinks = {
 # Docstring section listing the SageMaker requests a method sends (rendered like "Notes").
 napoleon_custom_sections = ["SageMaker API"]
 
+# Render the return type inline in the "Returns" field instead of a separate "Return type" field.
+napoleon_use_rtype = False
+
 # See https://myst-parser.readthedocs.io/en/latest/syntax/optional.html
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "html_image", "substitution"]
 

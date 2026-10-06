@@ -1,6 +1,6 @@
 import logging
 from abc import abstractmethod
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.constants import MODEL_ARTIFACT_NAME
@@ -38,8 +38,8 @@ class SageMakerJob(RemoteJob):
         """
         Give general information about the job.
 
-        Returns:
-        ------
+        Returns
+        -------
         dict
             A dictionary containing the general information about the job.
         """
@@ -51,7 +51,7 @@ class SageMakerJob(RemoteJob):
         raise NotImplementedError
 
     @abstractmethod
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         """Return the ``Describe*Job`` response for the job."""
         raise NotImplementedError
 
@@ -77,26 +77,26 @@ class SageMakerJob(RemoteJob):
             return False
         return self.get_job_status() == "Completed"
 
-    def get_job_status(self) -> Optional[str]:
+    def get_job_status(self) -> str | None:
         """
         Get job status
 
-        Returns:
-        --------
-        str:
+        Returns
+        -------
+        str
             Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
         """
         if not self.job_name:
             return "NotCreated"
         return self._get_job_status()
 
-    def get_output_path(self) -> Optional[str]:
+    def get_output_path(self) -> str | None:
         """
         Get the output path of the job generated artifacts if any.
 
-        Returns:
-        --------
-        Optional[str]:
+        Returns
+        -------
+        str | None
             Output path of the job generated artifacts if any.
             If no artifact, return None
         """
@@ -104,13 +104,13 @@ class SageMakerJob(RemoteJob):
             return None
         return self._get_output_path()
 
-    def get_hyperparameters(self) -> Dict[str, Union[int, str]]:
+    def get_hyperparameters(self) -> dict[str, int | str]:
         """
         Get hyperparameters of the job
 
-        Returns:
-        --------
-        dict:
+        Returns
+        -------
+        dict[str, int | str]
             Hyperparameters of the training job
         """
         return self._get_hyperparameters()
@@ -182,7 +182,7 @@ class SageMakerFitJob(SageMakerJob):
         )
         return info
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return self.session.sagemaker_client.describe_training_job(TrainingJobName=self.job_name)
 
     def _get_job_status(self):
@@ -198,8 +198,8 @@ class SageMakerFitJob(SageMakerJob):
 
     def run(
         self,
-        training_job_request: Dict[str, Any],
-        framework_version: Optional[str],
+        training_job_request: dict[str, Any],
+        framework_version: str | None,
         wait: bool,
     ):
         """Create the training job from a ``CreateTrainingJob`` request and optionally wait for it to finish."""
@@ -236,7 +236,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         )
         return info
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return self.session.sagemaker_client.describe_transform_job(TransformJobName=self.job_name)
 
     def _get_job_status(self):
@@ -250,7 +250,7 @@ class SageMakerBatchTransformationJob(SageMakerJob):
 
     def run(
         self,
-        transform_job_request: Dict[str, Any],
+        transform_job_request: dict[str, Any],
         model_name: str,
         wait: bool,
     ):

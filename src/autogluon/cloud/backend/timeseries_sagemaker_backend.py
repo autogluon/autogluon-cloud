@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import pandas as pd
 
@@ -20,21 +20,21 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     def fit(
         self,
         *,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Dict[str, Any],
-        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any],
+        data_channels: dict[str, str | pd.DataFrame | None],
         id_column: str,
         timestamp_column: str,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
         volume_size: int = 100,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        extra_ag_args: Optional[Dict[str, Any]] = None,
-        extra_tags: Optional[List[Dict[str, str]]] = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        extra_ag_args: dict[str, Any] | None = None,
+        extra_tags: list[dict[str, str]] | None = None,
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
@@ -70,11 +70,11 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
     def predict_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
+        test_data: str | pd.DataFrame,
+        static_features: str | pd.DataFrame | None = None,
+        known_covariates: str | pd.DataFrame | None = None,
         accept: str = "application/x-parquet",
-        inference_kwargs: Optional[Dict[str, Any]] = None,
+        inference_kwargs: dict[str, Any] | None = None,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -84,25 +84,25 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
-        static_features: Optional[Union[str, pd.DataFrame]]
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
+        static_features: str | pd.DataFrame | None
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        known_covariates: Optional[Union[str, pd.DataFrame]]
+        known_covariates: str | pd.DataFrame | None
             Future values of the known covariates over the forecast horizon.
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        inference_kwargs: Optional[Dict[str, Any]], default = None
+        inference_kwargs: dict[str, Any] | None, default = None
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.DataFrame
-        Predict results in DataFrame
+        pd.DataFrame
+            Predict results in ``pd.DataFrame``
         """
         self._validate_predict_real_time_args(accept)
 
@@ -127,11 +127,11 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
     def predict(
         self,
-        test_data: Union[str, pd.DataFrame],
-        static_features: Optional[Union[str, pd.DataFrame]] = None,
-        known_covariates: Optional[Union[str, pd.DataFrame]] = None,
+        test_data: str | pd.DataFrame,
+        static_features: str | pd.DataFrame | None = None,
+        known_covariates: str | pd.DataFrame | None = None,
         **kwargs,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -140,16 +140,16 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: str
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
-        static_features: Optional[Union[str, pd.DataFrame]]
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
+        static_features: str | pd.DataFrame | None
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        known_covariates: Optional[Union[str, pd.DataFrame]]
+        known_covariates: str | pd.DataFrame | None
             Future values of the known covariates over the forecast horizon.
-        kwargs:
+        **kwargs: Any
             Refer to `SagemakerBackend.predict()`
         """
         if isinstance(test_data, str):
@@ -189,17 +189,17 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
     def predict_proba(
         self,
         **kwargs,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         raise ValueError(f"{self.__class__.__name__} does not support predict_proba operation.")
 
     def _validate_data_channels(
         self,
         *,
-        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
-        predictor_init_args: Dict[str, Any],
+        data_channels: dict[str, str | pd.DataFrame | None],
+        predictor_init_args: dict[str, Any],
         id_column: str,
         timestamp_column: str,
-    ) -> Dict[str, Optional[Union[str, pd.DataFrame]]]:
+    ) -> dict[str, str | pd.DataFrame | None]:
         """Validate time-series data channels client-side before launching the SageMaker job.
 
         Resolves ``str`` paths via ``load_pd.load`` so column checks can run, and returns the (possibly loaded)
@@ -213,7 +213,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         - If ``known_covariates_names`` is set, ``train_data`` must also contain those columns.
         """
         target = predictor_init_args.get("target", "target")
-        loaded: Dict[str, Optional[Union[str, pd.DataFrame]]] = {}
+        loaded: dict[str, str | pd.DataFrame | None] = {}
         for name, df in data_channels.items():
             if isinstance(df, str):
                 df = load_pd.load(df)

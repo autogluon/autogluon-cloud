@@ -1,7 +1,7 @@
 import base64
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ def _dataframe_to_b64(df: pd.DataFrame) -> str:
     return base64.b64encode(df.to_parquet()).decode("ascii")
 
 
-def _ensure_json_serializable(inference_kwargs: Dict[str, Any]) -> None:
+def _ensure_json_serializable(inference_kwargs: dict[str, Any]) -> None:
     try:
         json.dumps(inference_kwargs)
     except (TypeError, ValueError) as e:
@@ -27,10 +27,10 @@ class AutoGluonSerializationWrapper:
     """Container for data, inference kwargs, and optional side inputs to be serialized into a single request payload."""
 
     data: pd.DataFrame
-    inference_kwargs: Dict[str, Any]
-    train_data: Optional[pd.DataFrame] = field(default=None)
-    static_features: Optional[pd.DataFrame] = field(default=None)
-    known_covariates: Optional[pd.DataFrame] = field(default=None)
+    inference_kwargs: dict[str, Any]
+    train_data: pd.DataFrame | None = field(default=None)
+    static_features: pd.DataFrame | None = field(default=None)
+    known_covariates: pd.DataFrame | None = field(default=None)
 
 
 class AutoGluonSerializer:
@@ -39,20 +39,25 @@ class AutoGluonSerializer:
     def __init__(self, content_type="application/x-autogluon"):
         """Initialize a ``AutoGluonSerializer`` instance.
 
-        Args:
-            content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/x-autogluon").
+        Parameters
+        ----------
+        content_type: str, default = "application/x-autogluon"
+            The MIME type to signal to the inference endpoint when sending request data.
         """
         self.content_type = content_type
 
     def serialize(self, data: AutoGluonSerializationWrapper):
         """Serialize data to a JSON envelope with base64-encoded parquet payloads.
 
-        Args:
-            data (object): Data to be serialized. An AutoGluonSerializationWrapper object
+        Parameters
+        ----------
+        data: AutoGluonSerializationWrapper
+            Data to be serialized.
 
-        Returns:
-            bytes: UTF-8 JSON containing base64-encoded parquet bytes and inference args
+        Returns
+        -------
+        bytes
+            UTF-8 JSON containing base64-encoded parquet bytes and inference args.
         """
         if not isinstance(data, AutoGluonSerializationWrapper):
             raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
@@ -76,33 +81,37 @@ class AutoGluonSerializer:
 class MultiModalSerializer:
     """Serializer for multi-modal use case.
 
-    Produces a JSON envelope containing either base64-encoded parquet (for DataFrames) or a
+    Produces a JSON envelope containing either base64-encoded parquet (for ``pd.DataFrame`` objects) or a
     JSON list of base85-encoded image strings (for numpy arrays), plus inference kwargs.
     """
 
     def __init__(self, content_type="application/x-autogluon-parquet"):
         """Initialize a ``MultiModalSerializer`` instance.
 
-        Args:
-            content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/x-autogluon-parquet").
-                Requests with image data pass their own content type to the endpoint call instead.
+        Parameters
+        ----------
+        content_type: str, default = "application/x-autogluon-parquet"
+            The MIME type to signal to the inference endpoint when sending request data.
+            Requests with image data pass their own content type to the endpoint call instead.
         """
         self.content_type = content_type
 
     def serialize(self, data):
         """Serialize data to a JSON envelope.
 
-        For DataFrame inputs, ``data`` is base64-encoded parquet bytes.
+        For ``pd.DataFrame`` inputs, ``data`` is base64-encoded parquet bytes.
         For numpy/list image inputs, ``data`` is a JSON list of base85-encoded image strings.
 
-        Args:
-            data (object): Data to be serialized.
-                An AutoGluonSerializationWrapper, which its data can be a Pandas Dataframe,
-                or a numpy array of base85-encoded image strings.
+        Parameters
+        ----------
+        data: AutoGluonSerializationWrapper
+            Data to be serialized. Its data can be a ``pd.DataFrame``,
+            or a numpy array of base85-encoded image strings.
 
-        Returns:
-            bytes: UTF-8 JSON containing both data and inference args
+        Returns
+        -------
+        bytes
+            UTF-8 JSON containing both data and inference args.
         """
         if not isinstance(data, AutoGluonSerializationWrapper):
             raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")

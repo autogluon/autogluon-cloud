@@ -4,7 +4,7 @@ import logging
 import os
 import tarfile
 import tempfile
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Literal
 
 import pandas as pd
 from botocore.exceptions import ClientError
@@ -59,7 +59,7 @@ _SERVERLESS_CONFIG_FIELDS = {
 }
 
 
-def _reject_local_mode(instance_type: Optional[str]) -> None:
+def _reject_local_mode(instance_type: str | None) -> None:
     if instance_type in (LOCAL_MODE, LOCAL_MODE_GPU):
         raise ValueError(
             f"instance_type={instance_type!r} (SageMaker local mode) is no longer supported. "
@@ -67,7 +67,7 @@ def _reject_local_mode(instance_type: Optional[str]) -> None:
         )
 
 
-def _s3_channel(channel_name: str, s3_uri: str) -> Dict[str, Any]:
+def _s3_channel(channel_name: str, s3_uri: str) -> dict[str, Any]:
     return {
         "ChannelName": channel_name,
         "DataSource": {
@@ -80,7 +80,7 @@ def _s3_channel(channel_name: str, s3_uri: str) -> Dict[str, Any]:
     }
 
 
-def _to_request_fields(settings: Dict[str, Any], fields: Dict[str, str], arg_name: str) -> Dict[str, Any]:
+def _to_request_fields(settings: dict[str, Any], fields: dict[str, str], arg_name: str) -> dict[str, Any]:
     """Rename the snake_case keys of a user-facing settings dict to the SageMaker API field names."""
     unknown = sorted(set(settings) - set(fields))
     if unknown:
@@ -96,7 +96,7 @@ class SagemakerBackend(Backend):
         local_output_path: str,
         cloud_output_path: str,
         predictor_type: str,
-        role: Optional[str] = None,
+        role: str | None = None,
         **kwargs,
     ) -> None:
         self.initialize(
@@ -107,12 +107,12 @@ class SagemakerBackend(Backend):
             **kwargs,
         )
 
-    def initialize(self, role: Optional[str] = None, **kwargs) -> None:
+    def initialize(self, role: str | None = None, **kwargs) -> None:
         """Initialize the backend.
 
         Parameters
         ----------
-        role
+        role: str | None, default = None
             SageMaker execution role ARN. See
             :func:`autogluon.cloud.utils.aws_utils.resolve_execution_role` for the resolution order.
         """
@@ -134,7 +134,7 @@ class SagemakerBackend(Backend):
         """Serializer used for realtime endpoint requests"""
         return AutoGluonSerializer()
 
-    def _resolve_tags(self, extra_tags: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, str]]:
+    def _resolve_tags(self, extra_tags: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
         """Tags for a created SageMaker resource: default + extra tags."""
         return build_tags(self.predictor_type, extra_tags=extra_tags)
 
@@ -162,7 +162,7 @@ class SagemakerBackend(Backend):
 
         Returns
         -------
-        str,
+        str
             Status of the job
         """
         return self._fit_job.get_job_status()
@@ -173,18 +173,18 @@ class SagemakerBackend(Backend):
 
         Returns
         -------
-        str,
+        str
             Output path of the job
         """
         return self._fit_job.get_output_path()
 
-    def get_fit_job_info(self) -> Dict[str, Any]:
+    def get_fit_job_info(self) -> dict[str, Any]:
         """
         Get general info of the training job.
 
         Returns
         -------
-        Dict,
+        dict[str, Any]
             General info of the job
         """
         return self._fit_job.info()
@@ -192,22 +192,22 @@ class SagemakerBackend(Backend):
     def fit(
         self,
         *,
-        predictor_init_args: Dict[str, Any],
-        predictor_fit_args: Dict[str, Any],
-        data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
-        image_column: Optional[str] = None,
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any],
+        data_channels: dict[str, str | pd.DataFrame | None],
+        image_column: str | None = None,
         leaderboard: bool = True,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: Optional[str] = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: Union[int, str] = 1,
+        instance_count: int | str = 1,
         volume_size: int = 256,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         timeout: int = 24 * 60 * 60,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        extra_ag_args: Optional[Dict[str, Any]] = None,
-        extra_tags: Optional[List[Dict[str, str]]] = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        extra_ag_args: dict[str, Any] | None = None,
+        extra_tags: list[dict[str, str]] | None = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -220,8 +220,8 @@ class SagemakerBackend(Backend):
             Init args for the predictor
         predictor_fit_args: dict
             Fit args for the predictor (must NOT contain data inputs — pass those via ``data_channels``).
-        data_channels: Dict[str, Union[str, pd.DataFrame, None]]
-            Mapping from data-input name to a DataFrame or local/S3 path. Each non-None entry is uploaded
+        data_channels: dict[str, str | pd.DataFrame | None]
+            Mapping from data-input name to a ``pd.DataFrame`` or local/S3 path. Each non-None entry is uploaded
             as a separate SageMaker channel; the train script reads it via ``SM_CHANNEL_<KEY_UPPER>``.
             Must contain a non-None ``train_data`` entry; subclasses define which additional keys are honored.
         image_column: str, default = None
@@ -248,10 +248,10 @@ class SagemakerBackend(Backend):
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields keyed by request name (see ``FIT_OVERRIDE_KEYS``). User-facing docs are on
             :meth:`CloudPredictor.fit`.
-        extra_ag_args: Optional[Dict[str, Any]], default = None
+        extra_ag_args: dict[str, Any] | None, default = None
             Additional entries to merge into ``ag_args.json``. Use this to ship caller-specific metadata to the
             train script (e.g. ``predict_after_fit``, ``save_predictor``, or ``id_column`` /
             ``timestamp_column`` for time series).
@@ -329,7 +329,7 @@ class SagemakerBackend(Backend):
             s3_uri_prefix=f"{self.cloud_output_path}/code/{job_name}/source",
         )
 
-        request: Dict[str, Any] = {
+        request: dict[str, Any] = {
             "TrainingJobName": job_name,
             "RoleArn": self.role_arn,
             "AlgorithmSpecification": {
@@ -362,7 +362,7 @@ class SagemakerBackend(Backend):
         self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
         self._fit_job.run(training_job_request=request, framework_version=framework_version, wait=wait)
 
-    def _default_inference_framework_version(self, framework_version: Optional[str], uses_fit_output: bool) -> str:
+    def _default_inference_framework_version(self, framework_version: str | None, uses_fit_output: bool) -> str:
         """Default to the version of the fit job when serving its model, so training and inference containers match."""
         if framework_version is not None:
             return framework_version
@@ -376,9 +376,9 @@ class SagemakerBackend(Backend):
         model_data: str,
         image_uri: str,
         entry_point: str,
-        environment: Dict[str, str],
-        tags: List[Dict[str, str]],
-        overrides: Dict[str, Dict[str, Any]],
+        environment: dict[str, str],
+        tags: list[dict[str, str]],
+        overrides: dict[str, dict[str, Any]],
     ) -> str:
         """Create a SageMaker model serving ``model_data`` (which must contain the serving code under ``code/``)."""
         # PYTHONUNBUFFERED disables output buffering for endpoint logging.
@@ -387,7 +387,7 @@ class SagemakerBackend(Backend):
             **environment,
             **script_mode_environment(entry_point, self._region),
         }
-        request: Dict[str, Any] = {
+        request: dict[str, Any] = {
             "ModelName": model_name,
             "PrimaryContainer": {
                 "Image": image_uri,
@@ -423,21 +423,21 @@ class SagemakerBackend(Backend):
 
     def deploy(
         self,
-        predictor_path: Optional[str] = None,
-        endpoint_name: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        instance_type: Optional[str] = "ml.m5.2xlarge",
+        predictor_path: str | None = None,
+        endpoint_name: str | None = None,
+        framework_version: str | None = None,
+        instance_type: str | None = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
-        volume_size: Optional[int] = None,
+        custom_image_uri: str | None = None,
+        volume_size: int | None = None,
         wait: bool = True,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-        entry_point: Optional[str] = None,
-        fm_serve_config: Optional[Dict[str, Any]] = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        entry_point: str | None = None,
+        fm_serve_config: dict[str, Any] | None = None,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
-        inference_config: Optional[Dict[str, Any]] = None,
+        inference_config: dict[str, Any] | None = None,
         repack: bool = True,
-        extra_tags: Optional[List[Dict[str, str]]] = None,
+        extra_tags: list[dict[str, str]] | None = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -460,7 +460,7 @@ class SagemakerBackend(Backend):
             Instance to be deployed for the endpoint
         initial_instance_count: int, default = 1,
             Initial number of instances to be deployed for the endpoint
-        custom_image_uri: Optional[str], default = None,
+        custom_image_uri: str | None, default = None
             Custom image to use to deploy endpoint with.
             If not specified, with use official DLC image:
             https://aws.github.io/deep-learning-containers/reference/available_images/#autogluon
@@ -470,17 +470,17 @@ class SagemakerBackend(Backend):
         wait: Bool, default = True,
             Whether to wait for the endpoint to be deployed.
             To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields keyed by request name (see ``DEPLOY_OVERRIDE_KEYS``). User-facing docs are on
             :meth:`CloudPredictor.deploy`.
-        entry_point: Optional[str], default = None
+        entry_point: str | None, default = None
             Serve script to use instead of the predictor type's default.
-        fm_serve_config: Optional[Dict[str, Any]], default = None
+        fm_serve_config: dict[str, Any] | None, default = None
             Configuration dict passed to the FM serve script via the AG_FM_SERVE_CONFIG env var.
         inference_mode: {"realtime", "serverless"}, default = "realtime"
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero).
-        inference_config: Optional[Dict[str, Any]], default = None
+        inference_config: dict[str, Any] | None, default = None
             Serverless overrides forwarded to the production variant's ``ServerlessConfig``
             (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
         repack: bool, default = True
@@ -584,7 +584,7 @@ class SagemakerBackend(Backend):
             overrides=overrides,
         )
 
-        variant: Dict[str, Any] = {"VariantName": "AllTraffic", "ModelName": model_name}
+        variant: dict[str, Any] = {"VariantName": "AllTraffic", "ModelName": model_name}
         if inference_mode == "realtime":
             variant["InstanceType"] = instance_type
             variant["InitialInstanceCount"] = initial_instance_count
@@ -597,7 +597,7 @@ class SagemakerBackend(Backend):
             variant["ServerlessConfig"] = serverless_config
         variant = deep_merge(variant, overrides.get("ProductionVariant", {}))
 
-        endpoint_config_request: Dict[str, Any] = {
+        endpoint_config_request: dict[str, Any] = {
             "EndpointConfigName": endpoint_name,
             "ProductionVariants": [variant],
             "Tags": tags,
@@ -673,12 +673,12 @@ class SagemakerBackend(Backend):
 
     def predict_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
-        inference_kwargs: Optional[Dict[str, Any]] = None,
+        inference_kwargs: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Union[pd.DataFrame, pd.Series]:
+    ) -> pd.DataFrame | pd.Series:
         """
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -686,21 +686,21 @@ class SagemakerBackend(Backend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to csv file.
         test_data_image_column: default = None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        inference_kwargs: Optional[Dict[str, Any]], default = None
+        inference_kwargs: dict[str, Any] | None, default = None
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.Series
-        Predict results in Series
+        pd.Series
+            Predict results in ``pd.Series``
         """
         self._validate_predict_real_time_args(accept)
         test_data = self._load_predict_real_time_test_data(test_data, test_data_image_column=test_data_image_column)
@@ -710,12 +710,12 @@ class SagemakerBackend(Backend):
 
     def predict_proba_real_time(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         accept: str = "application/x-parquet",
-        inference_kwargs: Optional[Dict[str, Any]] = None,
+        inference_kwargs: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Union[pd.DataFrame, pd.Series]:
+    ) -> pd.DataFrame | pd.Series:
         """
         Predict probability with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
@@ -724,21 +724,21 @@ class SagemakerBackend(Backend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to csv file.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to csv file.
         test_data_image_column: default = None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        inference_kwargs: Optional[Dict[str, Any]], default = None
+        inference_kwargs: dict[str, Any] | None, default = None
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.DataFrame or Pandas.Series
-            Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+        pd.DataFrame | pd.Series
+            Will return a ``pd.Series`` when it's a regression problem. Will return a ``pd.DataFrame`` otherwise
         """
         self._validate_predict_real_time_args(accept)
         test_data = self._load_predict_real_time_test_data(test_data, test_data_image_column=test_data_image_column)
@@ -749,14 +749,14 @@ class SagemakerBackend(Backend):
 
         return proba
 
-    def get_batch_inference_job_info(self, job_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_batch_inference_job_info(self, job_name: str | None = None) -> dict[str, Any] | None:
         """
         Get general info of the batch inference job.
         If job_name not specified, return the info of the most recent batch inference job
 
         Returns
         -------
-        Optional[Dict[str, Any]],
+        dict[str, Any] | None
             A dictinary containing general info of the job.
         """
         if not job_name:
@@ -766,15 +766,15 @@ class SagemakerBackend(Backend):
             return job.info()
         return None
 
-    def get_batch_inference_job_status(self, job_name: Optional[str] = None) -> str:
+    def get_batch_inference_job_status(self, job_name: str | None = None) -> str:
         """
         Get general status of the batch inference job.
         If job_name not specified, return the info of the most recent batch inference job
 
         Returns
         -------
-        str,
-        Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+        str
+            Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
         """
         if not job_name:
             job_name = self._batch_transform_jobs.last
@@ -783,31 +783,31 @@ class SagemakerBackend(Backend):
             return job.get_job_status()
         return "NotCreated"
 
-    def get_batch_inference_jobs(self) -> List[str]:
+    def get_batch_inference_jobs(self) -> list[str]:
         """
         Get a list of names of all batch inference jobs
 
         Returns
         -------
-        List[str],
+        list[str]
             a list of names of all batch inference jobs
         """
         return [job_name for job_name in self._batch_transform_jobs.keys()]
 
     def predict(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
-        predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        job_name: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
+        predictor_path: str | None = None,
+        framework_version: str | None = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[pd.Series]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> pd.Series | None:
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -817,8 +817,8 @@ class SagemakerBackend(Backend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to a csv.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to a csv.
         test_data_image_column: str, default = None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
@@ -840,17 +840,17 @@ class SagemakerBackend(Backend):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        predictions_path: Optional[str], default = None
+        predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields keyed by request name (see ``BATCH_PREDICT_OVERRIDE_KEYS``). User-facing docs
             are on :meth:`CloudPredictor.predict`.
 
         Returns
         -------
-        Optional Pandas.Series
-            Predict results in Series if `wait` is True
+        pd.Series | None
+            Predict results in ``pd.Series`` if `wait` is True
             None if `wait` is False
         """
         pred, _ = self._predict(
@@ -872,19 +872,19 @@ class SagemakerBackend(Backend):
 
     def predict_proba(
         self,
-        test_data: Union[str, pd.DataFrame],
-        test_data_image_column: Optional[str] = None,
+        test_data: str | pd.DataFrame,
+        test_data_image_column: str | None = None,
         include_predict: bool = True,
-        predictor_path: Optional[str] = None,
-        framework_version: Optional[str] = None,
-        job_name: Optional[str] = None,
+        predictor_path: str | None = None,
+        framework_version: str | None = None,
+        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
-        custom_image_uri: Optional[str] = None,
+        custom_image_uri: str | None = None,
         wait: bool = True,
-        predictions_path: Optional[str] = None,
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]:
+        predictions_path: str | None = None,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None:
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
@@ -894,8 +894,8 @@ class SagemakerBackend(Backend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
-            The test data to be inferenced. Can be a pandas.DataFrame, or a local path to a csv.
+        test_data: str | pd.DataFrame
+            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to a csv.
         test_data_image_column: str, default = None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
@@ -920,21 +920,21 @@ class SagemakerBackend(Backend):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        predictions_path: Optional[str], default = None
+        predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields keyed by request name (see ``BATCH_PREDICT_OVERRIDE_KEYS``). User-facing docs
             are on :meth:`CloudPredictor.predict`.
 
 
         Returns
         -------
-        Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
+        tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None
             If `wait` is False, will return None or (None, None) if `include_predict` is True
             If `wait` is True and `include_predict` is True,
-            will return (prediction, predict_probability), where prediction is a Pandas.Series and predict_probability is a Pandas.DataFrame
-            or a Pandas.Series that's identical to prediction when it's a regression problem.
+            will return (prediction, predict_probability), where prediction is a ``pd.Series`` and predict_probability is a ``pd.DataFrame``
+            or a ``pd.Series`` that's identical to prediction when it's a regression problem.
         """
         pred, pred_proba = self._predict(
             test_data=test_data,
@@ -956,7 +956,7 @@ class SagemakerBackend(Backend):
 
         return pred_proba
 
-    def download_predict_results(self, job_name: Optional[str] = None, save_path: Optional[str] = None) -> str:
+    def download_predict_results(self, job_name: str | None = None, save_path: str | None = None) -> str:
         """
         Download batch transform result
 
@@ -971,7 +971,7 @@ class SagemakerBackend(Backend):
 
         Returns
         -------
-        str,
+        str
             Path to downloaded results.
         """
         if not job_name:
@@ -1009,7 +1009,7 @@ class SagemakerBackend(Backend):
             self.sagemaker_session.s3_client.download_file(bucket, key, local_path)
             return load_pd.load(local_path)
 
-    def _download_ag_args_from_job(self) -> Dict[str, Any]:
+    def _download_ag_args_from_job(self) -> dict[str, Any]:
         """Fetch and parse the ``ag_args.json`` that was uploaded as the ``ag_args`` channel.
 
         Each training job carries the exact config it was launched with as an input channel,
@@ -1088,7 +1088,7 @@ class SagemakerBackend(Backend):
 
         self.original_features = [col for col in data_channels["train_data"].columns if col != label]
 
-        inputs: Dict[str, str] = {}
+        inputs: dict[str, str] = {}
         for channel_name, channel_data in data_channels.items():
             inputs[channel_name] = self._prepare_and_upload_data(
                 channel_data, channel_name, cloud_bucket, util_key_prefix
@@ -1314,19 +1314,19 @@ class SagemakerBackend(Backend):
             overrides=overrides,
         )
 
-        transform_input: Dict[str, Any] = {
+        transform_input: dict[str, Any] = {
             "DataSource": {"S3DataSource": {"S3DataType": "S3Prefix", "S3Uri": test_input}},
             "ContentType": content_type,
         }
         if split_type is not None:
             transform_input["SplitType"] = split_type
-        transform_output: Dict[str, Any] = {
+        transform_output: dict[str, Any] = {
             "S3OutputPath": (predictions_path or output_path + "/results").rstrip("/"),
             "Accept": accept,
         }
         if assemble_with is not None:
             transform_output["AssembleWith"] = assemble_with
-        transform_resources: Dict[str, Any] = {"InstanceType": instance_type, "InstanceCount": instance_count}
+        transform_resources: dict[str, Any] = {"InstanceType": instance_type, "InstanceCount": instance_count}
         transform_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="transform")
         if transform_ami_version is not None:
             transform_resources["TransformAmiVersion"] = transform_ami_version
@@ -1370,7 +1370,7 @@ class SagemakerBackend(Backend):
 
         return pred, pred_proba
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Custom implementation of the pickle process"""
         d = self.__dict__.copy()
         d["sagemaker_session"] = None
