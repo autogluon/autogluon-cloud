@@ -57,30 +57,30 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
             When predicting multimodality with image modality:
                 You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
             When predicting with only images:
-                Can be a pandas.DataFrame or a local path to a csv file.
+                Can be a ``pd.DataFrame`` or a local path to a csv file.
                     Similarly, you need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
                 Or a local path to a single image file.
                 Or a list of local paths to image files.
-        test_data_image_column: default = None
-            If provided a csv file or pandas.DataFrame as the test_data and test_data involves image modality,
+        test_data_image_column: str | None, default = None
+            If provided a csv file or ``pd.DataFrame`` as the test_data and test_data involves image modality,
             you must specify the column name corresponding to image paths.
             The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        inference_kwargs: Optional[Dict[str, Any]], default = None
+        inference_kwargs: dict[str, Any] | None, default = None
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.Series
-        Predict results in Series
+        pd.Series
+            Predict results in ``pd.Series``
         """
         self._validate_predict_real_time_args(accept)
         test_data, content_type = self._load_predict_real_time_test_data(
@@ -108,30 +108,30 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
             When predicting multimodality with image modality:
                 You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
             When predicting with only images:
-                Can be a pandas.DataFrame or a local path to a csv file.
+                Can be a ``pd.DataFrame`` or a local path to a csv file.
                     Similarly, you need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
                 Or a local path to a single image file.
                 Or a list of local paths to image files.
-        test_data_image_column: default = None
-            If provided a csv file or pandas.DataFrame as the test_data and test_data involves image modality,
+        test_data_image_column: str | None, default = None
+            If provided a csv file or ``pd.DataFrame`` as the test_data and test_data involves image modality,
             you must specify the column name corresponding to image paths.
             The path MUST be an abspath
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        inference_kwargs: Optional[Dict[str, Any]], default = None
+        inference_kwargs: dict[str, Any] | None, default = None
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.DataFrame or Pandas.Series
-            Will return a Pandas.Series when it's a regression problem. Will return a Pandas.DataFrame otherwise
+        pd.DataFrame | pd.Series
+            Will return a ``pd.Series`` when it's a regression problem. Will return a ``pd.DataFrame`` otherwise
         """
         self._validate_predict_real_time_args(accept)
         test_data, content_type = self._load_predict_real_time_test_data(
@@ -161,17 +161,17 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: str
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
             When predicting multimodality with image modality:
                 You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
             When predicting with only images:
                 Can be a local path to a directory containing the images or a local path to a single image.
-        test_data_image_column: Optional(str)
+        test_data_image_column: str | None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
-        kwargs:
+        **kwargs: Any
             Refer to `SagemakerBackend.predict()`
         """
         image_modality_only = self._check_image_modality_only(test_data)
@@ -202,17 +202,17 @@ class MultiModalSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: str
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
             When predicting multimodality with image modality:
                 You need to specify `test_data_image_column`, and make sure the image column contains relative path to the image.
             When predicting with only images:
                 Can be a local path to a directory containing the images or a local path to a single image.
-        test_data_image_column: Optional(str)
+        test_data_image_column: str | None
             If test_data involves image modality, you must specify the column name corresponding to image paths.
             The path MUST be an abspath
-        kwargs:
+        **kwargs: Any
             Refer to `SagemakerBackend.predict_proba()`
         """
         image_modality_only = self._check_image_modality_only(test_data)

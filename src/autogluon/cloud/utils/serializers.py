@@ -76,7 +76,7 @@ class AutoGluonSerializer:
 class MultiModalSerializer:
     """Serializer for multi-modal use case.
 
-    Produces a JSON envelope containing either base64-encoded parquet (for DataFrames) or a
+    Produces a JSON envelope containing either base64-encoded parquet (for ``pd.DataFrame`` objects) or a
     JSON list of base85-encoded image strings (for numpy arrays), plus inference kwargs.
     """
 
@@ -93,12 +93,12 @@ class MultiModalSerializer:
     def serialize(self, data):
         """Serialize data to a JSON envelope.
 
-        For DataFrame inputs, ``data`` is base64-encoded parquet bytes.
+        For ``pd.DataFrame`` inputs, ``data`` is base64-encoded parquet bytes.
         For numpy/list image inputs, ``data`` is a JSON list of base85-encoded image strings.
 
         Args:
             data (object): Data to be serialized.
-                An AutoGluonSerializationWrapper, which its data can be a Pandas Dataframe,
+                An AutoGluonSerializationWrapper, which its data can be a ``pd.DataFrame``,
                 or a numpy array of base85-encoded image strings.
 
         Returns:

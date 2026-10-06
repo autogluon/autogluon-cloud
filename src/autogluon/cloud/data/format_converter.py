@@ -23,7 +23,7 @@ class FormatConverter(ABC):
 
     def read_file(self, filename: str) -> pd.DataFrame:
         """
-        Read in file as a pandas DataFrame
+        Read in file as a ``pd.DataFrame``
 
         Parameters
         ----------
@@ -31,7 +31,7 @@ class FormatConverter(ABC):
             Path to the file to read.
 
         Returns
-        ------
+        -------
         pd.DataFrame
         """
         if FormatConverter.is_parquet_file(filename):
@@ -50,16 +50,16 @@ class FormatConverter(ABC):
 
         Parameters
         ----------
-        data: Union[str, pd.DataFrame]
+        data: str | pd.DataFrame
             If str, path to the file to be converted.
-            If pd.DataFrame, dataframe to be converted.
+            If ``pd.DataFrame``, the dataframe to be converted.
         output_path: str
             Path to save the converted file
         filename: str
             Filename to be saved for the converted file
 
         Returns
-        ------
+        -------
         str
             Path to the converted file. If the file does not need conversion, will return the original path.
         """

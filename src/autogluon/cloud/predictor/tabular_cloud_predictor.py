@@ -67,14 +67,14 @@ class TabularCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
-        train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Training data, as a DataFrame or local/S3 path to a data file.
-        test_data: Union[str, pathlib.Path, pd.DataFrame]
-            Data to predict on, as a DataFrame or local/S3 path to a data file. Must contain every feature
+        train_data: str | pathlib.Path | pd.DataFrame
+            Training data, as a ``pd.DataFrame`` or local/S3 path to a data file.
+        test_data: str | pathlib.Path | pd.DataFrame
+            Data to predict on, as a ``pd.DataFrame`` or local/S3 path to a data file. Must contain every feature
             column present in ``train_data`` (the label column is not required).
         predictor_init_args: dict
             Init args for the predictor.
-        predictor_fit_args: Optional[dict], default = None
+        predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to ``TabularPredictor.fit()``. Must NOT contain ``train_data`` or
             ``tuning_data``.
         leaderboard: bool, default = True
@@ -90,15 +90,15 @@ class TabularCloudPredictor(CloudPredictor):
             Number of instances used to fit the predictor.
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training.
-        custom_image_uri: Optional[str], default = None
+        custom_image_uri: str | None, default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        predictions_path: Optional[str]
+        predictions_path: str | None
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -108,8 +108,8 @@ class TabularCloudPredictor(CloudPredictor):
 
         Returns
         -------
-        Optional[pd.Series]
-            Predictions as a Series. Returns ``None`` when ``wait`` is False; fetch later via
+        pd.Series | None
+            Predictions as a ``pd.Series``. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_results()``.
 
         SageMaker API
@@ -167,13 +167,13 @@ class TabularCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
-        train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Training data, as a DataFrame or local/S3 path to a data file.
-        test_data: Union[str, pathlib.Path, pd.DataFrame]
+        train_data: str | pathlib.Path | pd.DataFrame
+            Training data, as a ``pd.DataFrame`` or local/S3 path to a data file.
+        test_data: str | pathlib.Path | pd.DataFrame
             Data to predict on. Must contain every feature column present in ``train_data``.
         predictor_init_args: dict
             Init args for the predictor.
-        predictor_fit_args: Optional[dict], default = None
+        predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to ``TabularPredictor.fit()``.
         include_predict: bool, default = True
             Whether to return the predictions along with the probabilities. Comes for free — the job always
@@ -191,14 +191,14 @@ class TabularCloudPredictor(CloudPredictor):
             Number of instances used to fit the predictor.
         volume_size: int, default = 256
             Size in GB of the EBS volume to use for storing input data during training.
-        custom_image_uri: Optional[str], default = None
+        custom_image_uri: str | None, default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        predictions_path: Optional[str]
+        predictions_path: str | None
             S3 URL where predictions will be written by the training container. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -208,7 +208,7 @@ class TabularCloudPredictor(CloudPredictor):
 
         Returns
         -------
-        Optional[Union[Tuple[pd.Series, Union[pd.DataFrame, pd.Series]], Union[pd.DataFrame, pd.Series]]]
+        tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None
             If ``include_predict`` is True, returns ``(prediction, predict_probability)``; otherwise just
             ``predict_probability``. Returns ``None`` when ``wait`` is False; fetch later via
             ``get_fit_predict_proba_results()``.
@@ -269,7 +269,7 @@ class TabularCloudPredictor(CloudPredictor):
 
         Returns
         -------
-        Tuple[pd.Series, Union[pd.DataFrame, pd.Series]]
+        tuple[pd.Series, pd.DataFrame | pd.Series]
             ``(prediction, predict_probability)``. For regression the probabilities are identical to the
             predictions.
         """

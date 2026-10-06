@@ -3,7 +3,9 @@ import base64
 import hashlib
 import json
 import os
+from collections.abc import Callable
 from io import BytesIO, StringIO
+from typing import IO
 
 import pandas as pd
 from PIL import Image
@@ -112,24 +114,24 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     return output, output_content_type
 
 
-def _read_with_fallback(read_func, buf, expected_columns):
+def _read_with_fallback(read_func: Callable, buf: IO, expected_columns: list[str]) -> pd.DataFrame:
     """
     Attempts to read data with headers. If columns don't match expected_columns,
     re-reads without headers and assigns expected_columns.
 
     Parameters
     ----------
-    read_func : callable
+    read_func: Callable
         Function to read the data (e.g., pd.read_csv, pd.read_json).
-    buf : IO buffer
+    buf: IO
         Buffer containing the data.
-    expected_columns : list
+    expected_columns: list[str]
         List of expected column names.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns aligned to expected_columns.
+        ``pd.DataFrame`` with columns aligned to expected_columns.
     """
     # Attempt to read with headers
     data = read_func(buf)
@@ -145,22 +147,22 @@ def _read_with_fallback(read_func, buf, expected_columns):
     return data
 
 
-def _align_columns(data, expected_columns):
+def _align_columns(data: pd.DataFrame, expected_columns: list[str]) -> pd.DataFrame:
     """
-    Aligns DataFrame columns to expected_columns.
+    Aligns ``pd.DataFrame`` columns to expected_columns.
     Removes extra columns and reorders existing ones.
 
     Parameters
     ----------
-    data : pd.DataFrame
-        Input DataFrame.
-    expected_columns : list
+    data: pd.DataFrame
+        Input ``pd.DataFrame``.
+    expected_columns: list[str]
         List of expected column names.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns aligned to expected_columns.
+        ``pd.DataFrame`` with columns aligned to expected_columns.
     """
     if set(data.columns) != set(expected_columns):
         missing_columns = set(expected_columns) - set(data.columns)

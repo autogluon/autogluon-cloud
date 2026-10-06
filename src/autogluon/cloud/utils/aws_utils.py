@@ -225,7 +225,7 @@ def setup_sagemaker_session(
     connect_timeout: int = 60,
     read_timeout: int = 60,
     retries: dict | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> AwsSession:
     """
     Setup an :class:`AwsSession` with a given configuration
@@ -236,19 +236,19 @@ def setup_sagemaker_session(
 
     Parameters
     ----------
-    boto_session
+    boto_session: boto3.Session | None, default = None
         Pre-built ``boto3.Session`` to wrap. If provided, region resolution is skipped and the
         session is used as-is.
-    config
+    config: Config | None, default = None
         A botocore.Config object providing the intended configuration
         https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
-    connect_timeout
+    connect_timeout: int, default = 60
         The time in seconds till a timeout exception is thrown when attempting to make a connection.
         The default is 60 seconds.
-    read_timeout
+    read_timeout: int, default = 60
         The time in seconds till a timeout exception is thrown when attempting to read from a connection.
         The default is 60 seconds.
-    retries
+    retries: dict | None, default = None
         A dictionary for retry specific configurations. Valid keys are:
             'total_max_attempts' -- An integer representing the maximum number of total attempts that will be made on a single request.
                 This includes the initial request, so a value of 1 indicates that no requests will be retried.
@@ -263,6 +263,8 @@ def setup_sagemaker_session(
                 legacy - The pre-existing retry behavior.
                 standard - The standardized set of retry rules. This will also default to 3 max attempts unless overridden.
                 adaptive - Retries with additional client side throttling.
+    **kwargs: Any
+        Additional arguments passed to ``botocore.config.Config`` when ``config`` is not provided.
     """
     if config is None:
         if retries is None:

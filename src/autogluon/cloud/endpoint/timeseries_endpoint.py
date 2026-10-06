@@ -24,11 +24,11 @@ class TimeSeriesEndpoint:
         """
         Parameters
         ----------
-        endpoint_name
+        endpoint_name: str
             Name of an existing SageMaker endpoint deployed via AutoGluon-Cloud (e.g. through
             :meth:`autogluon.cloud.TimeSeriesFoundationModel.deploy`). The endpoint must understand the AutoGluon-Cloud
             request payload format.
-        session
+        session: boto3.Session | None, default = None
             ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
         """
         self._endpoint_name = endpoint_name
@@ -54,29 +54,30 @@ class TimeSeriesEndpoint:
 
         Parameters
         ----------
-        data
-            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to a data file.
+        data: str | pd.DataFrame
+            Historical time series to forecast from, in long format, as a ``pd.DataFrame`` or local/S3 path to a data file.
             See the `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
             for the expected format.
-        known_covariates
+        known_covariates: str | pd.DataFrame | None, default = None
             Future values of the known covariates over the forecast horizon.
-        static_features
+        static_features: str | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
-        prediction_length
+        prediction_length: int, default = 1
             Forecast horizon: how many time steps into the future the model should predict.
-        target
+        target: str, default = "target"
             Name of the column that contains the target values to forecast.
-        id_column
+        id_column: str, default = "item_id"
             Name of the column with the unique identifier of each time series (item).
-        timestamp_column
+        timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
-        quantile_levels
+        quantile_levels: list[float] | None, default = None
             List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults to
             ``[0.1, 0.2, ..., 0.9]``.
 
         Returns
         -------
         pd.DataFrame
+            Predicted forecasts.
 
         SageMaker API
         -------------

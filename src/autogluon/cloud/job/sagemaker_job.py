@@ -38,8 +38,8 @@ class SageMakerJob(RemoteJob):
         """
         Give general information about the job.
 
-        Returns:
-        ------
+        Returns
+        -------
         dict
             A dictionary containing the general information about the job.
         """
@@ -81,9 +81,9 @@ class SageMakerJob(RemoteJob):
         """
         Get job status
 
-        Returns:
-        --------
-        str:
+        Returns
+        -------
+        str
             Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
         """
         if not self.job_name:
@@ -94,9 +94,9 @@ class SageMakerJob(RemoteJob):
         """
         Get the output path of the job generated artifacts if any.
 
-        Returns:
-        --------
-        Optional[str]:
+        Returns
+        -------
+        str | None
             Output path of the job generated artifacts if any.
             If no artifact, return None
         """
@@ -108,9 +108,9 @@ class SageMakerJob(RemoteJob):
         """
         Get hyperparameters of the job
 
-        Returns:
-        --------
-        dict:
+        Returns
+        -------
+        dict[str, int | str]
             Hyperparameters of the training job
         """
         return self._get_hyperparameters()

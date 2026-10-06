@@ -84,25 +84,25 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: Union(str, pandas.DataFrame)
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
-        static_features: Optional[Union[str, pd.DataFrame]]
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
+        static_features: str | pd.DataFrame | None
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        known_covariates: Optional[Union[str, pd.DataFrame]]
+        known_covariates: str | pd.DataFrame | None
             Future values of the known covariates over the forecast horizon.
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        inference_kwargs: Optional[Dict[str, Any]], default = None
+        inference_kwargs: dict[str, Any] | None, default = None
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.DataFrame
-        Predict results in DataFrame
+        pd.DataFrame
+            Predict results in ``pd.DataFrame``
         """
         self._validate_predict_real_time_args(accept)
 
@@ -140,16 +140,16 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
 
         Parameters
         ----------
-        test_data: str
+        test_data: str | pd.DataFrame
             The test data to be inferenced.
-            Can be a pandas.DataFrame or a local path to a csv file.
-        static_features: Optional[Union[str, pd.DataFrame]]
+            Can be a ``pd.DataFrame`` or a local path to a csv file.
+        static_features: str | pd.DataFrame | None
              An optional data frame describing the metadata attributes of individual items in the item index.
              For more detail, please refer to `TimeSeriesDataFrame` documentation:
              https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesDataFrame.html
-        known_covariates: Optional[Union[str, pd.DataFrame]]
+        known_covariates: str | pd.DataFrame | None
             Future values of the known covariates over the forecast horizon.
-        kwargs:
+        **kwargs: Any
             Refer to `SagemakerBackend.predict()`
         """
         if isinstance(test_data, str):

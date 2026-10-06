@@ -20,8 +20,8 @@ class RemoteJob(ABC):
         """
         Give general information about the job.
 
-        Returns:
-        ------
+        Returns
+        -------
         dict
             A dictionary containing the general information about the job.
         """

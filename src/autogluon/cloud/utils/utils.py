@@ -111,7 +111,7 @@ def split_pred_and_pred_proba(prediction):
     Parameters
     ----------
     prediction: pd.DataFrame
-        DataFrame consisting predicition and predict_proba (if available), i.e.
+        ``pd.DataFrame`` consisting predicition and predict_proba (if available), i.e.
                      class   <=50K_proba   >50K_proba
         0      <=50K_proba      0.949797     0.050203
         1      <=50K_proba      0.945973     0.054027

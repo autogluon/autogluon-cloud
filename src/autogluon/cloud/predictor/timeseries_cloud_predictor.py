@@ -63,8 +63,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
-        train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Training time series in long format, as a DataFrame or local/S3 path to a data file.
+        train_data: str | pathlib.Path | pd.DataFrame
+            Training time series in long format, as a ``pd.DataFrame`` or local/S3 path to a data file.
             See the `TimeSeriesPredictor.fit docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html>`_
             for the expected format.
         predictor_init_args: dict
@@ -72,17 +72,17 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
             for available options (e.g. ``target``, ``prediction_length``, ``freq``, ``eval_metric``,
             ``quantile_levels``, ``known_covariates_names``).
-        predictor_fit_args: Optional[dict], default = None
+        predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to ``TimeSeriesPredictor.fit()``. See the
             `TimeSeriesPredictor.fit docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html>`_
             for available options. Must NOT contain ``train_data`` or ``tuning_data`` — pass those as
             explicit arguments above.
-        tuning_data: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
-            Optional tuning data in long format, as a DataFrame or local/S3 path to a data file.
-        known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+        tuning_data: str | pathlib.Path | pd.DataFrame | None, default = None
+            Optional tuning data in long format, as a ``pd.DataFrame`` or local/S3 path to a data file.
+        known_covariates: str | pathlib.Path | pd.DataFrame | None, default = None
             Values of the known covariates. Must be provided if ``known_covariates_names`` was specified
             in ``predictor_init_args``.
-        static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+        static_features: str | pathlib.Path | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
         id_column: str, default = "item_id"
             Name of the column with the unique identifier of each time series (item).
@@ -101,13 +101,13 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
             Must be large enough to store training data if File Mode is used (which is the default).
-        custom_image_uri: Optional[str], default = None
+        custom_image_uri: str | None, default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes
             To be noticed, the function won't return immediately because there are some preparations needed prior fit.
             Use `get_fit_job_status` to get job status.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -117,7 +117,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Returns
         -------
-        `TimeSeriesCloudPredictor` object. Returns self.
+        TimeSeriesCloudPredictor
+            The fitted predictor (``self``).
 
         SageMaker API
         -------------
@@ -183,24 +184,24 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
-        data: Union(str, pandas.DataFrame)
-            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to
+        data: str | pd.DataFrame
+            Historical time series to forecast from, in long format, as a ``pd.DataFrame`` or local/S3 path to
             a data file.
-        static_features: Optional[pd.DataFrame]
+        static_features: pd.DataFrame | None
             Static (time-independent) features describing each individual time series.
-        known_covariates : Optional[pd.DataFrame]
+        known_covariates: pd.DataFrame | None
             Future values of the known covariates over the forecast horizon. Must be provided if
             ``known_covariates_names`` was specified at fit time.
         accept: str, default = application/x-parquet
             Type of accept output content.
             Valid options are application/x-parquet, text/csv, application/json
-        kwargs:
+        **kwargs: Any
             Additional args that you would pass to `predict` calls of an AutoGluon logic
 
         Returns
         -------
-        Pandas.DataFrame
-        Predict results in DataFrame
+        pd.DataFrame
+            Predict results in ``pd.DataFrame``
 
         SageMaker API
         -------------
@@ -247,12 +248,12 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
-        data: Union(str, pandas.DataFrame)
-            Historical time series to forecast from, in long format, as a DataFrame or local/S3 path to
+        data: str | pd.DataFrame
+            Historical time series to forecast from, in long format, as a ``pd.DataFrame`` or local/S3 path to
             a data file.
-        static_features: Optional[Union[str, pd.DataFrame]]
+        static_features: str | pd.DataFrame | None
             Static (time-independent) features describing each individual time series.
-        known_covariates: Optional[Union[str, pd.DataFrame]]
+        known_covariates: str | pd.DataFrame | None
             Future values of the known covariates over the forecast horizon. Must be provided if
             ``known_covariates_names`` was specified at fit time.
         predictor_path: str
@@ -273,10 +274,10 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         wait: bool, default = True
             Whether to wait for batch transform to complete.
             To be noticed, the function won't return immediately because there are some preparations needed prior transform.
-        predictions_path: Optional[str], default = None
+        predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -347,28 +348,28 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Parameters
         ----------
-        train_data: Union[str, pathlib.Path, pd.DataFrame]
-            Historical time series to train on and forecast from, in long format, as a DataFrame or
+        train_data: str | pathlib.Path | pd.DataFrame
+            Historical time series to train on and forecast from, in long format, as a ``pd.DataFrame`` or
             local/S3 path to a data file.
         predictor_init_args: dict
             Arguments forwarded to ``TimeSeriesPredictor()``. Must include ``prediction_length``. See the
             `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
             for available options.
-        predictor_fit_args: Optional[dict], default = None
+        predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to ``TimeSeriesPredictor.fit()``. See the
             `TimeSeriesPredictor.fit docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.fit.html>`_
             for available options. Must NOT contain ``train_data``, ``tuning_data``, or
             ``known_covariates`` — pass those as explicit arguments above.
-        known_covariates: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+        known_covariates: str | pathlib.Path | pd.DataFrame | None, default = None
             Future values of the known covariates over the forecast horizon. Must be provided if
             ``known_covariates_names`` was specified in ``predictor_init_args``.
-        static_features: Optional[Union[str, pathlib.Path, pd.DataFrame]], default = None
+        static_features: str | pathlib.Path | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
         id_column: str, default = "item_id"
             Name of the column with the unique identifier of each time series (item).
         timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
-        predictions_path: Optional[str]
+        predictions_path: str | None
             S3 URL where predictions will be written by the training container (e.g.
             ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must have
             ``s3:PutObject`` permission for this location. Defaults to
@@ -385,11 +386,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Number of instances used to fit the predictor.
         volume_size: int, default = 100
             Size in GB of the EBS volume to use for storing input data during training.
-        custom_image_uri: Optional[str], default = None
+        custom_image_uri: str | None, default = None
             Custom container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether the call should wait until the job completes.
-        backend_overrides: Optional[Dict[str, Dict[str, Any]]], default = None
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
             * Keys: request names from the *SageMaker API* section below.
@@ -399,8 +400,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         Returns
         -------
-        Optional[pd.DataFrame]
-            Predictions as a DataFrame. Returns ``None`` when ``wait`` is False.
+        pd.DataFrame | None
+            Predictions as a ``pd.DataFrame``. Returns ``None`` when ``wait`` is False.
 
         SageMaker API
         -------------

@@ -62,11 +62,11 @@ def bootstrap(
 
     Parameters
     ----------
-    backend
+    backend: BackendName, default = "sagemaker"
         Which AutoGluon-Cloud backend to provision.
-    stack_name
+    stack_name: str | None, default = None
         CloudFormation stack name. Auto-generated as ``ag-cloud-<backend>`` if not given.
-    session
+    session: boto3.Session | None, default = None
         A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is constructed from the standard
         credential chain (env vars, ``~/.aws/credentials``, SSO, instance profile).
     """
@@ -115,20 +115,20 @@ def register(
 
     Parameters
     ----------
-    role
+    role: str
         ARN of an IAM role suitable for SageMaker to assume. Named ``role`` for consistency with the SageMaker
         Python SDK (which uses ``role`` as the parameter name).
-    bucket
+    bucket: str
         S3 bucket name where AutoGluon-Cloud will read/write artifacts.
-    region
+    region: str
         AWS region for AutoGluon-Cloud operations.
-    backend
+    backend: BackendName, default = "sagemaker"
         Which AutoGluon-Cloud backend the resources are intended for. Selects the slot in ``cloud.yaml``.
-    stack_name
+    stack_name: str | None, default = None
         Optional CloudFormation stack name. If you deployed the resources via your own CFN stack and want
         :func:`teardown` to be able to delete it later, pass the name here. Defaults to ``None``, meaning teardown
         will only remove the config entry, not touch AWS.
-    session
+    session: boto3.Session | None, default = None
         ``boto3.Session`` used to verify the bucket region. If ``None``, the default ambient session is used.
     """
     if backend not in SUPPORTED_BACKENDS:
@@ -203,9 +203,9 @@ def teardown(
 
     Parameters
     ----------
-    backend
+    backend: BackendName | None, default = None
         Which backend to tear down. ``None`` (default) tears down all configured backends.
-    session
+    session: boto3.Session | None, default = None
         A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is built from the standard
         credential chain, with each backend's saved region applied automatically.
     """

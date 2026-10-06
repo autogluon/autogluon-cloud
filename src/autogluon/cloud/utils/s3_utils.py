@@ -11,11 +11,11 @@ def upload_file(file_name: str, bucket: str, prefix: str | None = None):
 
     Parameters
     ----------
-    file_name: str,
+    file_name: str
         File to upload
-    bucket: str,
+    bucket: str
         Bucket to upload to
-    prefix: Optional[str], default = None
+    prefix: str | None, default = None
         S3 prefix. If not specified then will upload to the root of the bucket
     """
     object_name = os.path.basename(file_name)

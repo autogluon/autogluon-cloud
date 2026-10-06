@@ -62,7 +62,7 @@ def retrieve_available_framework_versions(framework_type="training", details=Fal
             Defaults to False.
 
     Returns:
-        (Union(list, dict)):
+        (list | dict):
             returns a list of versions if detailed == False.
             returns a dict containing information related to each version if detailed == True.
     """

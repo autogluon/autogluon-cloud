@@ -23,10 +23,10 @@ class TabularEndpoint:
         """
         Parameters
         ----------
-        endpoint_name
+        endpoint_name: str
             Name of an existing SageMaker endpoint deployed through
             :meth:`autogluon.cloud.TabularFoundationModel.deploy`.
-        session
+        session: boto3.Session | None, default = None
             ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
         """
         self._endpoint_name = endpoint_name
