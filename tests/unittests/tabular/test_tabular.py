@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 
 from autogluon.cloud import TabularCloudPredictor
 from autogluon.cloud.model import TabularFoundationModel
-from autogluon.cloud.model.registry import get_model_config
+from autogluon.cloud.model.registry import FOUNDATION_MODEL_REGISTRY, get_model_config
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 
 _TRAIN_DATA = "tabular_train.csv"
@@ -172,30 +172,45 @@ def _synthetic_tabular_data(problem_type: str) -> tuple[pd.DataFrame, pd.DataFra
     return data.iloc[:200], data.iloc[200:].drop(columns="label")
 
 
-# Smallest model of each foundation model family in the registry.
-@pytest.mark.parametrize(
-    "model_id", ["mitra-classifier", "tabicl-v2-classifier", "tabdpt-turbo-classifier", "nori-regressor"]
-)
-def test_tabular_foundation_model_predict(test_helper, framework_version, model_id):
+# Smallest model of each tabular foundation model family on CPU, plus one GPU run. Instance types are set explicitly
+# instead of using the registry defaults to keep CI cheap.
+_FM_PREDICT_CASES = [
+    ("mitra-classifier", "ml.m5.4xlarge"),
+    ("tabicl-v2-classifier", "ml.m5.4xlarge"),
+    ("tabdpt-turbo-classifier", "ml.m5.4xlarge"),
+    ("nori-regressor", "ml.m5.4xlarge"),
+    ("tabicl-v2-classifier", "ml.g4dn.2xlarge"),
+]
+
+
+def test_fm_predict_cases_cover_every_tabular_family():
+    covered = {get_model_config(model_id).ag_model_key for model_id, _ in _FM_PREDICT_CASES}
+    expected = {c.ag_model_key for c in FOUNDATION_MODEL_REGISTRY.values() if c.problem_type != "forecasting"}
+    assert covered == expected, f"Add a test case for the families: {sorted(expected - covered)}"
+
+
+@pytest.mark.parametrize("model_id, instance_type", _FM_PREDICT_CASES, ids=lambda v: v.removeprefix("ml."))
+def test_tabular_foundation_model_predict(test_helper, framework_version, model_id, instance_type):
     timestamp = test_helper.get_utc_timestamp_now()
+    gpu = instance_type.startswith(("ml.g", "ml.p"))
     bucket = "autogluon-cloud-ci"
-    cloud_prefix = f"s3://{bucket}/test-tabular-fm-predict/{framework_version}/{timestamp}/{model_id}"
-    predictions_key = f"test-tabular-fm-predict/{framework_version}/{timestamp}/{model_id}/custom_predictions.csv"
+    run_prefix = f"test-tabular-fm-predict/{framework_version}/{timestamp}/{model_id}-{instance_type}"
+    predictions_key = f"{run_prefix}/custom_predictions.csv"
     predictions_path = f"s3://{bucket}/{predictions_key}"
     problem_type = get_model_config(model_id).problem_type
     train_data, test_data = _synthetic_tabular_data(problem_type)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
-        model = TabularFoundationModel(model_id, cloud_output_path=cloud_prefix)
+        model = TabularFoundationModel(model_id, cloud_output_path=f"s3://{bucket}/{run_prefix}")
         pred, pred_proba = model.predict_proba(
             train_data=train_data,
             test_data=test_data,
             label="label",
             include_predict=True,
-            instance_type="ml.m5.4xlarge",  # CPU; the GPU default of most tabular FMs is not needed for 200 rows
+            instance_type=instance_type,
             framework_version=framework_version,
-            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=False),
+            custom_image_uri=test_helper.get_custom_image_uri(framework_version, type="training", gpu=gpu),
             predictions_path=predictions_path,
         )
 
