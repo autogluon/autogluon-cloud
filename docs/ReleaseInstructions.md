@@ -10,6 +10,7 @@
   * Caps are at the minor level (`<x.y`), not micro (`<x.y.z`).
   * No exact pins (`==x.y.z`) without an inline comment.
 * Optionally bump upper caps to include the latest stable releases of dependencies and verify CI still passes.
+* If a new AutoGluon DLC was released, add it to `src/autogluon/cloud/utils/autogluon_dlc.json` and bump `DEFAULT_FRAMEWORK_VERSION` in `src/autogluon/cloud/utils/constants.py`.
 
 ## Update the `stable` docs branch
 

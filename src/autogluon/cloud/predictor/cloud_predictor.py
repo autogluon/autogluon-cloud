@@ -22,6 +22,7 @@ from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
 from ..utils.aws_utils import resolve_cloud_output_path
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import safe_unpack_archive
 
@@ -169,7 +170,7 @@ class CloudPredictor(ABC):
         predictor_fit_args: Optional[Dict[str, Any]] = None,
         image_column: Optional[str] = None,
         leaderboard: bool = True,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = "auto",
@@ -196,10 +197,8 @@ class CloudPredictor(ABC):
             ``train_data`` or ``tuning_data`` — pass those as explicit arguments above.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact
-        framework_version: str, default = `latest`
-            Training container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
@@ -372,7 +371,7 @@ class CloudPredictor(ABC):
         self,
         predictor_path: Optional[str] = None,
         endpoint_name: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: Optional[str] = None,
         instance_type: Optional[str] = None,
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
@@ -394,10 +393,9 @@ class CloudPredictor(ABC):
         endpoint_name: str
             The endpoint name to use for the deployment.
             If None, CloudPredictor creates one with a predictor-specific prefix.
-        framework_version: str, default = `latest`
-            Inference container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
         instance_type: Optional[str], default = None
             Instance to be deployed for the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None``
@@ -548,7 +546,7 @@ class CloudPredictor(ABC):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         predictor_path: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: Optional[str] = None,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -573,10 +571,9 @@ class CloudPredictor(ABC):
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
             If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, default = `latest`
-            Inference container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
@@ -626,7 +623,7 @@ class CloudPredictor(ABC):
         test_data_image_column: Optional[str] = None,
         include_predict: bool = True,
         predictor_path: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: Optional[str] = None,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -654,10 +651,9 @@ class CloudPredictor(ABC):
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
             If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, default = `latest`
-            Inference container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.

@@ -24,7 +24,7 @@ from ..utils.ag_sagemaker import (
     upload_training_code,
 )
 from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
-from ..utils.constants import LOCAL_MODE, LOCAL_MODE_GPU, VALID_ACCEPT
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, LOCAL_MODE, LOCAL_MODE_GPU, VALID_ACCEPT
 from ..utils.deserializers import PandasDeserializer
 from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version, retrieve_image_uri
 from ..utils.misc import MostRecentInsertedOrderedDict, sagemaker_timestamp, unique_name_from_base
@@ -197,7 +197,7 @@ class SagemakerBackend(Backend):
         data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         image_column: Optional[str] = None,
         leaderboard: bool = True,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: Union[int, str] = 1,
@@ -229,10 +229,8 @@ class SagemakerBackend(Backend):
             The image paths MUST be absolute paths to you local system.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact
-        framework_version: str, default = `latest`
-            Training container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
@@ -364,6 +362,14 @@ class SagemakerBackend(Backend):
         self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
         self._fit_job.run(training_job_request=request, framework_version=framework_version, wait=wait)
 
+    def _default_inference_framework_version(self, framework_version: Optional[str], uses_fit_output: bool) -> str:
+        """Default to the version of the fit job when serving its model, so training and inference containers match."""
+        if framework_version is not None:
+            return framework_version
+        if uses_fit_output and self._fit_job is not None and self._fit_job.framework_version is not None:
+            return self._fit_job.framework_version
+        return DEFAULT_FRAMEWORK_VERSION
+
     def _create_model(
         self,
         model_name: str,
@@ -419,7 +425,7 @@ class SagemakerBackend(Backend):
         self,
         predictor_path: Optional[str] = None,
         endpoint_name: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: Optional[str] = None,
         instance_type: Optional[str] = "ml.m5.2xlarge",
         initial_instance_count: int = 1,
         custom_image_uri: Optional[str] = None,
@@ -446,10 +452,9 @@ class SagemakerBackend(Backend):
         endpoint_name: str
             The endpoint name to use for the deployment.
             If None, AutoGluon Cloud creates one with a predictor- or model-specific prefix.
-        framework_version: str, default = `latest`
-            Inference container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
         instance_type: str, default = 'ml.m5.2xlarge'
             Instance to be deployed for the endpoint
@@ -510,7 +515,11 @@ class SagemakerBackend(Backend):
             logger.log(20, f"Deploying with custom_image_uri=={custom_image_uri}")
         else:
             framework_version, py_version = parse_framework_version(
-                framework_version, "inference", minimum_version="0.6.0"
+                self._default_inference_framework_version(
+                    framework_version, uses_fit_output=predictor_path is None and fm_serve_config is None
+                ),
+                "inference",
+                minimum_version="0.6.0",
             )
             logger.log(20, f"Deploying with framework_version=={framework_version}")
 
@@ -563,12 +572,13 @@ class SagemakerBackend(Backend):
             container_environment.setdefault("METRICS_LOCATION", "/tmp")
 
         tags = self._resolve_tags(extra_tags)
+        image_uri = retrieve_image_uri(
+            framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
+        )
         model_name = self._create_model(
             model_name=endpoint_name,
             model_data=model_data,
-            image_uri=retrieve_image_uri(
-                framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
-            ),
+            image_uri=image_uri,
             entry_point=entry_point,
             environment=container_environment,
             tags=tags,
@@ -581,9 +591,7 @@ class SagemakerBackend(Backend):
             variant["InitialInstanceCount"] = initial_instance_count
             if volume_size:
                 variant["VolumeSizeInGB"] = volume_size
-            inference_ami_version = infer_sagemaker_ami_version(
-                custom_image_uri, instance_type, image_scope="inference"
-            )
+            inference_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="inference")
             if inference_ami_version is not None:
                 variant["InferenceAmiVersion"] = inference_ami_version
         else:
@@ -792,7 +800,7 @@ class SagemakerBackend(Backend):
         test_data: Union[str, pd.DataFrame],
         test_data_image_column: Optional[str] = None,
         predictor_path: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: Optional[str] = None,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -819,10 +827,9 @@ class SagemakerBackend(Backend):
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
             If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, default = `latest`
-            Inference container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
@@ -870,7 +877,7 @@ class SagemakerBackend(Backend):
         test_data_image_column: Optional[str] = None,
         include_predict: bool = True,
         predictor_path: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: Optional[str] = None,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -900,10 +907,9 @@ class SagemakerBackend(Backend):
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
             If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, default = `latest`
-            Inference container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
@@ -1203,7 +1209,7 @@ class SagemakerBackend(Backend):
         test_data,
         test_data_image_column=None,
         predictor_path=None,
-        framework_version="latest",
+        framework_version=None,
         job_name=None,
         instance_type="ml.m5.2xlarge",
         instance_count=1,
@@ -1223,6 +1229,9 @@ class SagemakerBackend(Backend):
         overrides = check_override_keys(backend_overrides, BATCH_PREDICT_OVERRIDE_KEYS)
         if predictions_path is not None and not is_s3_url(predictions_path):
             raise ValueError(f"`predictions_path` must be an S3 URL, got {predictions_path!r}.")
+        framework_version = self._default_inference_framework_version(
+            framework_version, uses_fit_output=not predictor_path
+        )
         if not predictor_path:
             predictor_path = self._fit_job.get_output_path()
             assert predictor_path, "No cloud trained model found."
@@ -1293,12 +1302,13 @@ class SagemakerBackend(Backend):
         )
 
         tags = self._resolve_tags()
+        image_uri = retrieve_image_uri(
+            framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
+        )
         model_name = self._create_model(
             model_name=job_name,
             model_data=model_data,
-            image_uri=retrieve_image_uri(
-                framework_version, self._region, "inference", instance_type, py_version, custom_image_uri
-            ),
+            image_uri=image_uri,
             entry_point=entry_point,
             environment={},
             tags=tags,
@@ -1318,7 +1328,7 @@ class SagemakerBackend(Backend):
         if assemble_with is not None:
             transform_output["AssembleWith"] = assemble_with
         transform_resources: Dict[str, Any] = {"InstanceType": instance_type, "InstanceCount": instance_count}
-        transform_ami_version = infer_sagemaker_ami_version(custom_image_uri, instance_type, image_scope="transform")
+        transform_ami_version = infer_sagemaker_ami_version(image_uri, instance_type, image_scope="transform")
         if transform_ami_version is not None:
             transform_resources["TransformAmiVersion"] = transform_ami_version
         request = {

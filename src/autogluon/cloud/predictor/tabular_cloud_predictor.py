@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TABULAR_SAGEMAKER
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from .cloud_predictor import CloudPredictor
@@ -46,7 +47,7 @@ class TabularCloudPredictor(CloudPredictor):
         predictor_init_args: Dict[str, Any],
         predictor_fit_args: Optional[Dict[str, Any]] = None,
         leaderboard: bool = True,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -78,8 +79,8 @@ class TabularCloudPredictor(CloudPredictor):
             ``tuning_data``.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact.
-        framework_version: str, default = `latest`
-            Training container version of autogluon. If `latest`, will use the latest available container version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
@@ -138,7 +139,7 @@ class TabularCloudPredictor(CloudPredictor):
         predictor_fit_args: Optional[Dict[str, Any]] = None,
         include_predict: bool = True,
         leaderboard: bool = True,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -169,8 +170,9 @@ class TabularCloudPredictor(CloudPredictor):
             computes both.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact.
-        framework_version: str, default = `latest`
-            Training container version of autogluon. If `custom_image_uri` is set, this argument is ignored.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
+            If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
         instance_type: str, default = 'ml.m5.2xlarge'

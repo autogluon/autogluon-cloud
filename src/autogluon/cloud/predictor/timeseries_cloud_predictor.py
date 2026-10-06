@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Union
 import pandas as pd
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from .cloud_predictor import CloudPredictor
 
@@ -46,7 +47,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         static_features: Optional[Union[str, Path, pd.DataFrame]] = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -87,10 +88,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Name of the column with the unique identifier of each time series (item).
         timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
-        framework_version: str, default = `latest`
-            Training container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
@@ -214,7 +213,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         static_features: Optional[Union[str, pd.DataFrame]] = None,
         known_covariates: Optional[Union[str, pd.DataFrame]] = None,
         predictor_path: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: Optional[str] = None,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -245,10 +244,9 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             Path to the predictor tarball you want to use to predict.
             Path can be both a local path or a S3 location.
             If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, default = `latest`
-            Inference container version of autogluon.
-            If `latest`, will use the latest available container version.
-            If provided a specific version, will use this version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by `fit()`.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job.
@@ -299,7 +297,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
         predictions_path: Optional[str] = None,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
@@ -344,8 +342,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
             ``s3:PutObject`` permission for this location. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical column
             names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
-        framework_version: str, default = `latest`
-            Training container version of autogluon. If `latest`, will use the latest available container version.
+        framework_version: str, optional
+            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
             If `custom_image_uri` is set, this argument will be ignored.
         job_name: str, default = None
             Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-timeseries``.

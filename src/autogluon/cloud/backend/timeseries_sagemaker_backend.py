@@ -6,6 +6,7 @@ import pandas as pd
 
 from autogluon.common.loaders import load_pd
 
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
 from .constant import TIMESERIES_SAGEMAKER
 from .sagemaker_backend import SagemakerBackend
@@ -24,7 +25,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         data_channels: Dict[str, Optional[Union[str, pd.DataFrame]]],
         id_column: str,
         timestamp_column: str,
-        framework_version: str = "latest",
+        framework_version: str = DEFAULT_FRAMEWORK_VERSION,
         job_name: Optional[str] = None,
         instance_type: str = "ml.m5.2xlarge",
         instance_count: int = 1,
