@@ -39,20 +39,25 @@ class AutoGluonSerializer:
     def __init__(self, content_type="application/x-autogluon"):
         """Initialize a ``AutoGluonSerializer`` instance.
 
-        Args:
-            content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/x-autogluon").
+        Parameters
+        ----------
+        content_type: str, default = "application/x-autogluon"
+            The MIME type to signal to the inference endpoint when sending request data.
         """
         self.content_type = content_type
 
     def serialize(self, data: AutoGluonSerializationWrapper):
         """Serialize data to a JSON envelope with base64-encoded parquet payloads.
 
-        Args:
-            data (object): Data to be serialized. An AutoGluonSerializationWrapper object
+        Parameters
+        ----------
+        data: AutoGluonSerializationWrapper
+            Data to be serialized.
 
-        Returns:
-            bytes: UTF-8 JSON containing base64-encoded parquet bytes and inference args
+        Returns
+        -------
+        bytes
+            UTF-8 JSON containing base64-encoded parquet bytes and inference args.
         """
         if not isinstance(data, AutoGluonSerializationWrapper):
             raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`.")
@@ -83,10 +88,11 @@ class MultiModalSerializer:
     def __init__(self, content_type="application/x-autogluon-parquet"):
         """Initialize a ``MultiModalSerializer`` instance.
 
-        Args:
-            content_type (str): The MIME type to signal to the inference endpoint when sending
-                request data (default: "application/x-autogluon-parquet").
-                Requests with image data pass their own content type to the endpoint call instead.
+        Parameters
+        ----------
+        content_type: str, default = "application/x-autogluon-parquet"
+            The MIME type to signal to the inference endpoint when sending request data.
+            Requests with image data pass their own content type to the endpoint call instead.
         """
         self.content_type = content_type
 
@@ -96,13 +102,16 @@ class MultiModalSerializer:
         For ``pd.DataFrame`` inputs, ``data`` is base64-encoded parquet bytes.
         For numpy/list image inputs, ``data`` is a JSON list of base85-encoded image strings.
 
-        Args:
-            data (object): Data to be serialized.
-                An AutoGluonSerializationWrapper, which its data can be a ``pd.DataFrame``,
-                or a numpy array of base85-encoded image strings.
+        Parameters
+        ----------
+        data: AutoGluonSerializationWrapper
+            Data to be serialized. Its data can be a ``pd.DataFrame``,
+            or a numpy array of base85-encoded image strings.
 
-        Returns:
-            bytes: UTF-8 JSON containing both data and inference args
+        Returns
+        -------
+        bytes
+            UTF-8 JSON containing both data and inference args.
         """
         if not isinstance(data, AutoGluonSerializationWrapper):
             raise ValueError(f"{data} format is not supported. Please provide a `AutoGluonSerializationWrapper`")

@@ -15,11 +15,15 @@ class PandasDeserializeStrategy(ABC):
     def deserialize(self, stream) -> pd.DataFrame:
         """Deserialize data from stream to a ``pd.DataFrame``
 
-        Args:
-            stream (botocore.response.StreamingBody): Data to be deserialized.
+        Parameters
+        ----------
+        stream: botocore.response.StreamingBody
+            Data to be deserialized.
 
-        Returns:
-            pd.DataFrame: The data deserialized into a ``pd.DataFrame``.
+        Returns
+        -------
+        pd.DataFrame
+            The data deserialized into a ``pd.DataFrame``.
         """
         raise NotImplementedError
 
@@ -73,9 +77,10 @@ class PandasDeserializer:
     def __init__(self, accept=("application/x-parquet", "text/csv", "application/json")):
         """Initialize a ``PandasDeserializer`` instance.
 
-        Args:
-            accept (union[str, tuple[str]]): The MIME type (or tuple of allowable MIME types) that
-                is expected from the inference endpoint (default: ("application/x-parquet", "text/csv","application/json")).
+        Parameters
+        ----------
+        accept: str | tuple[str, ...], default = ("application/x-parquet", "text/csv", "application/json")
+            The MIME type (or tuple of allowable MIME types) that is expected from the inference endpoint.
         """
         self.accept = (accept,) if isinstance(accept, str) else tuple(accept)
 
@@ -85,11 +90,16 @@ class PandasDeserializer:
         If the data is JSON, the data should be formatted in the 'columns' orient.
         See https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_json.html
 
-        Args:
-            stream (botocore.response.StreamingBody): Data to be deserialized.
-            content_type (str): The MIME type of the data.
+        Parameters
+        ----------
+        stream: botocore.response.StreamingBody
+            Data to be deserialized.
+        content_type: str
+            The MIME type of the data.
 
-        Returns:
-            pd.DataFrame: The data deserialized into a ``pd.DataFrame``.
+        Returns
+        -------
+        pd.DataFrame
+            The data deserialized into a ``pd.DataFrame``.
         """
         return PandasDeserializeStrategyFactory.get_strategy(content_type).deserialize(stream)

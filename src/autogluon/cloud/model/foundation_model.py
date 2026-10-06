@@ -434,7 +434,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             Custom endpoint name. If None, will auto-generate a unique name.
         hyperparameters: dict[str, Any] | None, default = None
             Model hyperparameters for inference. Overrides values passed to the constructor.
-        framework_version: str, default = DEFAULT_FRAMEWORK_VERSION
+        framework_version: str, default = "1.6"
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the inference container.
@@ -561,7 +561,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type: str | None, default = None
             Instance type for the prediction job. If None, uses registry default.
-        framework_version: str, default = DEFAULT_FRAMEWORK_VERSION
+        framework_version: str, default = "1.6"
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the container.
@@ -683,7 +683,7 @@ class TabularFoundationModel(FoundationModel):
             Custom endpoint name. If None, will auto-generate a unique name.
         hyperparameters: dict[str, Any] | None, default = None
             Model hyperparameters for inference. Overrides values passed to the constructor.
-        framework_version: str, default = DEFAULT_FRAMEWORK_VERSION
+        framework_version: str, default = "1.6"
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the inference container.
@@ -802,7 +802,7 @@ class TabularFoundationModel(FoundationModel):
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type: str | None, default = None
             Instance type for the prediction job. If None, uses registry default.
-        framework_version: str, default = DEFAULT_FRAMEWORK_VERSION
+        framework_version: str, default = "1.6"
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the container.
@@ -893,7 +893,7 @@ class TabularFoundationModel(FoundationModel):
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type: str | None, default = None
             Instance type for the prediction job. If None, uses registry default.
-        framework_version: str, default = DEFAULT_FRAMEWORK_VERSION
+        framework_version: str, default = "1.6"
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the container.

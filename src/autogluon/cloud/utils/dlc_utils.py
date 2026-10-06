@@ -53,18 +53,18 @@ def infer_sagemaker_ami_version(image_uri, instance_type, image_scope):
 def retrieve_available_framework_versions(framework_type="training", details=False):
     """Get available versions of autogluon
 
-    Args:
-        framework_type (str, optional):
-            Type of framework. Options: 'training', 'inference'.
-            Defaults to 'training'.
-        details (bool, optional):
-            Whether to get detailed information of each versions.
-            Defaults to False.
+    Parameters
+    ----------
+    framework_type: str, default = "training"
+        Type of framework. Options: 'training', 'inference'.
+    details: bool, default = False
+        Whether to get detailed information of each versions.
 
-    Returns:
-        (list | dict):
-            returns a list of versions if detailed == False.
-            returns a dict containing information related to each version if detailed == True.
+    Returns
+    -------
+    list | dict
+        A list of versions if ``details`` is False.
+        A dict containing information related to each version if ``details`` is True.
     """
     assert framework_type in ["training", "inference"]
     config = _load_config()
@@ -82,14 +82,15 @@ def retrieve_py_versions(framework_version, framework_type="training"):
 def retrieve_latest_framework_version(framework_type="training"):
     """Get latest version of autogluon framework and its py_versions
 
-    Args:
-        framework_type (str, optional):
-            Type of framework. Options: 'training', 'inference'.
-            Defaults to 'training'.
+    Parameters
+    ----------
+    framework_type: str, default = "training"
+        Type of framework. Options: 'training', 'inference'.
 
-    Returns:
-        (str, list):
-            version number of latest autogluon framework, and its py_versions as a list
+    Returns
+    -------
+    tuple[str, list]
+        Version number of latest autogluon framework, and its py_versions as a list.
     """
     versions = retrieve_available_framework_versions(framework_type)
     versions.sort(key=version.parse)
