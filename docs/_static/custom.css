@@ -61,3 +61,14 @@ body[data-theme="dark"] {
   --mystnb-stderr-bg-color: #ee0000;
   --mystnb-traceback-bg-color: #202020;
 }
+
+/* Landing page: smaller section headings so the examples sit closer to the top */
+section#autogluon-cloud > section > h2 {
+    font-size: 1.25em;
+}
+
+/* Code comments: green italic so they read as annotations rather than code (works on light and dark backgrounds) */
+.highlight .c, .highlight .c1, .highlight .cm {
+    color: #3d8a5a !important;
+    font-style: italic;
+}
