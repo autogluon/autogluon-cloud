@@ -584,7 +584,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             Custom Docker image URI for the container.
         wait: bool, default = True
             If True, block until the job completes and return the forecasts. If False, return a
-            :class:`~autogluon.cloud.JobPredictionFuture` immediately; call its ``.status()`` to check progress and ``.result()`` to get
+            :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its ``.status()`` to check progress and ``.result()`` to get
             the forecasts.
         **backend_kwargs: Any
             Additional SageMaker arguments:
@@ -602,7 +602,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         -------
         pd.DataFrame | JobPredictionFuture
             Forecasts with ``item_id`` and ``timestamp`` columns, a ``mean`` column, and one column per quantile
-            level if ``wait=True``; a :class:`~autogluon.cloud.JobPredictionFuture` otherwise.
+            level if ``wait=True``; a :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` otherwise.
 
         SageMaker API
         -------------
@@ -828,7 +828,7 @@ class TabularFoundationModel(FoundationModel):
             Custom Docker image URI for the container.
         wait: bool, default = True
             If True, block until the job completes and return the predictions. If False, return a
-            :class:`~autogluon.cloud.JobPredictionFuture` immediately; call its ``.status()`` to check progress and ``.result()`` to get
+            :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its ``.status()`` to check progress and ``.result()`` to get
             the predictions.
         **backend_kwargs: Any
             Additional SageMaker arguments:
@@ -845,7 +845,7 @@ class TabularFoundationModel(FoundationModel):
         Returns
         -------
         pd.Series | JobPredictionFuture
-            Predictions if ``wait=True``; a :class:`~autogluon.cloud.JobPredictionFuture` otherwise.
+            Predictions if ``wait=True``; a :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` otherwise.
 
         SageMaker API
         -------------
@@ -919,7 +919,7 @@ class TabularFoundationModel(FoundationModel):
             Custom Docker image URI for the container.
         wait: bool, default = True
             If True, block until the job completes and return the result. If False, return a
-            :class:`~autogluon.cloud.JobPredictionFuture` immediately; call its ``.status()`` to check progress and ``.result()`` to get
+            :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its ``.status()`` to check progress and ``.result()`` to get
             the result.
         **backend_kwargs: Any
             Additional SageMaker arguments:
@@ -937,7 +937,7 @@ class TabularFoundationModel(FoundationModel):
         -------
         tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | JobPredictionFuture
             ``(prediction, predict_probability)`` if ``include_predict`` is True, otherwise ``predict_probability``.
-            A :class:`~autogluon.cloud.JobPredictionFuture` if ``wait=False``.
+            A :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` if ``wait=False``.
 
         SageMaker API
         -------------

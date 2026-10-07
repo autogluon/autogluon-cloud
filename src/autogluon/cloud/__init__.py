@@ -4,7 +4,6 @@ from autogluon.common.utils.log_utils import _add_stream_handler
 
 from .cloud_setup import bootstrap, register, status, teardown
 from .endpoint.multimodal_endpoint import MultiModalEndpoint
-from .endpoint.prediction_future import JobPredictionFuture
 from .endpoint.tabular_endpoint import TabularEndpoint
 from .endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from .model.foundation_model import TabularFoundationModel, TimeSeriesFoundationModel
@@ -14,7 +13,6 @@ _add_stream_handler()
 logging.getLogger(__name__).setLevel(logging.INFO)
 
 __all__ = [
-    "JobPredictionFuture",
     "MultiModalCloudPredictor",
     "MultiModalEndpoint",
     "TabularCloudPredictor",
