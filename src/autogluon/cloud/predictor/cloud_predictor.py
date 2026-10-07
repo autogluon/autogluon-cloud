@@ -13,7 +13,7 @@ from typing import Any, Generic, Literal, TypeVar
 
 import boto3
 import pandas as pd
-from typing_extensions import deprecated
+from typing_extensions import Self, Unpack, deprecated
 
 from autogluon.common.loaders import load_pkl
 from autogluon.common.savers import save_pkl
@@ -26,8 +26,15 @@ from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
 from ..endpoint.endpoint import Endpoint
 from ..utils.aws_utils import resolve_cloud_output_path
-from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
-from ..utils.sagemaker_api import reject_legacy_kwargs
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
+from ..utils.sagemaker_api import (
+    IGNORED_TRAINING_KWARGS,
+    BatchTransformKwargs,
+    DeployKwargs,
+    TrainingJobKwargs,
+    check_backend_kwargs,
+    reject_legacy_kwargs,
+)
 from ..utils.utils import safe_unpack_archive
 
 logger = logging.getLogger(__name__)
@@ -182,19 +189,12 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         tuning_data: str | Path | pd.DataFrame | None = None,
         predictor_init_args: dict[str, Any],
         predictor_fit_args: dict[str, Any] | None = None,
-        image_column: str | None = None,
-        leaderboard: bool = True,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int | str = "auto",
-        volume_size: int = DEFAULT_VOLUME_SIZE,
-        custom_image_uri: str | None = None,
-        timeout: int = 24 * 60 * 60,
         wait: bool = True,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
-        **kwargs,
-    ) -> CloudPredictor:
+        **kwargs: Unpack[TrainingJobKwargs],
+    ) -> Self:
         """
         Fit the predictor in a SageMaker training job.
 
@@ -209,27 +209,22 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to the underlying predictor's ``fit()``. Must NOT contain
             ``train_data`` or ``tuning_data`` — pass those as explicit arguments above.
-        leaderboard: bool, default = True
-            Whether to save the leaderboard in the output artifact, so that :meth:`leaderboard` can read it.
         framework_version: str, optional
             AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
             Ignored if ``custom_image_uri`` is set.
-        job_name: str | None, default = None
-            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-<predictor_type>`` is
-            generated.
         instance_type: str, default = "ml.m5.2xlarge"
             Instance type of the training job.
-        instance_count: int | str, default = "auto"
-            Number of training instances. Only single-instance training is supported, so this is always 1.
-        volume_size: int, default = 100
-            Size in GB of the EBS volume that stores the training data and model artifacts.
-        custom_image_uri: str | None, default = None
-            Custom training container image URI. If set, ``framework_version`` is ignored.
-        timeout: int, default = 24*60*60
-            Maximum training job runtime in seconds.
         wait: bool, default = True
             Whether to block until the job completes. If ``False``, returns once the job is launched; use
             :meth:`get_fit_job_status` to poll it.
+
+        Returns
+        -------
+        CloudPredictor
+            The fitted predictor (``self``).
+
+        Other Parameters
+        ----------------
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -237,29 +232,56 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
               built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
             * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
-
-        Returns
-        -------
-        CloudPredictor
-            The fitted predictor (``self``).
+        job_name: str | None, default = None
+            Name of the training job. Defaults to a unique name with prefix ``ag-cloud-<predictor_type>``.
+        volume_size: int, default = 100
+            Size in GB of the EBS volume that stores the training data and model artifacts.
+        custom_image_uri: str | None, default = None
+            Custom training container image URI. If set, ``framework_version`` is ignored.
+        timeout: int, default = 86400
+            Maximum training job runtime in seconds. Defaults to 24 hours.
 
         SageMaker API
         -------------
-        * :sm-api:`CreateTrainingJob`: trains the predictor on ``instance_count`` x ``instance_type`` and writes the
-          artifact to ``cloud_output_path``.
+        * :sm-api:`CreateTrainingJob`: trains the predictor on ``instance_type`` and writes the artifact to
+          ``cloud_output_path``.
         """  # noqa: E501
+        if "image_column" in kwargs:
+            raise ValueError(
+                "`image_column` is no longer supported for tabular predictors: image models in "
+                "AutoGluon-Tabular require autogluon.multimodal, which is being deprecated. "
+                "Use `MultiModalCloudPredictor` for image data."
+            )
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "fit", IGNORED_TRAINING_KWARGS)
+        self._fit(
+            data_channels={"train_data": train_data, "tuning_data": tuning_data},
+            predictor_init_args=predictor_init_args,
+            predictor_fit_args=predictor_fit_args,
+            framework_version=framework_version,
+            instance_type=instance_type,
+            wait=wait,
+            backend_overrides=backend_overrides,
+            **kwargs,
+        )
+        return self
+
+    def _fit(
+        self,
+        *,
+        data_channels: dict[str, str | Path | pd.DataFrame | None],
+        predictor_init_args: dict[str, Any],
+        predictor_fit_args: dict[str, Any] | None,
+        **backend_args,
+    ) -> None:
+        """Validate the inputs shared by ``fit()`` and ``fit_predict()``, then launch the training job.
+
+        ``backend_args`` are forwarded to ``backend.fit()``, including internal ones such as ``extra_ag_args``.
+        """
         assert not self.backend.is_fit, (
             "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
         )
-        # `test_data` / `extra_ag_args` are internal channels for the fit_predict path (see
-        # TabularCloudPredictor.fit_predict_proba); they are intentionally not part of the public `fit()` signature.
-        test_data = kwargs.pop("test_data", None)
-        extra_ag_args = kwargs.pop("extra_ag_args", None)
-        if kwargs:
-            raise TypeError(f"fit() got unexpected keyword arguments: {sorted(kwargs)}")
         predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
-        data_channels = {"train_data": train_data, "tuning_data": tuning_data, "test_data": test_data}
-        for key in ("train_data", "tuning_data"):
+        for key in data_channels:
             if key in predictor_fit_args:
                 raise TypeError(
                     f"`{key}` can no longer be passed via `predictor_fit_args`. "
@@ -267,31 +289,12 @@ class CloudPredictor(ABC, Generic[EndpointT]):
                 )
         if data_channels["train_data"] is None:
             raise TypeError("fit() missing required argument: 'train_data'")
-        if image_column is not None and self.predictor_type == "tabular":
-            raise ValueError(
-                "`image_column` is no longer supported for tabular predictors: image models in "
-                "AutoGluon-Tabular require autogluon.multimodal, which is being deprecated. "
-                "Use `MultiModalCloudPredictor` for image data."
-            )
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             data_channels=data_channels,
-            image_column=image_column,
-            leaderboard=leaderboard,
-            framework_version=framework_version,
-            job_name=job_name,
-            instance_type=instance_type,
-            instance_count=instance_count,
-            volume_size=volume_size,
-            custom_image_uri=custom_image_uri,
-            timeout=timeout,
-            wait=wait,
-            backend_overrides=backend_overrides,
-            extra_ag_args=extra_ag_args,
+            **backend_args,
         )
-
-        return self
 
     def attach_job(self, job_name: str) -> None:
         """
@@ -393,17 +396,16 @@ class CloudPredictor(ABC, Generic[EndpointT]):
     @reject_legacy_kwargs
     def deploy(
         self,
+        *,
         predictor_path: str | None = None,
         endpoint_name: str | None = None,
         framework_version: str | None = None,
         instance_type: str | None = None,
-        initial_instance_count: int = 1,
-        custom_image_uri: str | None = None,
-        volume_size: int | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: dict[str, Any] | None = None,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[DeployKwargs],
     ) -> EndpointT:
         """
         Deploy a predictor to a real-time inference endpoint.
@@ -424,12 +426,6 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         instance_type: str | None, default = None
             Instance type of the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None`` when
             ``inference_mode="serverless"``.
-        initial_instance_count: int, default = 1
-            Initial number of endpoint instances. Ignored when ``inference_mode="serverless"``.
-        custom_image_uri: str | None, default = None
-            Custom inference container image URI. If set, ``framework_version`` is ignored.
-        volume_size: int | None, default = None
-            Size in GB of the endpoint's EBS volume. Ignored for GPU instances (``ml.g*`` / ``ml.p*``).
         wait: bool, default = True
             Whether to block until the endpoint is in service.
         inference_mode: {"realtime", "serverless"}, default = "realtime"
@@ -437,6 +433,14 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             (no instance management, scales to zero).
         inference_config: dict[str, Any] | None, default = None
             Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
+
+        Returns
+        -------
+        TabularEndpoint | TimeSeriesEndpoint | MultiModalEndpoint
+            Handle to the deployed endpoint, matching the predictor type.
+
+        Other Parameters
+        ----------------
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -444,11 +448,12 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
               built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
             * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
-
-        Returns
-        -------
-        TabularEndpoint | TimeSeriesEndpoint | MultiModalEndpoint
-            Handle to the deployed endpoint, matching the predictor type.
+        initial_instance_count: int, default = 1
+            Initial number of endpoint instances. Ignored when ``inference_mode="serverless"``.
+        volume_size: int | None, default = None
+            Size in GB of the endpoint's EBS volume. Ignored for GPU instances (``ml.g*`` / ``ml.p*``).
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
 
         SageMaker API
         -------------
@@ -463,19 +468,18 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
         if instance_type is None and inference_mode == "realtime":
             instance_type = "ml.m5.2xlarge"
+        kwargs = check_backend_kwargs(kwargs, DeployKwargs, "deploy")
         self._warn_if_endpoint_active()
         self.backend.deploy(
             predictor_path=predictor_path,
             endpoint_name=endpoint_name,
             framework_version=framework_version,
             instance_type=instance_type,
-            initial_instance_count=initial_instance_count,
-            custom_image_uri=custom_image_uri,
-            volume_size=volume_size,
             wait=wait,
             inference_mode=inference_mode,
             inference_config=inference_config,
             backend_overrides=backend_overrides,
+            **kwargs,
         )
         return self._endpoint_cls(
             endpoint_name=self.backend.endpoint_name,
@@ -661,16 +665,14 @@ class CloudPredictor(ABC, Generic[EndpointT]):
     def predict(
         self,
         test_data: str | pd.DataFrame,
-        test_data_image_column: str | None = None,
+        *,
         predictor_path: str | None = None,
         framework_version: str | None = None,
-        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         predictions_path: str | None = None,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[BatchTransformKwargs],
     ) -> pd.Series | None:
         """
         Predict with a SageMaker batch transform job.
@@ -681,28 +683,27 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         ----------
         test_data: str | pd.DataFrame
             Data to predict on, as a ``pd.DataFrame`` or local path to a data file.
-        test_data_image_column: str | None, default = None
-            Name of the column containing absolute paths to images, if the data contains images.
         predictor_path: str | None, default = None
             Local or S3 path of the predictor tarball. If ``None``, uses the predictor trained by :meth:`fit`.
         framework_version: str | None, default = None
             AutoGluon version, e.g. ``"1.6"``. Inference uses the official AutoGluon DLC image for this version.
             Defaults to the version used by :meth:`fit`. Ignored if ``custom_image_uri`` is set.
-        job_name: str | None, default = None
-            Name of the batch transform job. If ``None``, a unique name with prefix ``ag-cloud-<predictor_type>`` is
-            generated.
         instance_type: str, default = "ml.m5.2xlarge"
             Instance type of the batch transform job.
-        instance_count: int, default = 1
-            Number of batch transform instances.
-        custom_image_uri: str | None, default = None
-            Custom inference container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether to block until the job completes and return the predictions. If ``False``, returns ``None`` once
             the job is launched; use :meth:`get_batch_inference_job_status` to poll it.
         predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
+
+        Returns
+        -------
+        pd.Series | None
+            Predictions, or ``None`` if ``wait=False``.
+
+        Other Parameters
+        ----------------
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -710,11 +711,12 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
               built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
             * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
-
-        Returns
-        -------
-        pd.Series | None
-            Predictions, or ``None`` if ``wait=False``.
+        job_name: str | None, default = None
+            Name of the batch transform job. Defaults to a unique name with prefix ``ag-cloud-<predictor_type>``.
+        instance_count: int, default = 1
+            Number of batch transform instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
 
         SageMaker API
         -------------
@@ -725,35 +727,31 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
         :sm-api:`DeleteModel`.
         """
+        kwargs = check_backend_kwargs(kwargs, BatchTransformKwargs, "predict")
         return self.backend.predict(
             test_data=test_data,
-            test_data_image_column=test_data_image_column,
             predictor_path=predictor_path,
             framework_version=framework_version,
-            job_name=job_name,
             instance_type=instance_type,
-            instance_count=instance_count,
-            custom_image_uri=custom_image_uri,
             wait=wait,
             predictions_path=predictions_path,
             backend_overrides=backend_overrides,
+            **kwargs,
         )
 
     @reject_legacy_kwargs
     def predict_proba(
         self,
         test_data: str | pd.DataFrame,
-        test_data_image_column: str | None = None,
+        *,
         include_predict: bool = True,
         predictor_path: str | None = None,
         framework_version: str | None = None,
-        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         predictions_path: str | None = None,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[BatchTransformKwargs],
     ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None:
         """
         Predict class probabilities with a SageMaker batch transform job.
@@ -765,8 +763,6 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         ----------
         test_data: str | pd.DataFrame
             Data to predict on, as a ``pd.DataFrame`` or local path to a data file.
-        test_data_image_column: str | None, default = None
-            Name of the column containing absolute paths to images, if the data contains images.
         include_predict: bool, default = True
             Whether to also return the predictions, saving a second batch transform job.
         predictor_path: str | None, default = None
@@ -774,28 +770,14 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         framework_version: str | None, default = None
             AutoGluon version, e.g. ``"1.6"``. Inference uses the official AutoGluon DLC image for this version.
             Defaults to the version used by :meth:`fit`. Ignored if ``custom_image_uri`` is set.
-        job_name: str | None, default = None
-            Name of the batch transform job. If ``None``, a unique name with prefix ``ag-cloud-<predictor_type>`` is
-            generated.
         instance_type: str, default = "ml.m5.2xlarge"
             Instance type of the batch transform job.
-        instance_count: int, default = 1
-            Number of batch transform instances.
-        custom_image_uri: str | None, default = None
-            Custom inference container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether to block until the job completes and return the predictions. If ``False``, returns ``None`` once
             the job is launched; use :meth:`get_batch_inference_job_status` to poll it.
         predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
-        backend_overrides: dict[str, dict[str, Any]] | None, default = None
-            Raw SageMaker request fields for settings without a dedicated argument.
-
-            * Keys: request names from the *SageMaker API* section below.
-            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
-              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
-            * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
 
         Returns
         -------
@@ -803,6 +785,22 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             ``(prediction, predict_probability)`` if ``include_predict=True``, otherwise ``predict_probability``.
             ``predict_probability`` is a ``pd.DataFrame`` with one column per class, or a ``pd.Series`` for
             regression. If ``wait=False``, returns ``(None, None)`` or ``None``, respectively.
+
+        Other Parameters
+        ----------------
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
+        job_name: str | None, default = None
+            Name of the batch transform job. Defaults to a unique name with prefix ``ag-cloud-<predictor_type>``.
+        instance_count: int, default = 1
+            Number of batch transform instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
 
         SageMaker API
         -------------
@@ -813,19 +811,17 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
         :sm-api:`DeleteModel`.
         """
+        kwargs = check_backend_kwargs(kwargs, BatchTransformKwargs, "predict_proba")
         return self.backend.predict_proba(
             test_data=test_data,
-            test_data_image_column=test_data_image_column,
             include_predict=include_predict,
             predictor_path=predictor_path,
             framework_version=framework_version,
-            job_name=job_name,
             instance_type=instance_type,
-            instance_count=instance_count,
-            custom_image_uri=custom_image_uri,
             wait=wait,
             predictions_path=predictions_path,
             backend_overrides=backend_overrides,
+            **kwargs,
         )
 
     def get_batch_inference_job_info(self, job_name: str | None = None) -> dict[str, Any]:

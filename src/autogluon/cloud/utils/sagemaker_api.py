@@ -4,7 +4,7 @@ import copy
 import functools
 import logging
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any
+from typing import Any, TypedDict
 
 from .aws_utils import AwsSession
 
@@ -25,7 +25,7 @@ _RESERVED_OVERRIDE_FIELDS = {
 }
 
 _REMOVED_KWARGS = {
-    "backend_kwargs": "`backend_overrides` (and `predictions_path` to choose where `predict()` writes results)",
+    "kwargs": "`backend_overrides` (and `predictions_path` to choose where `predict()` writes results)",
     "autogluon_sagemaker_estimator_kwargs": "`backend_overrides={'CreateTrainingJob': ...}`",
     "fit_kwargs": "`backend_overrides={'CreateTrainingJob': ...}`",
     "model_kwargs": "`backend_overrides={'CreateModel': ...}`",
@@ -56,7 +56,7 @@ def reject_legacy_kwargs(func):
 
 
 def _sets_custom_entry_point(value: Any) -> bool:
-    """Whether a legacy SDK kwargs dict (possibly nested, e.g. ``backend_kwargs["model_kwargs"]``) sets a script."""
+    """Whether a legacy SDK kwargs dict (possibly nested, e.g. ``kwargs["model_kwargs"]``) sets a script."""
     if not isinstance(value, Mapping):
         return False
     return any(key in ("entry_point", "source_dir") or _sets_custom_entry_point(v) for key, v in value.items())
@@ -73,6 +73,60 @@ def check_override_keys(overrides: Mapping[str, Any] | None, allowed_keys: Itera
         if reserved:
             raise ValueError(f"`backend_overrides[{key!r}]` cannot set {reserved}; AutoGluon-Cloud manages these.")
     return overrides
+
+
+class TrainingJobKwargs(TypedDict, total=False):
+    """Less common settings of methods that run a SageMaker training job, passed as ``**kwargs``."""
+
+    job_name: str
+    volume_size: int
+    custom_image_uri: str
+    timeout: int
+
+
+class BatchTransformKwargs(TypedDict, total=False):
+    """Less common settings of methods that run a SageMaker batch transform job, passed as ``**kwargs``."""
+
+    job_name: str
+    instance_count: int
+    custom_image_uri: str
+
+
+class DeployKwargs(TypedDict, total=False):
+    """Less common settings of methods that deploy a SageMaker endpoint, passed as ``**kwargs``."""
+
+    initial_instance_count: int
+    volume_size: int
+    custom_image_uri: str
+
+
+# Training kwargs that are no longer supported, but accepted with a warning: name -> why the value is ignored.
+IGNORED_TRAINING_KWARGS = {
+    "instance_count": "only single-instance training is supported",
+    "leaderboard": "the leaderboard is always saved",
+}
+
+
+def check_backend_kwargs(
+    kwargs: Mapping[str, Any],
+    kwargs_type: type,
+    method: str,
+    ignored: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return ``kwargs`` as a dict, raising ``TypeError`` for keys that the ``kwargs_type`` TypedDict doesn't
+    define. Keys in ``ignored`` (name -> reason) are dropped with a warning instead."""
+    kwargs = dict(kwargs)
+    for name, reason in (ignored or {}).items():
+        if name in kwargs:
+            kwargs.pop(name)
+            logger.warning(f"`{name}` is no longer supported by {method}() and is ignored: {reason}.")
+    allowed = kwargs_type.__annotations__
+    unknown = sorted(set(kwargs) - set(allowed))
+    if unknown:
+        raise TypeError(
+            f"{method}() got unexpected keyword argument(s) {unknown}. Supported keyword arguments: {sorted(allowed)}."
+        )
+    return kwargs
 
 
 def delete_quietly(delete: Callable[..., Any], **kwargs) -> None:

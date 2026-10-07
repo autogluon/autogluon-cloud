@@ -26,6 +26,7 @@ class TimeSeriesEndpoint(Endpoint):
     def predict(
         self,
         data: str | Path | pd.DataFrame,
+        *,
         known_covariates: str | Path | pd.DataFrame | None = None,
         static_features: str | Path | pd.DataFrame | None = None,
         prediction_length: int | None = None,

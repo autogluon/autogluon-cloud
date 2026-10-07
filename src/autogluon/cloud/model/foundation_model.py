@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 import pandas as pd
 from packaging.version import InvalidVersion, Version
-from typing_extensions import Self
+from typing_extensions import Self, Unpack
 
 from autogluon.common.loaders import load_pd
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
@@ -25,7 +25,12 @@ from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
 from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
-from ..utils.sagemaker_api import reject_legacy_kwargs
+from ..utils.sagemaker_api import (
+    DeployKwargs,
+    TrainingJobKwargs,
+    check_backend_kwargs,
+    reject_legacy_kwargs,
+)
 from ..utils.utils import split_pred_and_pred_proba
 from ..version import __version__
 from .registry import FOUNDATION_MODEL_REGISTRY, get_model_config
@@ -231,14 +236,15 @@ class FoundationModel:
         endpoint_name: str | None = None,
         hyperparameters: dict[str, Any] | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: dict[str, Any] | None = None,
-        **backend_kwargs,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs,
     ) -> None:
         """Shared deploy logic. Subclasses call this then wrap the endpoint."""
-        self._check_framework_version(framework_version, custom_image_uri)
+        kwargs = check_backend_kwargs(kwargs, DeployKwargs, "deploy")
+        self._check_framework_version(framework_version, kwargs.get("custom_image_uri"))
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
         if instance_type is None and inference_mode == "realtime":
@@ -268,15 +274,15 @@ class FoundationModel:
             endpoint_name=endpoint_name,
             framework_version=framework_version,
             instance_type=instance_type,
-            custom_image_uri=custom_image_uri,
             wait=wait,
+            backend_overrides=backend_overrides,
             entry_point=self._serve_script_path,
             fm_serve_config=fm_serve_config,
             inference_mode=inference_mode,
             inference_config=inference_config,
             repack=False,
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
-            **backend_kwargs,
+            **kwargs,
         )
         assert self._backend.endpoint_name is not None
 
@@ -467,15 +473,16 @@ class TimeSeriesFoundationModel(FoundationModel):
     @reject_legacy_kwargs
     def deploy(
         self,
+        *,
         instance_type: str | None = None,
         endpoint_name: str | None = None,
         hyperparameters: dict[str, Any] | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: dict[str, Any] | None = None,
-        **backend_kwargs,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[DeployKwargs],
     ) -> TimeSeriesEndpoint:
         """
         Deploy the model to a real-time or serverless endpoint.
@@ -491,8 +498,6 @@ class TimeSeriesFoundationModel(FoundationModel):
             Model hyperparameters for inference. Overrides values passed to the constructor.
         framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
-        custom_image_uri: str | None, default = None
-            Custom Docker image URI for the inference container.
         wait: bool, default = True
             Whether to block until the endpoint is ready.
         inference_mode: Literal["realtime", "serverless"], default = "realtime"
@@ -501,23 +506,27 @@ class TimeSeriesFoundationModel(FoundationModel):
         inference_config: dict[str, Any] | None, default = None
             Serverless settings: ``memory_size_in_mb`` (default 4096), ``max_concurrency`` (default 5), and
             ``provisioned_concurrency``.
-        **backend_kwargs: Any
-            Additional SageMaker arguments:
-
-            * ``initial_instance_count``: Number of instances for the endpoint. Defaults to 1. Ignored when
-              ``inference_mode="serverless"``.
-            * ``volume_size``: Size in GB of the EBS volume to use for the endpoint. Ignored for GPU instances.
-            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
-
-              * Keys: request names from the *SageMaker API* section below.
-              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
-                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
-              * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
 
         Returns
         -------
         TimeSeriesEndpoint
             Handle to the deployed endpoint.
+
+        Other Parameters
+        ----------------
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
+        initial_instance_count: int, default = 1
+            Number of instances for the endpoint. Ignored when ``inference_mode="serverless"``.
+        volume_size: int | None, default = None
+            Size in GB of the EBS volume to use for the endpoint. Ignored for GPU instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
 
         SageMaker API
         -------------
@@ -533,11 +542,11 @@ class TimeSeriesFoundationModel(FoundationModel):
             endpoint_name=endpoint_name,
             hyperparameters=hyperparameters,
             framework_version=framework_version,
-            custom_image_uri=custom_image_uri,
             wait=wait,
             inference_mode=inference_mode,
             inference_config=inference_config,
-            **backend_kwargs,
+            backend_overrides=backend_overrides,
+            **kwargs,
         )
         return TimeSeriesEndpoint(
             endpoint_name=self._backend.endpoint_name,
@@ -571,6 +580,7 @@ class TimeSeriesFoundationModel(FoundationModel):
     def predict(
         self,
         data: str | Path | pd.DataFrame,
+        *,
         target: str = "target",
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
@@ -582,9 +592,9 @@ class TimeSeriesFoundationModel(FoundationModel):
         hyperparameters: dict[str, Any] | None = None,
         instance_type: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: str | None = None,
         wait: bool = True,
-        **backend_kwargs,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[TrainingJobKwargs],
     ) -> pd.DataFrame | JobPredictionFuture:
         """
         Forecast the future values of ``data`` in a one-off SageMaker job.
@@ -621,23 +631,10 @@ class TimeSeriesFoundationModel(FoundationModel):
             Instance type for the prediction job. Defaults to the model registry value.
         framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
-        custom_image_uri: str | None, default = None
-            Custom Docker image URI for the container.
         wait: bool, default = True
             If True, block until the job completes and return the forecasts. If False, return a
             :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its
             ``.status()`` to check progress and ``.result()`` to get the forecasts.
-        **backend_kwargs: Any
-            Additional SageMaker arguments:
-
-            * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 100.
-            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
-
-              * Keys: request names from the *SageMaker API* section below.
-              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
-                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
-              * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -646,12 +643,31 @@ class TimeSeriesFoundationModel(FoundationModel):
             level if ``wait=True``; a :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture`
             otherwise.
 
+        Other Parameters
+        ----------------
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
+        job_name: str | None, default = None
+            Name of the training job that runs the prediction. Auto-generated if not set.
+        volume_size: int, default = 100
+            Size in GB of the storage volume to use for the job.
+        custom_image_uri: str | None, default = None
+            Custom container image URI. If set, ``framework_version`` is ignored.
+        timeout: int, default = 86400
+            Maximum job runtime in seconds. Defaults to 24 hours.
+
         SageMaker API
         -------------
         * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
           ``instance_type``. Predictions are written to ``predictions_path``.
         """
-        self._check_framework_version(framework_version, custom_image_uri)
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "predict")
+        self._check_framework_version(framework_version, kwargs.get("custom_image_uri"))
         if instance_type is None:
             instance_type = self._config.predict_instance_type
 
@@ -680,11 +696,11 @@ class TimeSeriesFoundationModel(FoundationModel):
             timestamp_column=timestamp_column,
             framework_version=framework_version,
             instance_type=instance_type,
-            custom_image_uri=custom_image_uri,
             wait=wait,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
-            **backend_kwargs,
+            **kwargs,
         )
 
         if not wait:
@@ -719,15 +735,16 @@ class TabularFoundationModel(FoundationModel):
     @reject_legacy_kwargs
     def deploy(
         self,
+        *,
         instance_type: str | None = None,
         endpoint_name: str | None = None,
         hyperparameters: dict[str, Any] | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         inference_mode: Literal["realtime"] = "realtime",
         inference_config: dict[str, Any] | None = None,
-        **backend_kwargs,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[DeployKwargs],
     ) -> TabularEndpoint:
         """Deploy the model to a real-time endpoint.
 
@@ -744,30 +761,33 @@ class TabularFoundationModel(FoundationModel):
             Model hyperparameters for inference. Overrides values passed to the constructor.
         framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
-        custom_image_uri: str | None, default = None
-            Custom Docker image URI for the inference container.
         wait: bool, default = True
             Whether to block until the endpoint is ready.
         inference_mode: Literal["realtime"], default = "realtime"
             Endpoint type. Only ``"realtime"`` is supported.
         inference_config: dict[str, Any] | None, default = None
             Not supported; must be None.
-        **backend_kwargs: Any
-            Additional SageMaker arguments:
-
-            * ``initial_instance_count``: Number of instances for the endpoint. Defaults to 1.
-            * ``volume_size``: Size in GB of the EBS volume to use for the endpoint. Ignored for GPU instances.
-            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
-
-              * Keys: request names from the *SageMaker API* section below.
-              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
-                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
-              * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
 
         Returns
         -------
         TabularEndpoint
             Handle to the deployed endpoint.
+
+        Other Parameters
+        ----------------
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
+        initial_instance_count: int, default = 1
+            Number of instances for the endpoint.
+        volume_size: int | None, default = None
+            Size in GB of the EBS volume to use for the endpoint. Ignored for GPU instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
 
         SageMaker API
         -------------
@@ -793,10 +813,10 @@ class TabularFoundationModel(FoundationModel):
             endpoint_name=endpoint_name,
             hyperparameters=hyperparameters,
             framework_version=framework_version,
-            custom_image_uri=custom_image_uri,
             wait=wait,
             inference_mode="realtime",
-            **backend_kwargs,
+            backend_overrides=backend_overrides,
+            **kwargs,
         )
         return TabularEndpoint(
             endpoint_name=self._backend.endpoint_name,
@@ -840,9 +860,9 @@ class TabularFoundationModel(FoundationModel):
         hyperparameters: dict[str, Any] | None = None,
         instance_type: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: str | None = None,
         wait: bool = True,
-        **backend_kwargs,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[TrainingJobKwargs],
     ) -> pd.Series | JobPredictionFuture:
         """
         Predict ``test_data`` in a one-off SageMaker job, using the labeled ``train_data`` as in-context examples.
@@ -865,29 +885,34 @@ class TabularFoundationModel(FoundationModel):
             Instance type for the prediction job. Defaults to the model registry value.
         framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
-        custom_image_uri: str | None, default = None
-            Custom Docker image URI for the container.
         wait: bool, default = True
             If True, block until the job completes and return the predictions. If False, return a
             :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its
             ``.status()`` to check progress and ``.result()`` to get the predictions.
-        **backend_kwargs: Any
-            Additional SageMaker arguments:
-
-            * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 100.
-            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
-
-              * Keys: request names from the *SageMaker API* section below.
-              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
-                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
-              * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
         pd.Series | JobPredictionFuture
             Predictions if ``wait=True``; a
             :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` otherwise.
+
+        Other Parameters
+        ----------------
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
+        job_name: str | None, default = None
+            Name of the training job that runs the prediction. Auto-generated if not set.
+        volume_size: int, default = 100
+            Size in GB of the storage volume to use for the job.
+        custom_image_uri: str | None, default = None
+            Custom container image URI. If set, ``framework_version`` is ignored.
+        timeout: int, default = 86400
+            Maximum job runtime in seconds. Defaults to 24 hours.
 
         SageMaker API
         -------------
@@ -903,9 +928,9 @@ class TabularFoundationModel(FoundationModel):
             hyperparameters=hyperparameters,
             instance_type=instance_type,
             framework_version=framework_version,
-            custom_image_uri=custom_image_uri,
             wait=wait,
-            **backend_kwargs,
+            backend_overrides=backend_overrides,
+            **kwargs,
         )
         if not wait:
             return JobPredictionFuture(
@@ -927,9 +952,9 @@ class TabularFoundationModel(FoundationModel):
         hyperparameters: dict[str, Any] | None = None,
         instance_type: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        custom_image_uri: str | None = None,
         wait: bool = True,
-        **backend_kwargs,
+        backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[TrainingJobKwargs],
     ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | JobPredictionFuture:
         """
         Predict class probabilities for ``test_data`` in a one-off SageMaker job, using the labeled ``train_data`` as
@@ -957,23 +982,10 @@ class TabularFoundationModel(FoundationModel):
             Instance type for the prediction job. Defaults to the model registry value.
         framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
-        custom_image_uri: str | None, default = None
-            Custom Docker image URI for the container.
         wait: bool, default = True
             If True, block until the job completes and return the result. If False, return a
             :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its
             ``.status()`` to check progress and ``.result()`` to get the result.
-        **backend_kwargs: Any
-            Additional SageMaker arguments:
-
-            * ``job_name``: Name of the training job that runs the prediction. Auto-generated if not set.
-            * ``volume_size``: Size in GB of the storage volume to use for the job. Defaults to 100.
-            * ``backend_overrides``: raw SageMaker request fields for settings without a dedicated argument.
-
-              * Keys: request names from the *SageMaker API* section below.
-              * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
-                built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
-              * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -981,12 +993,31 @@ class TabularFoundationModel(FoundationModel):
             ``(prediction, predict_probability)`` if ``include_predict`` is True, otherwise ``predict_probability``.
             A :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` if ``wait=False``.
 
+        Other Parameters
+        ----------------
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
+        job_name: str | None, default = None
+            Name of the training job that runs the prediction. Auto-generated if not set.
+        volume_size: int, default = 100
+            Size in GB of the storage volume to use for the job.
+        custom_image_uri: str | None, default = None
+            Custom container image URI. If set, ``framework_version`` is ignored.
+        timeout: int, default = 86400
+            Maximum job runtime in seconds. Defaults to 24 hours.
+
         SageMaker API
         -------------
         * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
           ``instance_type``. Predictions are written to ``predictions_path``.
         """
-        self._check_framework_version(framework_version, custom_image_uri)
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "predict_proba")
+        self._check_framework_version(framework_version, kwargs.get("custom_image_uri"))
         if instance_type is None:
             instance_type = self._config.predict_instance_type
 
@@ -999,7 +1030,7 @@ class TabularFoundationModel(FoundationModel):
         extra_ag_args: dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
-        backend_kwargs["leaderboard"] = False
+        kwargs["leaderboard"] = False
 
         self._backend.fit(
             predictor_init_args=self._build_predictor_init_args(label=label),
@@ -1007,11 +1038,11 @@ class TabularFoundationModel(FoundationModel):
             data_channels={"train_data": train_data, "tuning_data": tuning_data, "test_data": test_data},
             framework_version=framework_version,
             instance_type=instance_type,
-            custom_image_uri=custom_image_uri,
             wait=wait,
+            backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
-            **backend_kwargs,
+            **kwargs,
         )
 
         if not wait:

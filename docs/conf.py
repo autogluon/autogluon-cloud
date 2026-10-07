@@ -31,8 +31,9 @@ extlinks = {
     "sm-runtime-api": ("https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_runtime_%s.html", "%s"),
 }
 
-# Docstring section listing the SageMaker requests a method sends (rendered like "Notes").
-napoleon_custom_sections = ["SageMaker API"]
+# "SageMaker API" lists the SageMaker requests a method sends (rendered like "Notes"). "Other Parameters" holds rarely
+# used arguments; by default napoleon merges it into the "Parameters" field list, so render it as a separate one.
+napoleon_custom_sections = ["SageMaker API", ("Other Parameters", "params_style")]
 
 # Render the return type inline in the "Returns" field instead of a separate "Return type" field.
 napoleon_use_rtype = False
