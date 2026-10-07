@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from typing_extensions import Unpack, deprecated
+from typing_extensions import Self, Unpack, deprecated
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
@@ -62,7 +62,7 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         wait: bool = True,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
         **kwargs: Unpack[TrainingJobKwargs],
-    ) -> TimeSeriesCloudPredictor:
+    ) -> Self:
         """
         Fit the predictor in a SageMaker training job.
 

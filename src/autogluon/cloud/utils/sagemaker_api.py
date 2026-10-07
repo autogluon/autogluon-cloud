@@ -25,7 +25,7 @@ _RESERVED_OVERRIDE_FIELDS = {
 }
 
 _REMOVED_KWARGS = {
-    "kwargs": "`backend_overrides` (and `predictions_path` to choose where `predict()` writes results)",
+    "backend_kwargs": "`backend_overrides` (and `predictions_path` to choose where `predict()` writes results)",
     "autogluon_sagemaker_estimator_kwargs": "`backend_overrides={'CreateTrainingJob': ...}`",
     "fit_kwargs": "`backend_overrides={'CreateTrainingJob': ...}`",
     "model_kwargs": "`backend_overrides={'CreateModel': ...}`",
@@ -56,7 +56,7 @@ def reject_legacy_kwargs(func):
 
 
 def _sets_custom_entry_point(value: Any) -> bool:
-    """Whether a legacy SDK kwargs dict (possibly nested, e.g. ``kwargs["model_kwargs"]``) sets a script."""
+    """Whether a legacy SDK kwargs dict (possibly nested, e.g. ``backend_kwargs["model_kwargs"]``) sets a script."""
     if not isinstance(value, Mapping):
         return False
     return any(key in ("entry_point", "source_dir") or _sets_custom_entry_point(v) for key, v in value.items())
@@ -105,6 +105,8 @@ IGNORED_TRAINING_KWARGS = {
     "instance_count": "only single-instance training is supported",
     "leaderboard": "the leaderboard is always saved",
 }
+# FoundationModel jobs never save a leaderboard, and never accepted `leaderboard`, so only `instance_count` applies.
+IGNORED_FM_JOB_KWARGS = {"instance_count": IGNORED_TRAINING_KWARGS["instance_count"]}
 
 
 def check_backend_kwargs(
@@ -114,13 +116,16 @@ def check_backend_kwargs(
     ignored: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return ``kwargs`` as a dict, raising ``TypeError`` for keys that the ``kwargs_type`` TypedDict doesn't
-    define. Keys in ``ignored`` (name -> reason) are dropped with a warning instead."""
+    define. Keys in ``ignored`` (name -> reason) are dropped with a warning instead.
+
+    ``kwargs_type`` is annotated as ``type`` because typing has no way to spell "a TypedDict class".
+    """
     kwargs = dict(kwargs)
     for name, reason in (ignored or {}).items():
         if name in kwargs:
             kwargs.pop(name)
             logger.warning(f"`{name}` is no longer supported by {method}() and is ignored: {reason}.")
-    allowed = kwargs_type.__annotations__
+    allowed = kwargs_type.__required_keys__ | kwargs_type.__optional_keys__
     unknown = sorted(set(kwargs) - set(allowed))
     if unknown:
         raise TypeError(

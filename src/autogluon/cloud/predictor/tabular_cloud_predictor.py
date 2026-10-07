@@ -119,6 +119,7 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
         * :sm-api:`CreateTrainingJob`: trains the predictor and predicts in the same job on ``instance_type``.
           Predictions are written to ``predictions_path``.
         """
+        # Checked here too so warnings and errors name `fit_predict()`; the check in `fit_predict_proba()` is then a no-op.
         kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "fit_predict", IGNORED_TRAINING_KWARGS)
         result = self.fit_predict_proba(
             train_data=train_data,

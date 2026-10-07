@@ -26,6 +26,7 @@ from ..scripts.script_manager import ScriptManager
 from ..utils.aws_utils import resolve_cloud_output_path
 from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import (
+    IGNORED_FM_JOB_KWARGS,
     DeployKwargs,
     TrainingJobKwargs,
     check_backend_kwargs,
@@ -666,7 +667,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
           ``instance_type``. Predictions are written to ``predictions_path``.
         """
-        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "predict")
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "predict", IGNORED_FM_JOB_KWARGS)
         self._check_framework_version(framework_version, kwargs.get("custom_image_uri"))
         if instance_type is None:
             instance_type = self._config.predict_instance_type
@@ -919,6 +920,8 @@ class TabularFoundationModel(FoundationModel):
         * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
           ``instance_type``. Predictions are written to ``predictions_path``.
         """
+        # Checked here too so warnings and errors name `predict()`; the check in `predict_proba()` is then a no-op.
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "predict", IGNORED_FM_JOB_KWARGS)
         result = self.predict_proba(
             test_data,
             train_data,
@@ -1016,7 +1019,7 @@ class TabularFoundationModel(FoundationModel):
         * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
           ``instance_type``. Predictions are written to ``predictions_path``.
         """
-        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "predict_proba")
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "predict_proba", IGNORED_FM_JOB_KWARGS)
         self._check_framework_version(framework_version, kwargs.get("custom_image_uri"))
         if instance_type is None:
             instance_type = self._config.predict_instance_type

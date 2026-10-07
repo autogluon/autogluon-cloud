@@ -59,7 +59,7 @@ def test_fit_warns_and_drops_ignored_kwargs(predictor, caplog, name, value):
         lambda p: p.fit(TRAIN_DATA, predictor_init_args={"label": "y"}, instance_typo="ml.m5.xlarge"),
         lambda p: p.fit_predict(TRAIN_DATA, TRAIN_DATA, predictor_init_args={"label": "y"}, instance_typo="x"),
         lambda p: p.predict(TRAIN_DATA, volume_size=10),  # batch transform has no volume_size
-        lambda p: p.predict_proba(TRAIN_DATA, test_data_image_column="image"),  # multimodal only
+        lambda p: p.predict_proba(TRAIN_DATA, job_nme="job"),
         lambda p: p.deploy(timeout=10),
     ],
     ids=["fit", "fit_predict", "predict", "predict_proba", "deploy"],
@@ -69,9 +69,23 @@ def test_unknown_backend_kwargs_raise(predictor, call):
         call(predictor)
 
 
-def test_tabular_fit_rejects_image_column(predictor):
-    with pytest.raises(ValueError, match="`image_column` is no longer supported for tabular predictors"):
-        predictor.fit(TRAIN_DATA, predictor_init_args={"label": "y"}, image_column="image")
+def test_legacy_backend_kwargs_dict_raises_migration_hint(predictor):
+    with pytest.raises(TypeError, match="`backend_kwargs` was removed.*backend_overrides"):
+        predictor.predict(TRAIN_DATA, backend_kwargs={})
+
+
+@pytest.mark.parametrize(
+    "name, call",
+    [
+        ("image_column", lambda p: p.fit(TRAIN_DATA, predictor_init_args={"label": "y"}, image_column="image")),
+        ("test_data_image_column", lambda p: p.predict(TRAIN_DATA, test_data_image_column="image")),
+        ("test_data_image_column", lambda p: p.predict_proba(TRAIN_DATA, test_data_image_column="image")),
+    ],
+    ids=["fit", "predict", "predict_proba"],
+)
+def test_tabular_rejects_image_columns_with_pointer_to_multimodal(predictor, name, call):
+    with pytest.raises(ValueError, match=f"`{name}` is no longer supported for tabular predictors.*MultiModal"):
+        call(predictor)
 
 
 @pytest.mark.filterwarnings("ignore:AutoGluon Multimodal is on a deprecation path")
@@ -113,9 +127,24 @@ def test_foundation_model_deploy_forwards_backend_kwargs():
 
 def test_foundation_model_predict_rejects_unknown_backend_kwargs():
     fm = TabularFoundationModel("mitra-classifier", cloud_output_path="s3://b")
-    with pytest.raises(TypeError, match="unexpected keyword argument"):
-        fm.predict(TRAIN_DATA, TRAIN_DATA, label="y", instance_count=2)
+    with pytest.raises(TypeError, match="predict\\(\\) got unexpected keyword argument"):
+        fm.predict(TRAIN_DATA, TRAIN_DATA, label="y", instance_typo="ml.m5.xlarge")
     fm._backend.fit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fm_cls, model_id, args",
+    [
+        (TabularFoundationModel, "mitra-classifier", dict(test_data=TRAIN_DATA, train_data=TRAIN_DATA, label="y")),
+        (TimeSeriesFoundationModel, "chronos-2", dict(data=TS_DATA)),
+    ],
+    ids=["tabular", "timeseries"],
+)
+def test_foundation_model_predict_warns_and_drops_instance_count(caplog, fm_cls, model_id, args):
+    fm = fm_cls(model_id, cloud_output_path="s3://b")
+    fm.predict(**args, wait=False, instance_count=2)
+    assert "`instance_count` is no longer supported by predict() and is ignored" in caplog.text
+    assert "instance_count" not in fm._backend.fit.call_args.kwargs
 
 
 def test_timeseries_foundation_model_predict_is_keyword_only():

@@ -46,6 +46,15 @@ EndpointT = TypeVar("EndpointT", bound=Endpoint)
 _DEPRECATED_REAL_TIME = "Deploy an endpoint with `deploy()` and call `predict()` / `predict_proba()` on it instead."
 
 
+def _reject_image_column(kwargs: dict[str, Any], name: str) -> None:
+    """Raise a pointer to MultiModalCloudPredictor if ``name`` is passed to a predictor without image support."""
+    if name in kwargs:
+        raise ValueError(
+            f"`{name}` is no longer supported for tabular predictors: image models in AutoGluon-Tabular require "
+            "autogluon.multimodal, which is being deprecated. Use `MultiModalCloudPredictor` for image data."
+        )
+
+
 class CloudPredictor(ABC, Generic[EndpointT]):
     predictor_file_name = "CloudPredictor.pkl"
     backend_map = {}
@@ -246,12 +255,7 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         * :sm-api:`CreateTrainingJob`: trains the predictor on ``instance_type`` and writes the artifact to
           ``cloud_output_path``.
         """  # noqa: E501
-        if "image_column" in kwargs:
-            raise ValueError(
-                "`image_column` is no longer supported for tabular predictors: image models in "
-                "AutoGluon-Tabular require autogluon.multimodal, which is being deprecated. "
-                "Use `MultiModalCloudPredictor` for image data."
-            )
+        _reject_image_column(kwargs, "image_column")
         kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "fit", IGNORED_TRAINING_KWARGS)
         self._fit(
             data_channels={"train_data": train_data, "tuning_data": tuning_data},
@@ -285,10 +289,10 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             if key in predictor_fit_args:
                 raise TypeError(
                     f"`{key}` can no longer be passed via `predictor_fit_args`. "
-                    f"Pass `{key}` as an explicit argument to `fit()` instead."
+                    f"Pass `{key}` as an explicit argument instead."
                 )
         if data_channels["train_data"] is None:
-            raise TypeError("fit() missing required argument: 'train_data'")
+            raise TypeError("missing required argument: 'train_data'")
         self.backend.fit(
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
@@ -727,6 +731,7 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
         :sm-api:`DeleteModel`.
         """
+        _reject_image_column(kwargs, "test_data_image_column")
         kwargs = check_backend_kwargs(kwargs, BatchTransformKwargs, "predict")
         return self.backend.predict(
             test_data=test_data,
@@ -811,6 +816,7 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
         :sm-api:`DeleteModel`.
         """
+        _reject_image_column(kwargs, "test_data_image_column")
         kwargs = check_backend_kwargs(kwargs, BatchTransformKwargs, "predict_proba")
         return self.backend.predict_proba(
             test_data=test_data,
