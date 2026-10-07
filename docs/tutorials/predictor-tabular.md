@@ -33,8 +33,26 @@ cloud_predictor.fit(
 
 `train_data` can be a pandas DataFrame, or a path to a local or S3 file (CSV or Parquet). In every case AutoGluon-Cloud loads the data locally and uploads it to your `cloud_output_path` bucket before kicking off the SageMaker job.
 
+### Fit and predict in a single job
+
+If you only need predictions for a fixed test set, {py:meth}`~autogluon.cloud.TabularCloudPredictor.fit_predict` trains the predictor and predicts on `test_data` in the same SageMaker job. This is faster than `fit()` followed by `predict()`, since it skips starting a second job and re-uploading the predictor.
+
+```python
+predictions = cloud_predictor.fit_predict(
+    train_data="train.csv",
+    test_data="test.csv",  # must contain all feature columns of train_data
+    predictor_init_args={"label": "label"},
+    predictor_fit_args={"time_limit": 120},
+    predictions_path="s3://my-bucket/predictions/run-2026-06-02.csv",  # optional
+)
+```
+
+For class probabilities, use {py:meth}`~autogluon.cloud.TabularCloudPredictor.fit_predict_proba`, which returns a `(predictions, probabilities)` tuple like `predict_proba()`. By default predictions land at `{cloud_output_path}/{job_name}/predictions.csv`; pass `predictions_path` (ending in `.csv` or `.parquet`) to choose a destination. The predictor stays fitted, so you can still `deploy()` or `predict()` with it afterward.
+
+With `wait=False`, both methods return `None` right away; once {py:meth}`~autogluon.cloud.TabularCloudPredictor.get_fit_job_status` reports `Completed`, fetch the results with {py:meth}`~autogluon.cloud.TabularCloudPredictor.get_fit_predict_results` or {py:meth}`~autogluon.cloud.TabularCloudPredictor.get_fit_predict_proba_results`.
+
 ### Reattach to a training job
-If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (`INFO:sagemaker:Creating training-job with name: ag-cloud-tabular-...`) and also visible in the SageMaker console.
+If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (``Start sagemaker training job `ag-cloud-tabular-...` ``) and also visible in the SageMaker console.
 
 ```python
 another_cloud_predictor = TabularCloudPredictor()

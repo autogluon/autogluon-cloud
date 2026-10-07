@@ -27,7 +27,7 @@ from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from ..version import __version__
-from .registry import get_model_config
+from .registry import FOUNDATION_MODEL_REGISTRY, get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,23 @@ class FoundationModel:
 
     _backend_map: dict[str, str] = {}
     _predictor_type: str
+    _problem_types: tuple[str, ...] = ("forecasting", "multiclass", "regression")
+
+    @classmethod
+    def list_models(cls) -> list[str]:
+        """
+        List the supported ``model_id`` values.
+
+        Returns
+        -------
+        list[str]
+            IDs of the foundation models that this class can load.
+        """
+        return [
+            model_id
+            for model_id, config in FOUNDATION_MODEL_REGISTRY.items()
+            if config.problem_type in cls._problem_types
+        ]
 
     def __new__(cls, model_id: str, **kwargs) -> Self:
         if cls is not FoundationModel:
@@ -91,9 +108,8 @@ class FoundationModel:
         Parameters
         ----------
         model_id: str
-            ID of the foundation model from the model registry. See
-            `Available models <https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html#available-models>`_
-            in the foundation model tutorial for the list of supported values.
+            ID of the foundation model, e.g. ``"chronos-2"`` or ``"mitra-classifier"``. Use :meth:`list_models` to
+            get the supported IDs.
         cloud_output_path: str | None, default = None
             S3 location where intermediate artifacts are stored. Accepts:
 
@@ -108,13 +124,18 @@ class FoundationModel:
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
             :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
         hyperparameters: dict[str, Any] | None, default = None
-            Default hyperparameters applied to inference and (when supported) training.
+            Model hyperparameters. Hyperparameters passed to ``predict()`` or ``deploy()`` take precedence.
         model_artifact_uri: str | None, default = None
-            S3 URI of a pre-bundled ``model.tar.gz`` produced by :meth:`cache_model_artifact`. When set, deploys skip
-            the runtime HuggingFace download and load weights from the bundled artifact.
+            S3 URI of a ``model.tar.gz`` created by :meth:`cache_model_artifact`. If set, ``deploy()`` loads the
+            weights from this artifact instead of downloading them from Hugging Face.
         backend: Literal["sagemaker"], default = "sagemaker"
             Cloud backend to use.
         """
+        available_models = self.list_models()
+        if model_id not in available_models:
+            raise ValueError(
+                f"Unknown model_id {model_id!r} for {type(self).__name__}. Available models: {available_models}"
+            )
         self.model_id = model_id
         self.model_artifact_uri = model_artifact_uri
         self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
@@ -280,28 +301,26 @@ class FoundationModel:
 
     def cache_model_artifact(self, cache_path: str, *, overwrite: bool = False) -> Self:
         """
-        Download model weights from HuggingFace, bundle them with the FM serve script into a SageMaker-compatible
-        ``model.tar.gz``, and upload to S3.
+        Bundle the model weights from Hugging Face and the serve script into a ``model.tar.gz`` on S3.
 
-        Lets :meth:`deploy` skip the runtime HuggingFace download — required for network-isolated endpoints (e.g.
-        SageMaker Serverless Inference). Returns a new :class:`FoundationModel` with ``model_artifact_uri`` set to the
-        uploaded tarball.
+        Deploying from the bundled artifact skips the weight download, which is required for network-isolated
+        endpoints such as serverless ones (``deploy(inference_mode="serverless")``).
 
-        Destination key: ``{cache_path}/{model_id}/model.tar.gz``. If it already exists, upload is skipped unless
-        ``overwrite=True``; a stale-cache mismatch between the bundled artifact's autogluon-cloud version and the
-        current version raises ``RuntimeError`` and prompts the caller to re-bundle.
+        The artifact is written to ``{cache_path}/{model_id}/model.tar.gz``. If it already exists, the upload is
+        skipped unless ``overwrite=True``, and ``RuntimeError`` is raised if it was bundled with a different
+        autogluon-cloud version.
 
         Parameters
         ----------
         cache_path: str
-            S3 prefix under which the artifact will be uploaded. Multiple foundation models can share one prefix.
+            S3 prefix to upload the artifact to. Multiple foundation models can share one prefix.
         overwrite: bool, default = False
-            If True, re-upload even when the destination key exists.
+            If True, re-bundle and upload the artifact even if it already exists.
 
         Returns
         -------
-        FoundationModel
-            A new instance with ``model_artifact_uri`` populated. The original is unchanged.
+        TimeSeriesFoundationModel | TabularFoundationModel
+            A copy of this model with ``model_artifact_uri`` set to the uploaded artifact. The original is unchanged.
         """
         from huggingface_hub import snapshot_download
 
@@ -363,8 +382,10 @@ class FoundationModel:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the model identity. Runtime context (``role``, ``cloud_output_path``) is excluded so configs can
-        be shared across users."""
+        """Serialize ``model_id``, ``hyperparameters``, and ``model_artifact_uri`` to a dict.
+
+        ``role`` and ``cloud_output_path`` are excluded so the config can be shared across users and accounts.
+        """
         out: dict[str, Any] = {"model_id": self.model_id}
         if self._hyperparameter_overrides:
             out["hyperparameters"] = self._hyperparameter_overrides
@@ -373,32 +394,40 @@ class FoundationModel:
         return out
 
     def to_json(self) -> str:
-        """Serialize :meth:`to_dict` output as a JSON string."""
+        """Serialize ``model_id``, ``hyperparameters``, and ``model_artifact_uri`` to a JSON string.
+
+        ``role`` and ``cloud_output_path`` are excluded so the config can be shared across users and accounts.
+        """
         return json.dumps(self.to_dict())
 
     @classmethod
     def from_dict(cls, config: dict[str, Any], **runtime_context: Any) -> Self:
-        """Restore from :meth:`to_dict` output. Pass ``role`` / ``cloud_output_path`` as ``runtime_context``."""
+        """Create a model from the output of :meth:`to_dict`.
+
+        Pass ``role`` and ``cloud_output_path`` as keyword arguments if needed.
+        """
         return cls(**config, **runtime_context)
 
     @classmethod
     def from_json(cls, s: str, **runtime_context: Any) -> Self:
-        """Restore from a :meth:`to_json` string."""
+        """Create a model from the output of :meth:`to_json`.
+
+        Pass ``role`` and ``cloud_output_path`` as keyword arguments if needed.
+        """
         return cls.from_dict(json.loads(s), **runtime_context)
 
 
 class TimeSeriesFoundationModel(FoundationModel):
     """Pretrained time series foundation model for zero-shot forecasting on Amazon SageMaker.
 
-    Wraps pretrained models like `Chronos-2 <https://huggingface.co/autogluon/chronos-2>`_ and
-    Chronos-Bolt and runs prediction as a managed SageMaker job, with no training required. See
+    Wraps pretrained models like `Chronos-2 <https://huggingface.co/autogluon/chronos-2>`_, Chronos-Bolt, and
+    Toto-2.0, with no training required. Use :meth:`list_models` to get the supported ``model_id`` values, and see
     `the foundation model tutorial <https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html>`_
-    for the supported ``model_id`` values and a full walkthrough.
+    for a full walkthrough.
 
     Predictions can be produced in three modes:
 
     * **Batch** — :meth:`predict` runs a one-off SageMaker training job and writes forecasts to S3.
-      Best for one-shot inference.
     * **Real-time** — :meth:`deploy` provisions a real-time endpoint; call
       :meth:`TimeSeriesEndpoint.predict` for low-latency inference, then
       :meth:`TimeSeriesEndpoint.delete_endpoint` to tear it down.
@@ -409,6 +438,7 @@ class TimeSeriesFoundationModel(FoundationModel):
 
     _backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
     _predictor_type = "timeseries"
+    _problem_types = ("forecasting",)
 
     @property
     def _serve_script_path(self) -> str:
@@ -428,7 +458,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         **backend_kwargs,
     ) -> TimeSeriesEndpoint:
         """
-        Deploy model to an inference endpoint.
+        Deploy the model to a real-time or serverless endpoint.
 
         Parameters
         ----------
@@ -436,10 +466,10 @@ class TimeSeriesFoundationModel(FoundationModel):
             Instance type for the endpoint. Defaults to the model registry value. Must be ``None``
             when ``inference_mode="serverless"``.
         endpoint_name: str | None, default = None
-            Custom endpoint name. If None, will auto-generate a unique name.
+            Name of the endpoint. If None, a unique name is generated.
         hyperparameters: dict[str, Any] | None, default = None
             Model hyperparameters for inference. Overrides values passed to the constructor.
-        framework_version: str, default = "1.6"
+        framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the inference container.
@@ -449,7 +479,8 @@ class TimeSeriesFoundationModel(FoundationModel):
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero).
         inference_config: dict[str, Any] | None, default = None
-            Serverless settings (``memory_size_in_mb``, ``max_concurrency``, ``provisioned_concurrency``).
+            Serverless settings: ``memory_size_in_mb`` (default 4096), ``max_concurrency`` (default 5), and
+            ``provisioned_concurrency``.
         **backend_kwargs: Any
             Additional SageMaker arguments:
 
@@ -462,6 +493,11 @@ class TimeSeriesFoundationModel(FoundationModel):
               * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
                 built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
               * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
+
+        Returns
+        -------
+        TimeSeriesEndpoint
+            Handle to the deployed endpoint.
 
         SageMaker API
         -------------
@@ -531,7 +567,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         **backend_kwargs,
     ) -> pd.DataFrame | JobPredictionFuture:
         """
-        Run batch prediction for time series.
+        Forecast the future values of ``data`` in a one-off SageMaker job.
 
         Parameters
         ----------
@@ -540,40 +576,37 @@ class TimeSeriesFoundationModel(FoundationModel):
             a data file. See the `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
             for the expected format.
         target: str, default = "target"
-            Name of the column that contains the target values to forecast.
+            Name of the column with the values to forecast.
         id_column: str, default = "item_id"
-            Name of the column with the unique identifier of each time series (item).
+            Name of the column with the ID of each time series.
         timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
         known_covariates: str | Path | pd.DataFrame | None, default = None
-            Future values of the known covariates over the forecast horizon. Covariate column names are
-            inferred from the columns (excluding ``id_column`` and ``timestamp_column``).
+            Future values of the known covariates over the forecast horizon. All columns except ``id_column`` and
+            ``timestamp_column`` are used as known covariates.
         static_features: str | Path | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
         prediction_length: int, default = 1
-            Forecast horizon: how many time steps into the future the model should predict.
+            Number of time steps to forecast.
         quantile_levels: list[float] | None, default = None
-            List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults
-            to ``[0.1, 0.2, ..., 0.9]``.
+            Quantiles to forecast, as floats between 0 and 1. Defaults to ``[0.1, 0.2, ..., 0.9]``.
         predictions_path: str | None, default = None
-            S3 URL where predictions will be written by the prediction job (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution
-            role must have ``s3:PutObject`` permission for this location. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical
-            column names ``item_id`` and ``timestamp``, regardless of the ``id_column`` /
-            ``timestamp_column`` passed in.
+            S3 URL ending in ``.csv`` or ``.parquet`` where the job writes the predictions, e.g.
+            ``s3://my-bucket/predictions.csv``. The SageMaker execution role needs ``s3:PutObject`` permission for
+            it. Defaults to ``{cloud_output_path}/{job_name}/predictions.csv``. The predictions always use the
+            column names ``item_id`` and ``timestamp``, regardless of ``id_column`` and ``timestamp_column``.
         hyperparameters: dict[str, Any] | None, default = None
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type: str | None, default = None
-            Instance type for the prediction job. If None, uses registry default.
-        framework_version: str, default = "1.6"
+            Instance type for the prediction job. Defaults to the model registry value.
+        framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the container.
         wait: bool, default = True
-            If True, block and return a ``pd.DataFrame``. If False, return a
-            :class:`JobPredictionFuture` immediately — call ``.result()`` on it later to
-            retrieve the ``pd.DataFrame``, or ``.status()`` to check progress.
+            If True, block until the job completes and return the forecasts. If False, return a
+            :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its
+            ``.status()`` to check progress and ``.result()`` to get the forecasts.
         **backend_kwargs: Any
             Additional SageMaker arguments:
 
@@ -589,7 +622,9 @@ class TimeSeriesFoundationModel(FoundationModel):
         Returns
         -------
         pd.DataFrame | JobPredictionFuture
-            ``pd.DataFrame`` if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
+            Forecasts with ``item_id`` and ``timestamp`` columns, a ``mean`` column, and one column per quantile
+            level if ``wait=True``; a :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture`
+            otherwise.
 
         SageMaker API
         -------------
@@ -643,21 +678,18 @@ class TimeSeriesFoundationModel(FoundationModel):
 class TabularFoundationModel(FoundationModel):
     """Foundation model for tabular prediction on Amazon SageMaker.
 
-    Wraps pretrained tabular models like `Mitra <https://huggingface.co/autogluon/mitra-classifier>`_ and
-    runs prediction as a managed SageMaker job, with no training required. Each ``model_id`` targets a
-    single task:
+    Wraps pretrained tabular models like `Mitra <https://huggingface.co/autogluon/mitra-classifier>`_, with no
+    training required. Each ``model_id`` targets a single task, either classification (``*-classifier``) or
+    regression (``*-regressor``). Use :meth:`list_models` to get the supported ``model_id`` values.
 
-    * Classification: ``mitra-classifier``, ``tabicl-v2-classifier``, ``tabdpt-turbo-classifier``.
-    * Regression: ``mitra-regressor``, ``tabicl-v2-regressor``, ``tabdpt-turbo-regressor``,
-      ``nori-regressor``, ``nori-30m-regressor``.
-
-    Predictions can be produced in batch mode with :meth:`predict` / :meth:`predict_proba`, or through a
-    real-time endpoint created with :meth:`deploy`. In both modes, labeled ``train_data`` provides the
+    Predictions can be produced in a one-off SageMaker job with :meth:`predict` / :meth:`predict_proba`, or
+    through a real-time endpoint created with :meth:`deploy`. In both modes, labeled ``train_data`` provides the
     in-context examples for each prediction.
     """
 
     _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
     _predictor_type = "tabular"
+    _problem_types = ("multiclass", "regression")
 
     @property
     def _serve_script_path(self) -> str:
@@ -676,23 +708,20 @@ class TabularFoundationModel(FoundationModel):
         inference_config: dict[str, Any] | None = None,
         **backend_kwargs,
     ) -> TabularEndpoint:
-        """Deploy the tabular foundation model to an inference endpoint.
+        """Deploy the model to a real-time endpoint.
 
-        The returned endpoint accepts both labeled ``train_data`` and the rows to predict. It fits a
-        request-scoped :class:`TabularPredictor` before producing predictions.
-
-        Only real-time inference is supported. Tabular foundation models such as Mitra require a
-        provisioned instance and cannot be deployed with SageMaker Serverless Inference.
+        Each request to the endpoint sends the labeled ``train_data`` along with the rows to predict. Serverless
+        endpoints are not supported.
 
         Parameters
         ----------
         instance_type: str | None, default = None
             Instance type for the endpoint. Defaults to the model registry value.
         endpoint_name: str | None, default = None
-            Custom endpoint name. If None, will auto-generate a unique name.
+            Name of the endpoint. If None, a unique name is generated.
         hyperparameters: dict[str, Any] | None, default = None
             Model hyperparameters for inference. Overrides values passed to the constructor.
-        framework_version: str, default = "1.6"
+        framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the inference container.
@@ -713,6 +742,11 @@ class TabularFoundationModel(FoundationModel):
               * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
                 built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
               * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
+
+        Returns
+        -------
+        TabularEndpoint
+            Handle to the deployed endpoint.
 
         SageMaker API
         -------------
@@ -790,34 +824,32 @@ class TabularFoundationModel(FoundationModel):
         **backend_kwargs,
     ) -> pd.Series | JobPredictionFuture:
         """
-        Run batch prediction for tabular tasks.
-
-        For tabular foundation models (e.g., Mitra), ``train_data`` provides the few-shot context and
-        ``test_data`` contains the rows to predict on.
+        Predict ``test_data`` in a one-off SageMaker job, using the labeled ``train_data`` as in-context examples.
 
         Parameters
         ----------
         test_data: str | Path | pd.DataFrame
-            Data to predict on. Must contain every feature column present in ``train_data`` except ``label``.
+            Rows to predict, as a ``pd.DataFrame`` or local/S3 path to a data file. Must contain all feature columns
+            of ``train_data``.
         train_data: str | Path | pd.DataFrame
-            Labeled few-shot context for the foundation model, as a ``pd.DataFrame`` or local/S3 path to a data file.
+            Labeled examples, as a ``pd.DataFrame`` or local/S3 path to a data file.
         label: str
-            Target column name in ``train_data``.
+            Name of the label column in ``train_data``.
         predictions_path: str | None, default = None
-            S3 URL where predictions will be written by the training container (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``.
+            S3 URL ending in ``.csv`` or ``.parquet`` where the job writes the predictions, e.g.
+            ``s3://my-bucket/predictions.csv``. Defaults to ``{cloud_output_path}/{job_name}/predictions.csv``.
         hyperparameters: dict[str, Any] | None, default = None
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type: str | None, default = None
-            Instance type for the prediction job. If None, uses registry default.
-        framework_version: str, default = "1.6"
+            Instance type for the prediction job. Defaults to the model registry value.
+        framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the container.
         wait: bool, default = True
-            If True, block and return the predictions. If False, return a :class:`JobPredictionFuture`
-            immediately — call ``.result()`` on it later to retrieve the predictions.
+            If True, block until the job completes and return the predictions. If False, return a
+            :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its
+            ``.status()`` to check progress and ``.result()`` to get the predictions.
         **backend_kwargs: Any
             Additional SageMaker arguments:
 
@@ -833,7 +865,8 @@ class TabularFoundationModel(FoundationModel):
         Returns
         -------
         pd.Series | JobPredictionFuture
-            Predictions as a ``pd.Series`` if ``wait=True``; a :class:`JobPredictionFuture` otherwise.
+            Predictions if ``wait=True``; a
+            :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` otherwise.
 
         SageMaker API
         -------------
@@ -878,36 +911,37 @@ class TabularFoundationModel(FoundationModel):
         **backend_kwargs,
     ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | JobPredictionFuture:
         """
-        Run batch prediction returning class probabilities.
+        Predict class probabilities for ``test_data`` in a one-off SageMaker job, using the labeled ``train_data`` as
+        in-context examples.
 
-        For tabular foundation models (e.g., Mitra), ``train_data`` provides the few-shot context and
-        ``test_data`` contains the rows to predict on. For regression the probabilities are identical to the
-        predictions.
+        For regression, the probability result is identical to the prediction.
 
         Parameters
         ----------
         test_data: str | Path | pd.DataFrame
-            Data to predict on. Must contain every feature column present in ``train_data`` except ``label``.
+            Rows to predict, as a ``pd.DataFrame`` or local/S3 path to a data file. Must contain all feature columns
+            of ``train_data``.
         train_data: str | Path | pd.DataFrame
-            Labeled few-shot context for the foundation model, as a ``pd.DataFrame`` or local/S3 path to a data file.
+            Labeled examples, as a ``pd.DataFrame`` or local/S3 path to a data file.
         label: str
-            Target column name in ``train_data``.
+            Name of the label column in ``train_data``.
         include_predict: bool, default = True
-            Whether to return the predictions along with the probabilities. Comes for free — the job always
-            computes both.
+            Whether to return the predictions along with the probabilities. Both are computed in the same job.
         predictions_path: str | None, default = None
-            S3 URL where predictions will be written by the training container. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``.
+            S3 URL ending in ``.csv`` or ``.parquet`` where the job writes the predictions, e.g.
+            ``s3://my-bucket/predictions.csv``. Defaults to ``{cloud_output_path}/{job_name}/predictions.csv``.
         hyperparameters: dict[str, Any] | None, default = None
             Model hyperparameters for inference. Overrides values passed to the constructor.
         instance_type: str | None, default = None
-            Instance type for the prediction job. If None, uses registry default.
-        framework_version: str, default = "1.6"
+            Instance type for the prediction job. Defaults to the model registry value.
+        framework_version: str, optional
             AutoGluon version, e.g. "1.6". Uses the official AutoGluon DLC image for this version.
         custom_image_uri: str | None, default = None
             Custom Docker image URI for the container.
         wait: bool, default = True
-            If True, block and return the result. If False, return a :class:`JobPredictionFuture` immediately.
+            If True, block until the job completes and return the result. If False, return a
+            :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` immediately; call its
+            ``.status()`` to check progress and ``.result()`` to get the result.
         **backend_kwargs: Any
             Additional SageMaker arguments:
 
@@ -923,8 +957,8 @@ class TabularFoundationModel(FoundationModel):
         Returns
         -------
         tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | JobPredictionFuture
-            If ``include_predict`` is True, returns ``(prediction, predict_probability)``; otherwise just
-            ``predict_probability``. Returns a :class:`JobPredictionFuture` when ``wait=False``.
+            ``(prediction, predict_probability)`` if ``include_predict`` is True, otherwise ``predict_probability``.
+            A :class:`~autogluon.cloud.endpoint.prediction_future.JobPredictionFuture` if ``wait=False``.
 
         SageMaker API
         -------------

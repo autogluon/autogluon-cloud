@@ -33,7 +33,7 @@ The rest of the tutorial reuses this `model` object.
 
 ### Available models
 
-The following `model_id` values are currently supported. Chronos-2 models natively support covariates and cross-learning across items, while Chronos-Bolt and Toto-2.0 are univariate-only.
+The following `model_id` values are currently supported (also available via `TimeSeriesFoundationModel.list_models()`). Chronos-2 models natively support covariates and cross-learning across items, while Chronos-Bolt and Toto-2.0 are univariate-only.
 
 | Model ID | Documentation | Weights |
 |----------|---------------|---------|

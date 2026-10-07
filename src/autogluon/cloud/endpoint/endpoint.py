@@ -28,6 +28,7 @@ class Endpoint:
 
     @property
     def endpoint_name(self) -> str:
+        """Name of the SageMaker endpoint."""
         return self._endpoint_name
 
     @staticmethod
@@ -37,7 +38,7 @@ class Endpoint:
             logger.warning("as_pandas must be True for real-time prediction; ignoring it.")
 
     def delete_endpoint(self) -> None:
-        """Delete the endpoint and its backing model + endpoint config.
+        """Delete the endpoint along with the endpoint config and model created with it.
 
         SageMaker API
         -------------

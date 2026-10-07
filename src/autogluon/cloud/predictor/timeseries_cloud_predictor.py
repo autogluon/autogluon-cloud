@@ -30,7 +30,7 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
     @property
     def predictor_type(self):
         """
-        Type of the underneath AutoGluon Predictor
+        Type of the underlying AutoGluon predictor.
         """
         return "timeseries"
 
@@ -83,8 +83,8 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         tuning_data: str | pathlib.Path | pd.DataFrame | None, default = None
             Optional tuning data in long format, as a ``pd.DataFrame`` or local/S3 path to a data file.
         known_covariates: str | pathlib.Path | pd.DataFrame | None, default = None
-            Values of the known covariates. Must be provided if ``known_covariates_names`` was specified
-            in ``predictor_init_args``.
+            Values of the known covariates over the training period. Must be provided if
+            ``known_covariates_names`` is set in ``predictor_init_args``.
         static_features: str | pathlib.Path | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
         id_column: str, default = "item_id"
@@ -92,24 +92,21 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
         framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job.
-            If None, CloudPredictor creates one with prefix ``ag-cloud-timeseries``.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance type the predictor will be trained on with SageMaker.
+            AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
+            Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-timeseries`` is generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the training job.
         instance_count: int, default = 1
-            Number of instances used to fit the predictor.
+            Number of training instances. Only single-instance training is supported.
         volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training.
-            Must be large enough to store training data if File Mode is used (which is the default).
+            Size in GB of the EBS volume that stores the training data and model artifacts.
         custom_image_uri: str | None, default = None
-            Custom container image URI. If set, ``framework_version`` is ignored.
+            Custom training container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
-            Whether the call should wait until the job completes
-            To be noticed, the function won't return immediately because there are some preparations needed prior fit.
-            Use `get_fit_job_status` to get job status.
+            Whether to block until the job completes. If ``False``, returns once the job is launched; use
+            :meth:`get_fit_job_status` to poll it.
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -249,41 +246,38 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         backend_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> pd.DataFrame | None:
         """
-        Predict using SageMaker batch transform.
-        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
-        To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
+        Forecast with a SageMaker batch transform job.
 
-        ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
+        Suited for large datasets. For low-latency predictions, deploy an endpoint with :meth:`deploy` instead.
+        ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to :meth:`fit`.
 
         Parameters
         ----------
         data: str | pd.DataFrame
             Historical time series to forecast from, in long format, as a ``pd.DataFrame`` or local/S3 path to
             a data file.
-        static_features: str | pd.DataFrame | None
+        static_features: str | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
-        known_covariates: str | pd.DataFrame | None
+        known_covariates: str | pd.DataFrame | None, default = None
             Future values of the known covariates over the forecast horizon. Must be provided if
             ``known_covariates_names`` was specified at fit time.
-        predictor_path: str
-            Path to the predictor tarball you want to use to predict.
-            Path can be both a local path or a S3 location.
-            If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
-            Defaults to the version used by `fit()`.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job.
-            If None, CloudPredictor creates one with prefix ``ag-cloud-timeseries``.
-        instance_count: int, default = 1,
-            Number of instances used to do batch transform.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance to be used for batch transform.
+        predictor_path: str | None, default = None
+            Local or S3 path of the predictor tarball. If ``None``, uses the predictor trained by :meth:`fit`.
+        framework_version: str | None, default = None
+            AutoGluon version, e.g. ``"1.6"``. Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by :meth:`fit`. Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the batch transform job. If ``None``, a unique name with prefix ``ag-cloud-timeseries`` is
+            generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the batch transform job.
+        instance_count: int, default = 1
+            Number of batch transform instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
-            Whether to wait for batch transform to complete.
-            To be noticed, the function won't return immediately because there are some preparations needed prior transform.
+            Whether to block until the job completes and return the forecast. If ``False``, returns ``None`` once
+            the job is launched; use :meth:`get_batch_inference_job_status` to poll it.
         predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
@@ -294,6 +288,12 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
             * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
               built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
             * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
+
+        Returns
+        -------
+        pd.DataFrame | None
+            Forecast in long format with ``item_id``, ``timestamp``, ``mean``, and one column per quantile, or
+            ``None`` if ``wait=False``.
 
         SageMaker API
         -------------
@@ -352,9 +352,8 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         """
         Fit and predict in a single SageMaker training job.
 
-        Predictions are generated inside the training container against ``train_data`` (the standard time-series
-        forecasting flow where the last ``prediction_length`` steps of each series are forecast) and written
-        directly to S3.
+        Fits a ``TimeSeriesPredictor`` on ``train_data`` and, in the same job, forecasts the next
+        ``prediction_length`` steps after the end of each series in ``train_data``.
 
         Parameters
         ----------
@@ -379,27 +378,24 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
             Name of the column with the unique identifier of each time series (item).
         timestamp_column: str, default = "timestamp"
             Name of the column with the observation timestamps.
-        predictions_path: str | None
-            S3 URL where predictions will be written by the training container (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). The container's SageMaker execution role must have
-            ``s3:PutObject`` permission for this location. Defaults to
-            ``{cloud_output_path}/{job_name}/predictions.csv``. Predictions use AutoGluon's canonical column
-            names ``item_id`` and ``timestamp``, regardless of the ``id_column`` / ``timestamp_column`` passed in.
+        predictions_path: str | None, default = None
+            S3 URL of the predictions file, ending in ``.csv`` or ``.parquet``. The SageMaker execution role must be
+            able to write to it. Defaults to ``{cloud_output_path}/{job_name}/predictions.csv``.
         framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-timeseries``.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance type the predictor will be trained on with SageMaker.
+            AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
+            Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-timeseries`` is generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the training job.
         instance_count: int, default = 1
-            Number of instances used to fit the predictor.
+            Number of training instances. Only single-instance training is supported.
         volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training.
+            Size in GB of the EBS volume that stores the training data and model artifacts.
         custom_image_uri: str | None, default = None
-            Custom container image URI. If set, ``framework_version`` is ignored.
+            Custom training container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
-            Whether the call should wait until the job completes.
+            Whether to block until the job completes. If ``False``, returns ``None`` once the job is launched.
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -411,7 +407,9 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         Returns
         -------
         pd.DataFrame | None
-            Predictions as a ``pd.DataFrame``. Returns ``None`` when ``wait`` is False.
+            Forecast in long format with ``item_id``, ``timestamp``, ``mean``, and one column per quantile, or
+            ``None`` if ``wait=False``; fetch it later with :meth:`get_fit_predict_results`. Columns are named
+            ``item_id`` and ``timestamp`` regardless of ``id_column`` / ``timestamp_column``.
 
         SageMaker API
         -------------
@@ -452,7 +450,7 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
 
     def get_fit_predict_results(self) -> pd.DataFrame:
         """
-        Retrieve predictions produced by a completed ``fit_predict`` job.
+        Retrieve the forecast of a completed :meth:`fit_predict` job.
 
         Returns
         -------

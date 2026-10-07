@@ -54,21 +54,20 @@ def bootstrap(
     stack_name: str | None = None,
     session: boto3.Session | None = None,
 ) -> None:
-    """Deploy the CloudFormation stack and persist resource identifiers.
+    """Create the IAM role and S3 bucket used by AutoGluon-Cloud and save them to ``~/.autogluon/cloud.yaml``.
 
-    On completion the IAM role and S3 bucket created by the stack are saved to ``~/.autogluon/cloud.yaml`` via
-    :func:`register`. If you already have an IAM role and bucket in place, call :func:`register` directly and
-    skip this function entirely.
+    Deploys a CloudFormation stack (or reuses an existing stack with the same name) and saves its outputs via
+    :func:`register`. If you already have an IAM role and bucket, call :func:`register` instead.
 
     Parameters
     ----------
     backend: BackendName, default = "sagemaker"
         Which AutoGluon-Cloud backend to provision.
     stack_name: str | None, default = None
-        CloudFormation stack name. Auto-generated as ``ag-cloud-<backend>`` if not given.
+        CloudFormation stack name. Defaults to ``ag-cloud-<backend>``.
     session: boto3.Session | None, default = None
-        A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is constructed from the standard
-        credential chain (env vars, ``~/.aws/credentials``, SSO, instance profile).
+        Session used for AWS calls; its region is where the resources are created. If ``None``, uses the default
+        boto3 credential chain and region.
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
@@ -105,31 +104,26 @@ def register(
     stack_name: str | None = None,
     session: boto3.Session | None = None,
 ) -> None:
-    """Persist resource identifiers to ``~/.autogluon/cloud.yaml`` under the given backend key.
+    """Save an existing IAM role and S3 bucket to ``~/.autogluon/cloud.yaml``.
 
-    Use this when you already have an IAM role and S3 bucket — for example, centrally provisioned by your platform
-    team — and just want AutoGluon-Cloud to remember them.
-
-    If a config entry already exists for ``backend``, it is overwritten. Other backends in the file are left
-    untouched.
+    Use this instead of :func:`bootstrap` if the resources already exist, e.g. provisioned by your platform team.
+    Overwrites any existing entry for ``backend``.
 
     Parameters
     ----------
     role: str
-        ARN of an IAM role suitable for SageMaker to assume. Named ``role`` for consistency with the SageMaker
-        Python SDK (which uses ``role`` as the parameter name).
+        ARN of the SageMaker execution role.
     bucket: str
-        S3 bucket name where AutoGluon-Cloud will read/write artifacts.
+        Name of the S3 bucket for artifacts, without ``s3://`` or a prefix. Must be in ``region``.
     region: str
-        AWS region for AutoGluon-Cloud operations.
+        AWS region where jobs and endpoints run.
     backend: BackendName, default = "sagemaker"
-        Which AutoGluon-Cloud backend the resources are intended for. Selects the slot in ``cloud.yaml``.
+        Backend the resources are used for.
     stack_name: str | None, default = None
-        Optional CloudFormation stack name. If you deployed the resources via your own CFN stack and want
-        :func:`teardown` to be able to delete it later, pass the name here. Defaults to ``None``, meaning teardown
-        will only remove the config entry, not touch AWS.
+        CloudFormation stack that owns the resources. If set, :func:`teardown` deletes this stack; otherwise it
+        only removes the config entry.
     session: boto3.Session | None, default = None
-        ``boto3.Session`` used to verify the bucket region. If ``None``, the default ambient session is used.
+        Session used to verify the bucket region. If ``None``, uses the default boto3 session.
     """
     if backend not in SUPPORTED_BACKENDS:
         raise ValueError(f"Unsupported backend {backend!r}. Choose from {SUPPORTED_BACKENDS}.")
@@ -155,18 +149,25 @@ def status(
     *,
     session: boto3.Session | None = None,
 ) -> dict[str, StatusReport]:
-    """Return health snapshots keyed by backend name, one per configured backend.
+    """Check that the resources saved in ``~/.autogluon/cloud.yaml`` exist.
 
-    Each :class:`StatusReport` has:
+    Parameters
+    ----------
+    session: boto3.Session | None, default = None
+        Session used for AWS calls. If ``None``, uses the default boto3 credentials with each backend's saved
+        region.
 
-    * ``config`` — the saved :class:`BackendConfig`
-    * ``config_path`` — path to ``~/.autogluon/cloud.yaml``
-    * ``checks`` — dict of ``bucket`` / ``stack`` / ``role`` to a status string. ``"ok"`` means the resource exists;
-      ``"ok (unverified)"`` means the caller lacks the IAM permission to verify and the resource may still be fine;
-      anything else is a failure description.
+    Returns
+    -------
+    dict[str, StatusReport]
+        One report per configured backend, keyed by backend name; empty if no config exists. Each report has:
 
-    Returns an empty dict if no config exists. Makes real AWS calls. Pass ``session=`` to use specific credentials;
-    otherwise the standard boto3 credential chain is used (with the saved region as a default).
+        * ``config``: the saved backend config (region, role ARN, bucket, and stack name).
+        * ``config_path``: path to the config file.
+        * ``checks``: status of the ``"bucket"``, ``"role"``, and (if ``stack_name`` is set) ``"stack"``. The
+          bucket and role checks return ``"ok"``, and the stack check returns its CloudFormation status, e.g.
+          ``"CREATE_COMPLETE"``. ``"ok (unverified ...)"`` means the caller lacks permission to check the resource.
+          Anything else describes a failure.
     """
     config = load_config()
     if config is None:
@@ -192,22 +193,20 @@ def teardown(
     backend: BackendName | None = None,
     session: boto3.Session | None = None,
 ) -> None:
-    """Delete a backend's CloudFormation stack and remove its config entry.
+    """Delete the CloudFormation stack created by :func:`bootstrap` and remove the config entry.
 
-    With ``backend=None`` (default), tears down every configured backend and removes the config file. With
-    ``backend="sagemaker"``, tears down just that one and leaves any other backends in the config.
+    For backends saved with :func:`register` without a ``stack_name``, only the config entry is removed.
 
-    The S3 buckets are **not** emptied for you: CloudFormation refuses to delete a non-empty bucket, so you must
-    remove their contents (e.g. via ``aws s3 rm s3://<bucket> --recursive``) before calling :func:`teardown`. This
-    is intentional — buckets may contain training artifacts or model weights that are expensive to recreate.
+    The S3 bucket is **not** emptied for you, and CloudFormation can't delete a non-empty bucket. Empty it first,
+    e.g. with ``aws s3 rm s3://<bucket> --recursive``.
 
     Parameters
     ----------
     backend: BackendName | None, default = None
-        Which backend to tear down. ``None`` (default) tears down all configured backends.
+        Backend to tear down. If ``None``, tears down all configured backends and deletes the config file.
     session: boto3.Session | None, default = None
-        A ``boto3.Session`` to use for AWS calls. If ``None``, a default session is built from the standard
-        credential chain, with each backend's saved region applied automatically.
+        Session used for AWS calls. If ``None``, uses the default boto3 credentials with each backend's saved
+        region.
     """
     config = load_config()
     if config is None or not config.backends:

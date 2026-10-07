@@ -39,7 +39,7 @@ cloud_predictor.fit(
 
 ### Fit and predict in a single job
 
-For workflows where fitting is light (e.g. fine-tuning a pretrained foundation model), {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.fit_predict` runs both steps inside the same SageMaker job — saving the startup overhead of a second job. Predictions are generated against `train_data` and written to S3.
+If you only need a single forecast, {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.fit_predict` trains the predictor and forecasts the next `prediction_length` steps after the end of each series in `train_data`, all in the same SageMaker job. This is faster than `fit()` followed by `predict()`, since it skips starting a second job and re-uploading the predictor.
 
 ```python
 forecasts = cloud_predictor.fit_predict(
@@ -54,10 +54,10 @@ forecasts = cloud_predictor.fit_predict(
 )
 ```
 
-By default predictions land at `{cloud_output_path}/{job_name}/predictions.csv`; pass `predictions_path` to choose a destination.
+By default predictions land at `{cloud_output_path}/{job_name}/predictions.csv`; pass `predictions_path` (ending in `.csv` or `.parquet`) to choose a destination. With `wait=False`, `fit_predict()` returns `None` right away; once {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.get_fit_job_status` reports `Completed`, fetch the forecast with {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.get_fit_predict_results`.
 
 ### Reattach to a training job
-If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (`INFO:sagemaker:Creating training-job with name: ag-cloud-timeseries-...`) and also visible in the SageMaker console.
+If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (``Start sagemaker training job `ag-cloud-timeseries-...` ``) and also visible in the SageMaker console.
 
 ```python
 another_cloud_predictor = TimeSeriesCloudPredictor()
