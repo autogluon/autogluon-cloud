@@ -8,10 +8,11 @@ import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Generic, Literal, TypeVar
 
 import boto3
 import pandas as pd
+from typing_extensions import deprecated
 
 from autogluon.common.loaders import load_pkl
 from autogluon.common.savers import save_pkl
@@ -30,11 +31,17 @@ from ..utils.utils import safe_unpack_archive
 
 logger = logging.getLogger(__name__)
 
+EndpointT = TypeVar("EndpointT", bound=Endpoint)
 
-class CloudPredictor(ABC):
+# Marks methods as deprecated for IDEs and type checkers only (category=None); the methods emit their own
+# FutureWarning at runtime, naming the concrete predictor and endpoint classes.
+_DEPRECATED_REAL_TIME = "Deploy an endpoint with `deploy()` and call `predict()` / `predict_proba()` on it instead."
+
+
+class CloudPredictor(ABC, Generic[EndpointT]):
     predictor_file_name = "CloudPredictor.pkl"
     backend_map = {}
-    _endpoint_cls: type[Endpoint] = Endpoint
+    _endpoint_cls: type[EndpointT]
 
     def __init__(
         self,
@@ -399,7 +406,7 @@ class CloudPredictor(ABC):
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: dict[str, Any] | None = None,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
-    ) -> Endpoint:
+    ) -> EndpointT:
         """
         Deploy a predictor to an inference endpoint.
 
@@ -520,6 +527,7 @@ class CloudPredictor(ABC):
             stacklevel=4,
         )
 
+    @deprecated("Construct the endpoint class directly from the endpoint name instead.", category=None)
     def attach_endpoint(self, endpoint: str) -> None:
         """
         Attach the current CloudPredictor to an existing endpoint.
@@ -541,6 +549,7 @@ class CloudPredictor(ABC):
         )
         self.backend.attach_endpoint(endpoint)
 
+    @deprecated("The endpoint returned by `deploy()` is independent of the predictor.", category=None)
     def detach_endpoint(self) -> str:
         """
         Detach the current endpoint and return its name.
@@ -561,6 +570,7 @@ class CloudPredictor(ABC):
         )
         return self.backend.detach_endpoint()
 
+    @deprecated(_DEPRECATED_REAL_TIME, category=None)
     def predict_real_time(
         self,
         test_data: str | pd.DataFrame,
@@ -608,6 +618,7 @@ class CloudPredictor(ABC):
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept, inference_kwargs=kwargs
         )
 
+    @deprecated(_DEPRECATED_REAL_TIME, category=None)
     def predict_proba_real_time(
         self,
         test_data: str | pd.DataFrame,
@@ -862,6 +873,7 @@ class CloudPredictor(ABC):
         """
         return self.backend.get_batch_inference_job_status(job_name)
 
+    @deprecated("Call `delete_endpoint()` on the endpoint returned by `deploy()` instead.", category=None)
     def cleanup_deployment(self) -> None:
         """
         Delete the deployed endpoint and other artifacts

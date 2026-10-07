@@ -8,7 +8,7 @@ from .cloud_predictor import CloudPredictor
 logger = logging.getLogger(__name__)
 
 
-class MultiModalCloudPredictor(CloudPredictor):
+class MultiModalCloudPredictor(CloudPredictor[MultiModalEndpoint]):
     """Train and deploy AutoGluon multimodal models (image, text, tabular) on Amazon SageMaker.
 
     Wraps :class:`autogluon.multimodal.MultiModalPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.multimodal.MultiModalPredictor.html>`_)

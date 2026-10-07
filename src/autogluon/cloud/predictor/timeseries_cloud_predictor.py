@@ -5,17 +5,18 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from typing_extensions import deprecated
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
 from ..utils.sagemaker_api import reject_legacy_kwargs
-from .cloud_predictor import CloudPredictor
+from .cloud_predictor import _DEPRECATED_REAL_TIME, CloudPredictor
 
 logger = logging.getLogger(__name__)
 
 
-class TimeSeriesCloudPredictor(CloudPredictor):
+class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
     """Train and deploy AutoGluon time series forecasting models on Amazon SageMaker.
 
     Wraps :class:`autogluon.timeseries.TimeSeriesPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_)
@@ -169,6 +170,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         return self
 
+    @deprecated(_DEPRECATED_REAL_TIME, category=None)
     def predict_real_time(
         self,
         data: str | pd.DataFrame,

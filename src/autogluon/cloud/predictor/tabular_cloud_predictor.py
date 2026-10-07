@@ -16,7 +16,7 @@ from .cloud_predictor import CloudPredictor
 logger = logging.getLogger(__name__)
 
 
-class TabularCloudPredictor(CloudPredictor):
+class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
     """Train and deploy AutoGluon tabular models (classification and regression) on Amazon SageMaker.
 
     Wraps :class:`autogluon.tabular.TabularPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.tabular.TabularPredictor.html>`_)
