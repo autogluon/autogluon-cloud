@@ -466,6 +466,7 @@ class CloudPredictor(ABC):
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
         if instance_type is None and inference_mode == "realtime":
             instance_type = "ml.m5.2xlarge"
+        self._warn_if_endpoint_active()
         self.backend.deploy(
             predictor_path=predictor_path,
             endpoint_name=endpoint_name,
@@ -483,6 +484,25 @@ class CloudPredictor(ABC):
             endpoint_name=self.backend.endpoint_name,
             session=self.backend.sagemaker_session.boto_session,
         )
+
+    def _warn_if_endpoint_active(self) -> None:
+        # The predictor only remembers the name of its last endpoint, which may since have been deleted through the
+        # returned endpoint handle, so ask SageMaker before warning.
+        previous_endpoint = self.backend.endpoint_name
+        if previous_endpoint is None:
+            return
+        try:
+            status = self.backend.sagemaker_session.sagemaker_client.describe_endpoint(EndpointName=previous_endpoint)[
+                "EndpointStatus"
+            ]
+        except Exception:
+            return
+        if status not in ("Deleting", "Failed"):
+            logger.warning(
+                f"This predictor already deployed endpoint {previous_endpoint} (status: {status}). Deploying a new "
+                f"endpoint; {previous_endpoint} keeps running and incurring charges until you delete it with "
+                f"`{self._endpoint_cls.__name__}('{previous_endpoint}').delete_endpoint()`."
+            )
 
     def _warn_deprecated(self, method: str, replacement: str, stacklevel: int = 3) -> None:
         warnings.warn(
