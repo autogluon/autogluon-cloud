@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pandas as pd
+from packaging.version import InvalidVersion, Version
 from typing_extensions import Self
 
 from autogluon.common.loaders import load_pd
@@ -172,6 +173,24 @@ class FoundationModel:
             merged.setdefault(self._config.model_source_hyperparameter, self._config.model_source_uri)
         return merged
 
+    def _check_framework_version(self, framework_version: str, custom_image_uri: str | None) -> None:
+        """Raise if ``framework_version`` is older than the model's ``min_framework_version``.
+
+        Skipped for custom images, whose AutoGluon version is unknown.
+        """
+        if custom_image_uri is not None or framework_version == "latest":
+            return
+        min_version = self._config.min_framework_version
+        try:
+            requested = Version(framework_version).release[:2]
+        except InvalidVersion:
+            return  # the backend raises a descriptive error for invalid versions
+        if requested < Version(min_version).release[:2]:
+            raise ValueError(
+                f"Model '{self.model_id}' requires AutoGluon {min_version} or newer, got "
+                f"framework_version={framework_version!r}."
+            )
+
     @abstractmethod
     def _build_predictor_init_args(self, **user_kwargs) -> dict[str, Any]:
         """Build predictor_init_args dict from user-provided kwargs.
@@ -219,6 +238,7 @@ class FoundationModel:
         **backend_kwargs,
     ) -> None:
         """Shared deploy logic. Subclasses call this then wrap the endpoint."""
+        self._check_framework_version(framework_version, custom_image_uri)
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
         if instance_type is None and inference_mode == "realtime":
@@ -631,6 +651,7 @@ class TimeSeriesFoundationModel(FoundationModel):
         * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
           ``instance_type``. Predictions are written to ``predictions_path``.
         """
+        self._check_framework_version(framework_version, custom_image_uri)
         if instance_type is None:
             instance_type = self._config.predict_instance_type
 
@@ -965,6 +986,7 @@ class TabularFoundationModel(FoundationModel):
         * :sm-api:`CreateTrainingJob`: runs the prediction as a training job (not a batch transform job) on
           ``instance_type``. Predictions are written to ``predictions_path``.
         """
+        self._check_framework_version(framework_version, custom_image_uri)
         if instance_type is None:
             instance_type = self._config.predict_instance_type
 

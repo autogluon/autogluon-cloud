@@ -223,6 +223,7 @@ def test_cache_model_artifact_rejects_models_without_weights_source_hyperparamet
         ("tabicl-v2-regressor", {"checkpoint_version": "tabicl-regressor-v2-20260212.ckpt"}),
         ("tabdpt-turbo-classifier", {}),
         ("nori-30m-regressor", {"model": "nori-30m"}),
+        ("mitra-v2-classifier", {"fine_tune": False, "hf_cls_model": "autogluon/mitra-classifier-2"}),
     ],
 )
 def test_inference_hyperparameters_for_new_models(model_id, expected_hp):
@@ -304,3 +305,33 @@ def test_list_models_filters_by_task():
 def test_subclass_rejects_model_id_for_other_task():
     with pytest.raises(ValueError, match="Unknown model_id 'mitra-classifier' for TimeSeriesFoundationModel"):
         TimeSeriesFoundationModel("mitra-classifier", cloud_output_path="s3://b")
+
+
+@pytest.mark.parametrize("framework_version", ["1.5", "1.5.0", "1.4"])
+def test_rejects_framework_version_below_model_minimum(framework_version):
+    fm = TabularFoundationModel("mitra-v2-classifier", cloud_output_path="s3://b")
+    with pytest.raises(ValueError, match="requires AutoGluon 1.6 or newer"):
+        fm.deploy(framework_version=framework_version)
+    with pytest.raises(ValueError, match="requires AutoGluon 1.6 or newer"):
+        fm.predict(
+            pd.DataFrame({"x": [1]}),
+            pd.DataFrame({"x": [1], "y": [0]}),
+            label="y",
+            framework_version=framework_version,
+        )
+    fm._backend.deploy.assert_not_called()
+    fm._backend.fit.assert_not_called()
+
+
+@pytest.mark.parametrize("framework_version", ["1.6", "1.6.3", "latest"])
+def test_accepts_framework_version_at_or_above_model_minimum(framework_version):
+    fm = TimeSeriesFoundationModel("toto-2.0-4m", cloud_output_path="s3://b")
+    fm.predict(pd.DataFrame({"x": [1]}), framework_version=framework_version)
+    assert fm._backend.fit.call_args.kwargs["framework_version"] == framework_version
+
+
+def test_skips_framework_version_check_for_custom_image():
+    fm = TimeSeriesFoundationModel("toto-2.0-4m", cloud_output_path="s3://b")
+    fm._backend.endpoint_name = "ep"
+    fm.deploy(framework_version="1.5", custom_image_uri="my-image")
+    assert fm._backend.deploy.call_args.kwargs["custom_image_uri"] == "my-image"
