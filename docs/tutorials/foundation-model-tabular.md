@@ -152,7 +152,7 @@ predictions, probabilities = endpoint.predict_proba(
 
 The endpoint holds no data between requests, so each request carries its own labeled context. This means you can use a single endpoint to serve predictions for different datasets and tasks of the same type — for example, a `mitra-classifier` endpoint can classify rows from any table, as long as each request includes the matching `train_data` and `label`.
 
-Each request payload — `train_data` and `data` combined — is limited to 6 MB. For larger inputs, use [batch prediction](#batch-prediction) instead.
+Each request payload — `train_data` and `data` combined — is limited to 6 MB. For larger inputs, use batch prediction instead.
 
 The endpoint stays active — and billed — until you delete it:
 

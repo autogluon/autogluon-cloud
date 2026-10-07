@@ -40,7 +40,7 @@ AutoGluon-Cloud lets you train and deploy state-of-the-art ML models for classif
 
 - **Works like local [AutoGluon](https://auto.gluon.ai/stable/index.html).** Pass in DataFrames, get predictions back — as convenient as working locally, with the compute handled by AWS.
 - **No boilerplate.** No training scripts, inference handlers, or serialization code to write and maintain.
-- **Official AWS containers.** Everything runs in the [AutoGluon Deep Learning Containers](https://aws.github.io/deep-learning-containers/), maintained and security-patched by AWS.
+- **Official AWS containers.** Everything runs in the [AutoGluon Deep Learning Container](container/index.md), maintained and security-patched by AWS.
 - **Sensible defaults, fully configurable.** Under the hood it's just SageMaker running in your AWS account, so you stay in full control.
 
 ## {octicon}`package` Installation
@@ -189,6 +189,18 @@ hidden:
 Setup <tutorials/setup>
 Train Your Own Predictor <tutorials/predictor>
 Foundation Models <tutorials/foundation-model>
+```
+
+```{toctree}
+---
+caption: AutoGluon Container
+maxdepth: 1
+hidden:
+---
+
+Overview <container/index>
+Custom Scripts <container/custom-scripts>
+Reference <container/reference>
 ```
 
 ```{toctree}
