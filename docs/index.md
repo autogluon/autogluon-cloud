@@ -112,40 +112,6 @@ endpoint.delete_endpoint()
 
 ## {octicon}`gear` Train your own predictor
 
-:::{dropdown} Tabular
-:animate: fade-in-slide-down
-:color: primary
-
-Train a classification or regression model on tabular data.
-
-```python
-from autogluon.cloud import TabularCloudPredictor
-
-# `train_data` and `test_data` can be a local path, S3 URL, or pandas DataFrame
-train_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv"
-test_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv"
-
-# Train
-cloud_predictor = TabularCloudPredictor()
-cloud_predictor.fit(
-    train_data=train_data,
-    predictor_init_args={"label": "class"},  # passed to TabularPredictor()
-    predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
-)
-
-# Batch prediction
-result = cloud_predictor.predict(test_data)
-
-# Real-time inference endpoint
-endpoint = cloud_predictor.deploy()
-result = endpoint.predict(test_data)
-endpoint.delete_endpoint()
-```
-
-→ [Full walkthrough](tutorials/predictor-tabular.md)
-:::
-
-
 :::{dropdown} Time Series
 :animate: fade-in-slide-down
 :color: primary
@@ -176,6 +142,41 @@ endpoint.delete_endpoint()
 ```
 
 → [Full walkthrough](tutorials/predictor-timeseries.md)
+:::
+
+
+:::{dropdown} Tabular
+:animate: fade-in-slide-down
+:open:
+:color: primary
+
+Train a classification or regression model on tabular data.
+
+```python
+from autogluon.cloud import TabularCloudPredictor
+
+# `train_data` and `test_data` can be a local path, S3 URL, or pandas DataFrame
+train_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv"
+test_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv"
+
+# Train
+cloud_predictor = TabularCloudPredictor()
+cloud_predictor.fit(
+    train_data=train_data,
+    predictor_init_args={"label": "class"},  # passed to TabularPredictor()
+    predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
+)
+
+# Batch prediction
+result = cloud_predictor.predict(test_data)
+
+# Real-time inference endpoint
+endpoint = cloud_predictor.deploy()
+result = endpoint.predict(test_data)
+endpoint.delete_endpoint()
+```
+
+→ [Full walkthrough](tutorials/predictor-tabular.md)
 :::
 
 
@@ -211,8 +212,8 @@ hidden:
 ---
 
 Setup <api/setup>
-Tabular <api/tabular>
 Time Series <api/timeseries>
+Tabular <api/tabular>
 ```
 
 ```{toctree}
