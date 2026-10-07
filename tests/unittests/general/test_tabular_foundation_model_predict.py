@@ -128,10 +128,10 @@ def test_wait_false_returns_future_without_fetching():
 
 
 def _make_tcp(result=CLASSIFICATION_FRAME):
-    """A TabularCloudPredictor with `fit` and the backend mocked out — no AWS interaction."""
+    """A TabularCloudPredictor with `_fit` and the backend mocked out — no AWS interaction."""
     with mock.patch.object(TabularCloudPredictor, "__init__", lambda self: None):
         tcp = TabularCloudPredictor()
-    tcp.fit = mock.MagicMock()
+    tcp._fit = mock.MagicMock()
     tcp.backend = mock.MagicMock()
     tcp.backend.get_fit_predict_results.return_value = result
     return tcp

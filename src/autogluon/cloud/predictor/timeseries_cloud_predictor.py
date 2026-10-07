@@ -5,12 +5,18 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from typing_extensions import deprecated
+from typing_extensions import Self, Unpack, deprecated
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
-from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
-from ..utils.sagemaker_api import reject_legacy_kwargs
+from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
+from ..utils.sagemaker_api import (
+    IGNORED_TRAINING_KWARGS,
+    BatchTransformKwargs,
+    TrainingJobKwargs,
+    check_backend_kwargs,
+    reject_legacy_kwargs,
+)
 from .cloud_predictor import _DEPRECATED_REAL_TIME, CloudPredictor
 
 logger = logging.getLogger(__name__)
@@ -47,20 +53,16 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         predictor_init_args: dict[str, Any],
         predictor_fit_args: dict[str, Any] | None = None,
         tuning_data: str | Path | pd.DataFrame | None = None,
+        known_covariates: str | Path | pd.DataFrame | None = None,
         static_features: str | Path | pd.DataFrame | None = None,
         id_column: str = "item_id",
         timestamp_column: str = "timestamp",
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
-        volume_size: int = DEFAULT_VOLUME_SIZE,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
-        known_covariates: str | Path | pd.DataFrame | None = None,
-        **kwargs,
-    ) -> TimeSeriesCloudPredictor:
+        **kwargs: Unpack[TrainingJobKwargs],
+    ) -> Self:
         """
         Fit the predictor in a SageMaker training job.
 
@@ -94,19 +96,19 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         framework_version: str, optional
             AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
             Ignored if ``custom_image_uri`` is set.
-        job_name: str | None, default = None
-            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-timeseries`` is generated.
         instance_type: str, default = "ml.m5.2xlarge"
             Instance type of the training job.
-        instance_count: int, default = 1
-            Number of training instances. Only single-instance training is supported.
-        volume_size: int, default = 100
-            Size in GB of the EBS volume that stores the training data and model artifacts.
-        custom_image_uri: str | None, default = None
-            Custom training container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether to block until the job completes. If ``False``, returns once the job is launched; use
             :meth:`get_fit_job_status` to poll it.
+
+        Returns
+        -------
+        TimeSeriesCloudPredictor
+            The fitted predictor (``self``).
+
+        Other Parameters
+        ----------------
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -114,57 +116,38 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
             * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
               built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
             * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
-
-        Returns
-        -------
-        TimeSeriesCloudPredictor
-            The fitted predictor (``self``).
+        job_name: str | None, default = None
+            Name of the training job. Defaults to a unique name with prefix ``ag-cloud-timeseries``.
+        volume_size: int, default = 100
+            Size in GB of the EBS volume that stores the training data and model artifacts.
+        custom_image_uri: str | None, default = None
+            Custom training container image URI. If set, ``framework_version`` is ignored.
+        timeout: int, default = 86400
+            Maximum training job runtime in seconds. Defaults to 24 hours.
 
         SageMaker API
         -------------
-        * :sm-api:`CreateTrainingJob`: trains the predictor on ``instance_count`` x ``instance_type`` and writes the
-          artifact to ``cloud_output_path``.
+        * :sm-api:`CreateTrainingJob`: trains the predictor on ``instance_type`` and writes the artifact to
+          ``cloud_output_path``.
         """
-        assert not self.backend.is_fit, (
-            "Predictor is already fit! To fit additional models, create a new `CloudPredictor`"
-        )
-        # `extra_ag_args` is an internal channel for `fit_predict`; it is intentionally not part of the public signature.
-        extra_ag_args = kwargs.pop("extra_ag_args", None)
-        if kwargs:
-            raise TypeError(f"fit() got unexpected keyword arguments: {sorted(kwargs)}")
-        predictor_fit_args = {} if predictor_fit_args is None else dict(predictor_fit_args)
-        data_channels = {
-            "train_data": train_data,
-            "tuning_data": tuning_data,
-            "known_covariates": known_covariates,
-            "static_features": static_features,
-        }
-        for key in ("train_data", "tuning_data", "known_covariates"):
-            if key in predictor_fit_args:
-                raise TypeError(
-                    f"`{key}` can no longer be passed via `predictor_fit_args`. "
-                    f"Pass `{key}` as an explicit argument to `fit()` instead."
-                )
-        if data_channels["train_data"] is None:
-            raise TypeError("fit() missing required argument: 'train_data'")
-
-        self.backend.fit(
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "fit", IGNORED_TRAINING_KWARGS)
+        self._fit(
+            data_channels={
+                "train_data": train_data,
+                "tuning_data": tuning_data,
+                "known_covariates": known_covariates,
+                "static_features": static_features,
+            },
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
-            data_channels=data_channels,
             id_column=id_column,
             timestamp_column=timestamp_column,
             framework_version=framework_version,
-            job_name=job_name,
             instance_type=instance_type,
-            instance_count=instance_count,
-            volume_size=volume_size,
-            custom_image_uri=custom_image_uri,
             wait=wait,
             backend_overrides=backend_overrides,
-            extra_ag_args=extra_ag_args,
+            **kwargs,
         )
-
         return self
 
     @deprecated(_DEPRECATED_REAL_TIME, category=None)
@@ -233,17 +216,16 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
     def predict(
         self,
         data: str | pd.DataFrame,
+        *,
         static_features: str | pd.DataFrame | None = None,
         known_covariates: str | pd.DataFrame | None = None,
         predictor_path: str | None = None,
         framework_version: str | None = None,
-        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         predictions_path: str | None = None,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[BatchTransformKwargs],
     ) -> pd.DataFrame | None:
         """
         Forecast with a SageMaker batch transform job.
@@ -266,21 +248,23 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         framework_version: str | None, default = None
             AutoGluon version, e.g. ``"1.6"``. Inference uses the official AutoGluon DLC image for this version.
             Defaults to the version used by :meth:`fit`. Ignored if ``custom_image_uri`` is set.
-        job_name: str | None, default = None
-            Name of the batch transform job. If ``None``, a unique name with prefix ``ag-cloud-timeseries`` is
-            generated.
         instance_type: str, default = "ml.m5.2xlarge"
             Instance type of the batch transform job.
-        instance_count: int, default = 1
-            Number of batch transform instances.
-        custom_image_uri: str | None, default = None
-            Custom inference container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether to block until the job completes and return the forecast. If ``False``, returns ``None`` once
             the job is launched; use :meth:`get_batch_inference_job_status` to poll it.
         predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
+
+        Returns
+        -------
+        pd.DataFrame | None
+            Forecast in long format with ``item_id``, ``timestamp``, ``mean``, and one column per quantile, or
+            ``None`` if ``wait=False``.
+
+        Other Parameters
+        ----------------
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -288,12 +272,12 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
             * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
               built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
             * Example: ``{"CreateTransformJob": {"BatchStrategy": "SingleRecord", "MaxPayloadInMB": 20}}``
-
-        Returns
-        -------
-        pd.DataFrame | None
-            Forecast in long format with ``item_id``, ``timestamp``, ``mean``, and one column per quantile, or
-            ``None`` if ``wait=False``.
+        job_name: str | None, default = None
+            Name of the batch transform job. Defaults to a unique name with prefix ``ag-cloud-timeseries``.
+        instance_count: int, default = 1
+            Number of batch transform instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
 
         SageMaker API
         -------------
@@ -304,19 +288,18 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         The model is deleted when the job finishes. With ``wait=False`` it is kept; delete it with
         :sm-api:`DeleteModel`.
         """
+        kwargs = check_backend_kwargs(kwargs, BatchTransformKwargs, "predict")
         return self.backend.predict(
             test_data=data,
             static_features=static_features,
             known_covariates=known_covariates,
             predictor_path=predictor_path,
             framework_version=framework_version,
-            job_name=job_name,
             instance_type=instance_type,
-            instance_count=instance_count,
-            custom_image_uri=custom_image_uri,
             wait=wait,
             predictions_path=predictions_path,
             backend_overrides=backend_overrides,
+            **kwargs,
         )
 
     def predict_proba(
@@ -341,13 +324,10 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         timestamp_column: str = "timestamp",
         predictions_path: str | None = None,
         framework_version: str = DEFAULT_FRAMEWORK_VERSION,
-        job_name: str | None = None,
         instance_type: str = "ml.m5.2xlarge",
-        instance_count: int = 1,
-        volume_size: int = DEFAULT_VOLUME_SIZE,
-        custom_image_uri: str | None = None,
         wait: bool = True,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
+        **kwargs: Unpack[TrainingJobKwargs],
     ) -> pd.DataFrame | None:
         """
         Fit and predict in a single SageMaker training job.
@@ -384,25 +364,10 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
         framework_version: str, optional
             AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
             Ignored if ``custom_image_uri`` is set.
-        job_name: str | None, default = None
-            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-timeseries`` is generated.
         instance_type: str, default = "ml.m5.2xlarge"
             Instance type of the training job.
-        instance_count: int, default = 1
-            Number of training instances. Only single-instance training is supported.
-        volume_size: int, default = 100
-            Size in GB of the EBS volume that stores the training data and model artifacts.
-        custom_image_uri: str | None, default = None
-            Custom training container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
             Whether to block until the job completes. If ``False``, returns ``None`` once the job is launched.
-        backend_overrides: dict[str, dict[str, Any]] | None, default = None
-            Raw SageMaker request fields for settings without a dedicated argument.
-
-            * Keys: request names from the *SageMaker API* section below.
-            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
-              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
-            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
 
         Returns
         -------
@@ -411,32 +376,51 @@ class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
             ``None`` if ``wait=False``; fetch it later with :meth:`get_fit_predict_results`. Columns are named
             ``item_id`` and ``timestamp`` regardless of ``id_column`` / ``timestamp_column``.
 
+        Other Parameters
+        ----------------
+        backend_overrides: dict[str, dict[str, Any]] | None, default = None
+            Raw SageMaker request fields for settings without a dedicated argument.
+
+            * Keys: request names from the *SageMaker API* section below.
+            * Values: request fields in PascalCase, as in the SageMaker API and boto3. Deep-merged over the request
+              built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
+            * Example: ``{"CreateTrainingJob": {"RetryStrategy": {"MaximumRetryAttempts": 2}}}``
+        job_name: str | None, default = None
+            Name of the training job. Defaults to a unique name with prefix ``ag-cloud-timeseries``.
+        volume_size: int, default = 100
+            Size in GB of the EBS volume that stores the training data and model artifacts.
+        custom_image_uri: str | None, default = None
+            Custom training container image URI. If set, ``framework_version`` is ignored.
+        timeout: int, default = 86400
+            Maximum training job runtime in seconds. Defaults to 24 hours.
+
         SageMaker API
         -------------
-        * :sm-api:`CreateTrainingJob`: trains the predictor and predicts in the same job on ``instance_count`` x
-          ``instance_type``. Predictions are written to ``predictions_path``.
+        * :sm-api:`CreateTrainingJob`: trains the predictor and predicts in the same job on ``instance_type``.
+          Predictions are written to ``predictions_path``.
         """
+        kwargs = check_backend_kwargs(kwargs, TrainingJobKwargs, "fit_predict", IGNORED_TRAINING_KWARGS)
         extra_ag_args = {"predict_after_fit": True}
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
 
-        self.fit(
-            train_data=train_data,
-            known_covariates=known_covariates,
-            static_features=static_features,
+        self._fit(
+            data_channels={
+                "train_data": train_data,
+                "tuning_data": None,
+                "known_covariates": known_covariates,
+                "static_features": static_features,
+            },
             predictor_init_args=predictor_init_args,
             predictor_fit_args=predictor_fit_args,
             id_column=id_column,
             timestamp_column=timestamp_column,
             framework_version=framework_version,
-            job_name=job_name,
             instance_type=instance_type,
-            instance_count=instance_count,
-            volume_size=volume_size,
-            custom_image_uri=custom_image_uri,
             wait=wait,
             backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
+            **kwargs,
         )
 
         if not wait:
