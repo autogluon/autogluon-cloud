@@ -81,6 +81,34 @@ endpoint.delete_endpoint()
 → [Full walkthrough](tutorials/foundation-model-timeseries.md)
 :::
 
+:::{dropdown} Tabular (Mitra)
+:animate: fade-in-slide-down
+:color: primary
+
+Classification and regression with a pretrained model — labeled rows are passed as context, no training required.
+
+```python
+import pandas as pd
+from autogluon.cloud import TabularFoundationModel
+
+# `train_data` and `test_data` can be a local path, S3 URL, or pandas DataFrame
+train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv").sample(2000)  # labeled context
+test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv").head(100)
+
+model = TabularFoundationModel("mitra-classifier")
+
+# Batch prediction
+predictions = model.predict(test_data=test_data, train_data=train_data, label="class")
+
+# Real-time inference endpoint
+endpoint = model.deploy()
+predictions = endpoint.predict(data=test_data, train_data=train_data, label="class")
+endpoint.delete_endpoint()
+```
+
+→ [Full walkthrough](tutorials/foundation-model-tabular.md)
+:::
+
 
 ## {octicon}`gear` Train your own predictor
 

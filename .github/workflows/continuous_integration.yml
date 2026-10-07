@@ -30,7 +30,30 @@ defaults:
     shell: bash
 
 jobs:
+  changes:
+    # PRs that touch none of the `code` paths below (e.g. docs or README only) skip lint and the SageMaker tests.
+    # Pushes, tags, schedules and manual runs always run them.
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Check if code changed
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'setup.py'
   cloud_lint_check:
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -38,29 +61,20 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Check if changes beside docs
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            other_than_docs:
-              - '!(docs/**)**'
       - name: Ruff Format Check
-        if: steps.changes.outputs.other_than_docs == 'true'
         uses: astral-sh/ruff-action@v3
         with:
           args: "format --check"
           src: "src tests"
       - name: Ruff Lint Check
-        if: steps.changes.outputs.other_than_docs == 'true'
         uses: astral-sh/ruff-action@v3
         with:
           args: "check"
           src: "src tests"
   test_general_cloud:
     # Fork PRs cannot assume the CI role, so skip instead of failing.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    needs: cloud_lint_check
+    if: ${{ needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [changes, cloud_lint_check]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -68,22 +82,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Check if changes beside docs
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            other_than_docs:
-              - '!(docs/**)**'
       - name: Test General Cloud
-        if: steps.changes.outputs.other_than_docs == 'true'
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: general
   test_tabular_cloud:
     # Fork PRs cannot assume the CI role, so skip instead of failing.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    needs: cloud_lint_check
+    if: ${{ needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [changes, cloud_lint_check]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -91,22 +97,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Check if changes beside docs
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            other_than_docs:
-              - '!(docs/**)**'
       - name: Test Tabular Cloud
-        if: steps.changes.outputs.other_than_docs == 'true'
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: tabular
   test_timeseries_cloud:
     # Fork PRs cannot assume the CI role, so skip instead of failing.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    needs: cloud_lint_check
+    if: ${{ needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [changes, cloud_lint_check]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -114,23 +112,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Check if changes beside docs
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            other_than_docs:
-              - '!(docs/**)**'
       - name: Test Timeseries Cloud
-        if: steps.changes.outputs.other_than_docs == 'true'
         uses: ./.github/actions/test-cloud
         with:
           submodule-to-test: timeseries
   cleanup_cloud_endpoints:
     # Tests delete their own endpoints, but a failed or cancelled job can leak one that bills forever.
     # always() also runs this when the run is cancelled by a newer push.
-    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    needs: [test_tabular_cloud, test_timeseries_cloud]
+    if: ${{ always() && needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [changes, test_tabular_cloud, test_timeseries_cloud]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -150,8 +140,9 @@ jobs:
           python3 ./.github/workflow_scripts/cleanup_endpoints.py '${{ github.run_id }}'
   build_doc:
     # Fork PRs cannot assume the doc role or comment on the PR, so skip instead of failing.
-    if: ${{ github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    needs: [test_general_cloud, test_tabular_cloud, test_timeseries_cloud]
+    # !cancelled() lets docs-only PRs build docs even though lint and tests were skipped; failures still block.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [changes, cloud_lint_check, test_general_cloud, test_tabular_cloud, test_timeseries_cloud]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
