@@ -182,6 +182,8 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
 
+        :meta private:
+
         .. deprecated::
             Use ``predict()`` of the endpoint returned by :meth:`deploy` instead.
 

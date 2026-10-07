@@ -504,6 +504,8 @@ class CloudPredictor(ABC):
         """
         Attach the current CloudPredictor to an existing endpoint.
 
+        :meta private:
+
         .. deprecated::
             Construct the endpoint class directly to get a handle to an existing endpoint instead, e.g.
             ``TabularEndpoint(endpoint_name)``.
@@ -522,6 +524,8 @@ class CloudPredictor(ABC):
     def detach_endpoint(self) -> str:
         """
         Detach the current endpoint and return its name.
+
+        :meta private:
 
         .. deprecated::
             The endpoint returned by :meth:`deploy` is independent of the predictor, so there is nothing to detach.
@@ -548,6 +552,8 @@ class CloudPredictor(ABC):
         Predict with the deployed endpoint. A deployed endpoint is required.
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
+
+        :meta private:
 
         .. deprecated::
             Use ``predict()`` of the endpoint returned by :meth:`deploy` instead.
@@ -594,6 +600,8 @@ class CloudPredictor(ABC):
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict_proba()` instead.
         If your problem_type is regression, this functions identically to `predict_real_time`, returning the same output.
+
+        :meta private:
 
         .. deprecated::
             Use ``predict_proba(..., include_predict=False)`` of the endpoint returned by :meth:`deploy` instead.
@@ -837,6 +845,8 @@ class CloudPredictor(ABC):
     def cleanup_deployment(self) -> None:
         """
         Delete the deployed endpoint and other artifacts
+
+        :meta private:
 
         .. deprecated::
             Use ``delete_endpoint()`` of the endpoint returned by :meth:`deploy` instead.

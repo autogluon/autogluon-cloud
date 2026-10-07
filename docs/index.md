@@ -173,7 +173,6 @@ hidden:
 Setup <api/setup>
 Tabular <api/tabular>
 Time Series <api/timeseries>
-Multimodal <api/multimodal>
 ```
 
 ```{toctree}
