@@ -20,6 +20,8 @@ class FoundationModelConfig:
     inference_hyperparameters: dict[str, Any] = field(default_factory=dict)  # defaults for deploy() and predict()
     training_hyperparameters: dict[str, Any] = field(default_factory=dict)  # defaults for fit()
     fine_tunable: bool = False  # whether .fit() is supported
+    # Oldest AutoGluon version that supports the model. Not checked when a custom image is used.
+    min_framework_version: str = "1.5"
 
 
 FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
@@ -58,12 +60,14 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         ag_model_key="Toto2",
         model_source_uri="Datadog/Toto-2.0-4m",
         model_source_hyperparameter="model_path",
+        min_framework_version="1.6",
     ),
     "toto-2.0-22m": FoundationModelConfig(
         problem_type="forecasting",
         ag_model_key="Toto2",
         model_source_uri="Datadog/Toto-2.0-22m",
         model_source_hyperparameter="model_path",
+        min_framework_version="1.6",
     ),
     "toto-2.0-313m": FoundationModelConfig(
         problem_type="forecasting",
@@ -71,6 +75,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="Datadog/Toto-2.0-313m",
         model_source_hyperparameter="model_path",
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "toto-2.0-1b": FoundationModelConfig(
         problem_type="forecasting",
@@ -78,6 +83,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="Datadog/Toto-2.0-1B",
         model_source_hyperparameter="model_path",
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "toto-2.0-2.5b": FoundationModelConfig(
         problem_type="forecasting",
@@ -85,6 +91,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="Datadog/Toto-2.0-2.5B",
         model_source_hyperparameter="model_path",
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "mitra-classifier": FoundationModelConfig(
         problem_type="multiclass",
@@ -104,6 +111,16 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         predict_instance_type="ml.m5.4xlarge",
         deploy_instance_type="ml.m5.4xlarge",
     ),
+    "mitra-v2-classifier": FoundationModelConfig(
+        problem_type="multiclass",
+        ag_model_key="MITRA",
+        model_source_uri="autogluon/mitra-classifier-2",
+        model_source_hyperparameter="hf_cls_model",
+        inference_hyperparameters={"fine_tune": False},
+        predict_instance_type="ml.m5.4xlarge",
+        deploy_instance_type="ml.m5.4xlarge",
+        min_framework_version="1.6",
+    ),
     # TabICL, TabDPT-Turbo and Nori download weights pinned by AutoGluon / the model library at fit time, so they
     # have no weights-source hyperparameter and don't support `cache_model_artifact`.
     "tabicl-v2-classifier": FoundationModelConfig(
@@ -112,6 +129,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="jingang/TabICL",
         inference_hyperparameters={"checkpoint_version": "tabicl-classifier-v2-20260212.ckpt"},
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "tabicl-v2-regressor": FoundationModelConfig(
         problem_type="regression",
@@ -119,18 +137,21 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="jingang/TabICL",
         inference_hyperparameters={"checkpoint_version": "tabicl-regressor-v2-20260212.ckpt"},
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "tabdpt-turbo-classifier": FoundationModelConfig(
         problem_type="multiclass",
         ag_model_key="TABDPT-TURBO",
         model_source_uri="Layer6/TabDPT",
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "tabdpt-turbo-regressor": FoundationModelConfig(
         problem_type="regression",
         ag_model_key="TABDPT-TURBO",
         model_source_uri="Layer6/TabDPT",
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "nori-regressor": FoundationModelConfig(
         problem_type="regression",
@@ -138,6 +159,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="Synthefy/Nori",
         inference_hyperparameters={"model": "nori"},
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
     "nori-30m-regressor": FoundationModelConfig(
         problem_type="regression",
@@ -145,6 +167,7 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_uri="Synthefy/Nori-30M",
         inference_hyperparameters={"model": "nori-30m"},
         predict_instance_type="ml.g5.xlarge",
+        min_framework_version="1.6",
     ),
 }
 

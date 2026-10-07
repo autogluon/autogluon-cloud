@@ -39,6 +39,7 @@ The following `model_id` values are currently supported (also available via `Tab
 |----------|------|---------------|---------|
 | `mitra-classifier` | Classification | [MitraModel](https://auto.gluon.ai/stable/api/autogluon.tabular.models.html#autogluon.tabular.models.MitraModel) | [autogluon/mitra-classifier](https://huggingface.co/autogluon/mitra-classifier) |
 | `mitra-regressor` | Regression | [MitraModel](https://auto.gluon.ai/stable/api/autogluon.tabular.models.html#autogluon.tabular.models.MitraModel) | [autogluon/mitra-regressor](https://huggingface.co/autogluon/mitra-regressor) |
+| `mitra-v2-classifier` | Classification | [MitraModel](https://auto.gluon.ai/stable/api/autogluon.tabular.models.html#autogluon.tabular.models.MitraModel) | [autogluon/mitra-classifier-2](https://huggingface.co/autogluon/mitra-classifier-2) |
 | `tabicl-v2-classifier` | Classification | [TabICLModel](https://auto.gluon.ai/stable/api/autogluon.tabular.models.html#autogluon.tabular.models.TabICLModel) | [jingang/TabICL](https://huggingface.co/jingang/TabICL) |
 | `tabicl-v2-regressor` | Regression | [TabICLModel](https://auto.gluon.ai/stable/api/autogluon.tabular.models.html#autogluon.tabular.models.TabICLModel) | [jingang/TabICL](https://huggingface.co/jingang/TabICL) |
 | `tabdpt-turbo-classifier` | Classification | [TabDPTTurboModel](https://auto.gluon.ai/stable/api/autogluon.tabular.models.html#autogluon.tabular.models.TabDPTTurboModel) | [Layer6/TabDPT](https://huggingface.co/Layer6/TabDPT) |
