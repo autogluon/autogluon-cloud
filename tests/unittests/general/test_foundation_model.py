@@ -7,6 +7,7 @@ from unittest import mock
 import pandas as pd
 import pytest
 
+from autogluon.cloud import TabularFoundationModel, TimeSeriesFoundationModel
 from autogluon.cloud.model import FoundationModel
 
 
@@ -290,3 +291,16 @@ def test_sagemaker_backend_skips_repack_when_repack_is_false():
         repack.assert_not_called()
         container = backend.sagemaker_session.sagemaker_client.create_model.call_args.kwargs["PrimaryContainer"]
         assert container["ModelDataUrl"] == "s3://bucket/cache/chronos-2/model.tar.gz"
+
+
+def test_list_models_filters_by_task():
+    ts_models = TimeSeriesFoundationModel.list_models()
+    tabular_models = TabularFoundationModel.list_models()
+    assert "chronos-2" in ts_models and "mitra-classifier" not in ts_models
+    assert "mitra-classifier" in tabular_models and "chronos-2" not in tabular_models
+    assert sorted(FoundationModel.list_models()) == sorted(ts_models + tabular_models)
+
+
+def test_subclass_rejects_model_id_for_other_task():
+    with pytest.raises(ValueError, match="Unknown model_id 'mitra-classifier' for TimeSeriesFoundationModel"):
+        TimeSeriesFoundationModel("mitra-classifier", cloud_output_path="s3://b")

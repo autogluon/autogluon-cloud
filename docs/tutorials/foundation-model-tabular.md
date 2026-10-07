@@ -33,7 +33,7 @@ The rest of the tutorial reuses this `model` object.
 
 ### Available models
 
-The following `model_id` values are currently supported. Each `model_id` targets a single task — pick a `*-classifier` model for classification (binary or multiclass) and a `*-regressor` model for regression.
+The following `model_id` values are currently supported (also available via `TabularFoundationModel.list_models()`). Each `model_id` targets a single task — pick a `*-classifier` model for classification (binary or multiclass) and a `*-regressor` model for regression.
 
 | Model ID | Task | Documentation | Weights |
 |----------|------|---------------|---------|

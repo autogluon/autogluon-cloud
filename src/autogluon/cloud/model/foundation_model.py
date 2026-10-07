@@ -27,7 +27,7 @@ from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import reject_legacy_kwargs
 from ..utils.utils import split_pred_and_pred_proba
 from ..version import __version__
-from .registry import get_model_config
+from .registry import FOUNDATION_MODEL_REGISTRY, get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,23 @@ class FoundationModel:
 
     _backend_map: dict[str, str] = {}
     _predictor_type: str
+    _problem_types: tuple[str, ...] = ("forecasting", "multiclass", "regression")
+
+    @classmethod
+    def list_models(cls) -> list[str]:
+        """
+        List the supported ``model_id`` values.
+
+        Returns
+        -------
+        list[str]
+            IDs of the foundation models that this class can load.
+        """
+        return [
+            model_id
+            for model_id, config in FOUNDATION_MODEL_REGISTRY.items()
+            if config.problem_type in cls._problem_types
+        ]
 
     def __new__(cls, model_id: str, **kwargs) -> Self:
         if cls is not FoundationModel:
@@ -91,10 +108,8 @@ class FoundationModel:
         Parameters
         ----------
         model_id: str
-            ID of the foundation model, e.g. ``"chronos-2"`` or ``"mitra-classifier"``. See the available
-            `time series <https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html#available-models>`_
-            and `tabular <https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-tabular.html#available-models>`_
-            models.
+            ID of the foundation model, e.g. ``"chronos-2"`` or ``"mitra-classifier"``. Use :meth:`list_models` to
+            get the supported IDs.
         cloud_output_path: str | None, default = None
             S3 location where intermediate artifacts are stored. Accepts:
 
@@ -116,6 +131,10 @@ class FoundationModel:
         backend: Literal["sagemaker"], default = "sagemaker"
             Cloud backend to use.
         """
+        if model_id not in self.list_models():
+            raise ValueError(
+                f"Unknown model_id {model_id!r} for {type(self).__name__}. Available models: {self.list_models()}"
+            )
         self.model_id = model_id
         self.model_artifact_uri = model_artifact_uri
         self.cloud_output_path = resolve_cloud_output_path(cloud_output_path, backend_name=backend)
@@ -401,9 +420,9 @@ class TimeSeriesFoundationModel(FoundationModel):
     """Pretrained time series foundation model for zero-shot forecasting on Amazon SageMaker.
 
     Wraps pretrained models like `Chronos-2 <https://huggingface.co/autogluon/chronos-2>`_, Chronos-Bolt, and
-    Toto-2.0, with no training required. See
+    Toto-2.0, with no training required. Use :meth:`list_models` to get the supported ``model_id`` values, and see
     `the foundation model tutorial <https://auto.gluon.ai/cloud/stable/tutorials/foundation-model-timeseries.html>`_
-    for the supported ``model_id`` values and a full walkthrough.
+    for a full walkthrough.
 
     Predictions can be produced in three modes:
 
@@ -418,6 +437,7 @@ class TimeSeriesFoundationModel(FoundationModel):
 
     _backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
     _predictor_type = "timeseries"
+    _problem_types = ("forecasting",)
 
     @property
     def _serve_script_path(self) -> str:
@@ -657,11 +677,8 @@ class TabularFoundationModel(FoundationModel):
     """Foundation model for tabular prediction on Amazon SageMaker.
 
     Wraps pretrained tabular models like `Mitra <https://huggingface.co/autogluon/mitra-classifier>`_, with no
-    training required. Each ``model_id`` targets a single task:
-
-    * Classification: ``mitra-classifier``, ``tabicl-v2-classifier``, ``tabdpt-turbo-classifier``.
-    * Regression: ``mitra-regressor``, ``tabicl-v2-regressor``, ``tabdpt-turbo-regressor``,
-      ``nori-regressor``, ``nori-30m-regressor``.
+    training required. Each ``model_id`` targets a single task, either classification (``*-classifier``) or
+    regression (``*-regressor``). Use :meth:`list_models` to get the supported ``model_id`` values.
 
     Predictions can be produced in a one-off SageMaker job with :meth:`predict` / :meth:`predict_proba`, or
     through a real-time endpoint created with :meth:`deploy`. In both modes, labeled ``train_data`` provides the
@@ -670,6 +687,7 @@ class TabularFoundationModel(FoundationModel):
 
     _backend_map = {SAGEMAKER: TABULAR_SAGEMAKER}
     _predictor_type = "tabular"
+    _problem_types = ("multiclass", "regression")
 
     @property
     def _serve_script_path(self) -> str:
