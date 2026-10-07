@@ -1,40 +1,32 @@
 from pathlib import Path
 from typing import Any
 
-import boto3
 import pandas as pd
 
 from autogluon.common.loaders import load_pd
 
-from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.deserializers import PandasDeserializer
-from ..utils.sagemaker_api import delete_endpoint, invoke_endpoint
+from ..utils.sagemaker_api import invoke_endpoint
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
-from ..utils.utils import split_pred_and_pred_proba
+from ..utils.utils import convert_image_path_to_encoded_bytes_in_dataframe, split_pred_and_pred_proba
+from .endpoint import Endpoint
 
 DataInput = str | Path | pd.DataFrame
 Prediction = pd.DataFrame | pd.Series
 
 
-class TabularEndpoint:
-    """High-level handle for an AutoGluon-Cloud tabular foundation-model endpoint."""
+class TabularEndpoint(Endpoint):
+    """High-level handle for an AutoGluon-Cloud tabular endpoint.
 
-    def __init__(self, endpoint_name: str, session: boto3.Session | None = None):
-        """
-        Parameters
-        ----------
-        endpoint_name: str
-            Name of an existing SageMaker endpoint deployed through
-            :meth:`autogluon.cloud.TabularFoundationModel.deploy`.
-        session: boto3.Session | None, default = None
-            ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
-        """
-        self._endpoint_name = endpoint_name
-        self._session = setup_sagemaker_session(boto_session=session)
+    Returned by :meth:`autogluon.cloud.TabularCloudPredictor.deploy` and
+    :meth:`autogluon.cloud.TabularFoundationModel.deploy`. Construct it directly to attach to an existing endpoint by
+    name.
 
-    @property
-    def endpoint_name(self) -> str:
-        return self._endpoint_name
+    * **Trained predictor endpoints** (:meth:`TabularCloudPredictor.deploy`) serve the fitted predictor: pass only
+      ``data``.
+    * **Foundation model endpoints** (:meth:`TabularFoundationModel.deploy`) fit a request-scoped predictor on the
+      labeled examples sent with each request: pass ``train_data`` and ``label`` along with ``data``.
+    """
 
     @staticmethod
     def _load_data(data: DataInput) -> pd.DataFrame:
@@ -45,24 +37,42 @@ class TabularEndpoint:
     def _predict(
         self,
         data: DataInput,
-        train_data: DataInput,
-        label: str,
+        train_data: DataInput | None = None,
+        label: str | None = None,
         inference_kwargs: dict[str, Any] | None = None,
     ) -> tuple[pd.Series, Prediction]:
         data = self._load_data(data)
-        train_data = self._load_data(train_data)
+        inference_kwargs = dict(inference_kwargs or {})
+        self._pop_as_pandas(inference_kwargs)
+        image_column = inference_kwargs.pop("image_column", None)
 
-        if label not in train_data.columns:
-            raise ValueError(f"Label column {label!r} is not present in `train_data`.")
-        feature_columns = [column for column in train_data.columns if column != label]
-        missing_columns = [column for column in feature_columns if column not in data.columns]
-        if missing_columns:
-            raise ValueError(f"`data` is missing feature columns present in `train_data`: {missing_columns}.")
+        if (train_data is None) != (label is None):
+            raise ValueError(
+                "`train_data` and `label` must be passed together: pass both for foundation model endpoints, "
+                "and neither for endpoints deployed with `TabularCloudPredictor.deploy`."
+            )
+        if train_data is not None:
+            if image_column is not None:
+                raise ValueError(
+                    "`image_column` is only supported by endpoints deployed with `TabularCloudPredictor.deploy`; "
+                    "foundation model endpoints do not support image features."
+                )
+            train_data = self._load_data(train_data)
+            if label not in train_data.columns:
+                raise ValueError(f"Label column {label!r} is not present in `train_data`.")
+            feature_columns = [column for column in train_data.columns if column != label]
+            missing_columns = [column for column in feature_columns if column not in data.columns]
+            if missing_columns:
+                raise ValueError(f"`data` is missing feature columns present in `train_data`: {missing_columns}.")
+            inference_kwargs = {"label": label, **inference_kwargs}
+
+        if image_column is not None:
+            data = convert_image_path_to_encoded_bytes_in_dataframe(data, image_column)
 
         payload = AutoGluonSerializationWrapper(
             data=data,
             train_data=train_data,
-            inference_kwargs={"label": label, **(inference_kwargs or {})},
+            inference_kwargs=inference_kwargs,
         )
         raw = invoke_endpoint(
             self._endpoint_name,
@@ -80,19 +90,37 @@ class TabularEndpoint:
     def predict(
         self,
         data: DataInput,
-        train_data: DataInput,
-        label: str,
+        train_data: DataInput | None = None,
+        label: str | None = None,
         **inference_kwargs: Any,
     ) -> pd.Series:
-        """Fit the foundation model on ``train_data`` and predict ``data``.
+        """Predict ``data`` with the deployed endpoint.
 
-        The request includes both ``train_data`` and ``data``. Use
-        :meth:`autogluon.cloud.TabularFoundationModel.predict` for inputs above the payload limit.
+        This is intended for low-latency inference. For inputs above the payload limit, use
+        :meth:`autogluon.cloud.TabularCloudPredictor.predict` or
+        :meth:`autogluon.cloud.TabularFoundationModel.predict` instead.
+
+        Parameters
+        ----------
+        data: str | pathlib.Path | pd.DataFrame
+            Rows to predict, as a ``pd.DataFrame`` or local/S3 path to a data file.
+        train_data: str | pathlib.Path | pd.DataFrame | None, default = None
+            Labeled examples the foundation model is fit on. Required for foundation model endpoints; must be
+            ``None`` for trained predictor endpoints.
+        label: str | None, default = None
+            Name of the label column in ``train_data``. Required if and only if ``train_data`` is passed.
+        **inference_kwargs: Any
+            Additional args passed to ``TabularPredictor.predict`` on the endpoint.
+
+        Returns
+        -------
+        pd.Series
+            Predictions for ``data``.
 
         SageMaker API
         -------------
         * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
-          limited to 6 MB.
+          limited to 6 MB (4 MB for serverless endpoints).
         """
         pred, _ = self._predict(
             data=data,
@@ -105,23 +133,41 @@ class TabularEndpoint:
     def predict_proba(
         self,
         data: DataInput,
-        train_data: DataInput,
-        label: str,
+        train_data: DataInput | None = None,
+        label: str | None = None,
         *,
         include_predict: bool = True,
         **inference_kwargs: Any,
     ) -> tuple[pd.Series, Prediction] | Prediction:
-        """Fit the foundation model and return class probabilities.
+        """Predict class probabilities for ``data`` with the deployed endpoint.
 
-        For regression, the probability result is identical to the prediction.
+        For regression, the probability result is identical to the prediction. For inputs above the payload limit,
+        use :meth:`autogluon.cloud.TabularCloudPredictor.predict_proba` or
+        :meth:`autogluon.cloud.TabularFoundationModel.predict_proba` instead.
 
-        The request includes both ``train_data`` and ``data``. Use
-        :meth:`autogluon.cloud.TabularFoundationModel.predict_proba` for inputs above the payload limit.
+        Parameters
+        ----------
+        data: str | pathlib.Path | pd.DataFrame
+            Rows to predict, as a ``pd.DataFrame`` or local/S3 path to a data file.
+        train_data: str | pathlib.Path | pd.DataFrame | None, default = None
+            Labeled examples the foundation model is fit on. Required for foundation model endpoints; must be
+            ``None`` for trained predictor endpoints.
+        label: str | None, default = None
+            Name of the label column in ``train_data``. Required if and only if ``train_data`` is passed.
+        include_predict: bool, default = True
+            Whether to return the predictions along with the probabilities. Both are computed in the same request.
+        **inference_kwargs: Any
+            Additional args passed to ``TabularPredictor.predict_proba`` on the endpoint.
+
+        Returns
+        -------
+        tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series
+            ``(prediction, predict_probability)`` if ``include_predict`` is True, otherwise ``predict_probability``.
 
         SageMaker API
         -------------
         * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
-          limited to 6 MB.
+          limited to 6 MB (4 MB for serverless endpoints).
         """
         pred, pred_proba = self._predict(
             data=data,
@@ -132,13 +178,3 @@ class TabularEndpoint:
         if include_predict:
             return pred, pred_proba
         return pred_proba
-
-    def delete_endpoint(self) -> None:
-        """Delete the endpoint and its backing model + endpoint config.
-
-        SageMaker API
-        -------------
-        * :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`: delete the endpoint and
-          the endpoint config and model created with it.
-        """
-        delete_endpoint(self._endpoint_name, self._session)

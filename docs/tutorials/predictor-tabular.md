@@ -54,47 +54,45 @@ A rough guideline: if you need predictions less often than once an hour and can 
 
 ### Real-time inference
 
-Deploy the predictor as a SageMaker endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.deploy`:
+Deploy the predictor as a SageMaker endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.deploy`, then send requests through the returned {py:class}`~autogluon.cloud.TabularEndpoint`:
 
 ```python
-cloud_predictor.deploy(
-    instance_type="ml.m5.2xlarge",
-)
+endpoint = cloud_predictor.deploy(instance_type="ml.m5.2xlarge")  # takes a few minutes
 ```
 
-Optionally, you can also attach to a deployed endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_endpoint`:
+{py:meth}`~autogluon.cloud.TabularEndpoint.predict` returns a pandas Series of predictions:
 
 ```python
-cloud_predictor.attach_endpoint(endpoint="ENDPOINT_NAME")
-```
-
-Send requests to the endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.predict_real_time`, which returns a pandas Series of predictions:
-
-```python
-result = cloud_predictor.predict_real_time("test.csv")  # DataFrame, local path, or S3 URL
+result = endpoint.predict("test.csv")  # DataFrame, local path, or S3 URL
 # 0      dog
 # 1      cat
 # 2      cat
 # Name: label, dtype: object
 ```
 
-For class probabilities, use {py:meth}`~autogluon.cloud.TabularCloudPredictor.predict_proba_real_time`, which returns a DataFrame with one column per class:
+For class probabilities, use {py:meth}`~autogluon.cloud.TabularEndpoint.predict_proba`. Like the batch version, it returns a `(predictions, probabilities)` tuple by default; pass `include_predict=False` to get the probabilities DataFrame alone:
 
 ```python
-result = cloud_predictor.predict_proba_real_time("test.csv")
+probabilities = endpoint.predict_proba("test.csv", include_predict=False)
 #         dog       cat
 # 0  0.682754  0.317246
 # 1  0.195782  0.804218
 # 2  0.372283  0.627717
 ```
 
-Make sure you clean up the endpoint with {py:meth}`~autogluon.cloud.TabularCloudPredictor.cleanup_deployment`:
+The endpoint stays active — and billed — until you delete it:
 
 ```python
-cloud_predictor.cleanup_deployment()
+endpoint.delete_endpoint()
 ```
 
-To check whether an endpoint is currently attached, call {py:meth}`~autogluon.cloud.TabularCloudPredictor.info` and look for the `endpoint` key in the returned dict.
+To send requests to an endpoint that's already running (e.g. from a previous session), build a {py:class}`~autogluon.cloud.TabularEndpoint` directly from the endpoint name:
+
+```python
+from autogluon.cloud import TabularEndpoint
+
+endpoint = TabularEndpoint(endpoint_name="ENDPOINT_NAME")
+```
 
 #### Invoke the endpoint without AutoGluon-Cloud
 The deployed endpoint is a normal SageMaker endpoint, and you can invoke it through other methods. For example, to invoke it with boto3 directly:

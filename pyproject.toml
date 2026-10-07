@@ -47,7 +47,7 @@ dependencies = [
     "PyYAML~=6.0",
     "Pillow>=10.2,<13",
     "huggingface_hub>=0.20,<2",
-    "typing_extensions>=4.0,<5",
+    "typing_extensions>=4.5,<5",  # 4.5 adds @deprecated (PEP 702)
     # CLI dependencies (autogluon-cloud command)
     "click>=8.0,<9",
     "rich>=13.0,<15",

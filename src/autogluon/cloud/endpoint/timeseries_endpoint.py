@@ -1,52 +1,36 @@
 from typing import Any
 
-import boto3
 import pandas as pd
 
 from autogluon.common.loaders import load_pd
 
-from ..utils.aws_utils import setup_sagemaker_session
 from ..utils.deserializers import PandasDeserializer
-from ..utils.sagemaker_api import delete_endpoint, invoke_endpoint
+from ..utils.sagemaker_api import invoke_endpoint
 from ..utils.serializers import AutoGluonSerializationWrapper, AutoGluonSerializer
+from .endpoint import Endpoint
 
 
-class TimeSeriesEndpoint:
-    """High-level handle for an AutoGluon-Cloud time series inference endpoint.
+class TimeSeriesEndpoint(Endpoint):
+    """High-level handle for an AutoGluon-Cloud time series endpoint.
 
-    Wraps a SageMaker endpoint with the AutoGluon-Cloud serializer/deserializer pair, providing a clean
-    :meth:`predict` interface. Use this to attach to an existing endpoint by name. To create a new endpoint, call
-    :meth:`autogluon.cloud.TimeSeriesFoundationModel.deploy`, which returns a :class:`TimeSeriesEndpoint` already
-    pointing at the new endpoint.
+    Returned by :meth:`autogluon.cloud.TimeSeriesCloudPredictor.deploy` and
+    :meth:`autogluon.cloud.TimeSeriesFoundationModel.deploy`. Construct it directly to attach to an existing endpoint
+    by name.
+
+    * **Trained predictor endpoints** (:meth:`TimeSeriesCloudPredictor.deploy`) use the ``prediction_length``,
+      ``quantile_levels``, and ``target`` set at fit time, and reject requests that set them to different values.
+    * **Foundation model endpoints** (:meth:`TimeSeriesFoundationModel.deploy`) read them from each request.
     """
-
-    def __init__(self, endpoint_name: str, session: boto3.Session | None = None):
-        """
-        Parameters
-        ----------
-        endpoint_name: str
-            Name of an existing SageMaker endpoint deployed via AutoGluon-Cloud (e.g. through
-            :meth:`autogluon.cloud.TimeSeriesFoundationModel.deploy`). The endpoint must understand the AutoGluon-Cloud
-            request payload format.
-        session: boto3.Session | None, default = None
-            ``boto3.Session`` used to invoke and delete the endpoint. If ``None``, the default ambient session is used.
-        """
-        self._endpoint_name = endpoint_name
-        self._session = setup_sagemaker_session(boto_session=session)
-
-    @property
-    def endpoint_name(self) -> str:
-        return self._endpoint_name
 
     def predict(
         self,
         data: str | pd.DataFrame,
         known_covariates: str | pd.DataFrame | None = None,
         static_features: str | pd.DataFrame | None = None,
-        prediction_length: int = 1,
-        target: str = "target",
-        id_column: str = "item_id",
-        timestamp_column: str = "timestamp",
+        prediction_length: int | None = None,
+        target: str | None = None,
+        id_column: str | None = None,
+        timestamp_column: str | None = None,
         quantile_levels: list[float] | None = None,
     ) -> pd.DataFrame:
         """
@@ -62,17 +46,25 @@ class TimeSeriesEndpoint:
             Future values of the known covariates over the forecast horizon.
         static_features: str | pd.DataFrame | None, default = None
             Static (time-independent) features describing each individual time series.
-        prediction_length: int, default = 1
-            Forecast horizon: how many time steps into the future the model should predict.
-        target: str, default = "target"
-            Name of the column that contains the target values to forecast.
-        id_column: str, default = "item_id"
-            Name of the column with the unique identifier of each time series (item).
-        timestamp_column: str, default = "timestamp"
-            Name of the column with the observation timestamps.
+        prediction_length: int | None, default = None
+            Forecast horizon: how many time steps into the future the model should predict. Defaults to 1 on
+            foundation model endpoints; trained predictor endpoints use the value set at fit time.
+        target: str | None, default = None
+            Name of the column that contains the target values to forecast. Defaults to ``"target"`` on foundation
+            model endpoints; trained predictor endpoints use the value set at fit time.
+        id_column: str | None, default = None
+            Name of the column with the unique identifier of each time series (item). Defaults to ``"item_id"`` on
+            foundation model endpoints; trained predictor endpoints use the column set at fit time.
+        timestamp_column: str | None, default = None
+            Name of the column with the observation timestamps. Defaults to ``"timestamp"`` on foundation model
+            endpoints; trained predictor endpoints use the column set at fit time.
         quantile_levels: list[float] | None, default = None
             List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults to
-            ``[0.1, 0.2, ..., 0.9]``.
+            ``[0.1, 0.2, ..., 0.9]`` on foundation model endpoints; trained predictor endpoints use the value set at
+            fit time.
+
+        Trained predictor endpoints raise an error if ``prediction_length``, ``target``, or ``quantile_levels`` is
+        set to a value different from the one used at fit time.
 
         Returns
         -------
@@ -91,14 +83,18 @@ class TimeSeriesEndpoint:
         if isinstance(static_features, str):
             static_features = load_pd.load(static_features)
 
+        # Only send the args that were set: the endpoint falls back to its own defaults for the rest.
         inference_kwargs: dict[str, Any] = {
-            "prediction_length": prediction_length,
-            "target": target,
-            "id_column": id_column,
-            "timestamp_column": timestamp_column,
+            key: value
+            for key, value in {
+                "prediction_length": prediction_length,
+                "target": target,
+                "id_column": id_column,
+                "timestamp_column": timestamp_column,
+                "quantile_levels": quantile_levels,
+            }.items()
+            if value is not None
         }
-        if quantile_levels is not None:
-            inference_kwargs["quantile_levels"] = quantile_levels
 
         payload = AutoGluonSerializationWrapper(
             data=data,
@@ -114,13 +110,3 @@ class TimeSeriesEndpoint:
             deserializer=PandasDeserializer(),
             accept="application/x-parquet",
         )
-
-    def delete_endpoint(self) -> None:
-        """Delete the endpoint and its backing model + endpoint config.
-
-        SageMaker API
-        -------------
-        * :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`: delete the endpoint and
-          the endpoint config and model created with it.
-        """
-        delete_endpoint(self._endpoint_name, self._session)

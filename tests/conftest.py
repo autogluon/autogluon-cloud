@@ -68,27 +68,23 @@ class CloudTestHelper:
             assert tags.get("autogluon-cloud-model-id") == model_id, f"missing/wrong model-id tag on {arn}: {tags}"
 
     @staticmethod
-    def test_endpoint(cloud_predictor, test_data, inference_kwargs=None, **predict_real_time_kwargs):
-        if inference_kwargs is None:
-            inference_kwargs = {}
+    def test_endpoint(endpoint, test_data, **inference_kwargs):
         try:
-            pred = cloud_predictor.predict_real_time(test_data, **inference_kwargs, **predict_real_time_kwargs)
+            pred = endpoint.predict(test_data, **inference_kwargs)
             assert isinstance(pred, pd.Series)
-            pred_proba = cloud_predictor.predict_proba_real_time(
-                test_data, **inference_kwargs, **predict_real_time_kwargs
-            )
+            pred_proba = endpoint.predict_proba(test_data, include_predict=False, **inference_kwargs)
             assert isinstance(pred_proba, pd.DataFrame)
         except Exception as e:
-            cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
+            endpoint.delete_endpoint()  # cleanup endpoint if test failed
             raise e
 
     @staticmethod
-    def test_timeseries_endpoint(cloud_predictor, test_data, **predict_real_time_kwargs):
+    def test_timeseries_endpoint(endpoint, test_data, **predict_kwargs):
         try:
-            pred = cloud_predictor.predict_real_time(test_data, **predict_real_time_kwargs)
+            pred = endpoint.predict(test_data, **predict_kwargs)
             assert isinstance(pred, pd.DataFrame)
         except Exception as e:
-            cloud_predictor.cleanup_deployment()  # cleanup endpoint if test failed
+            endpoint.delete_endpoint()  # cleanup endpoint if test failed
             raise e
 
 

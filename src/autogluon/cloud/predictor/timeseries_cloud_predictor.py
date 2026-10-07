@@ -5,16 +5,18 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from typing_extensions import deprecated
 
 from ..backend.constant import SAGEMAKER, TIMESERIES_SAGEMAKER
+from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
 from ..utils.sagemaker_api import reject_legacy_kwargs
-from .cloud_predictor import CloudPredictor
+from .cloud_predictor import _DEPRECATED_REAL_TIME, CloudPredictor
 
 logger = logging.getLogger(__name__)
 
 
-class TimeSeriesCloudPredictor(CloudPredictor):
+class TimeSeriesCloudPredictor(CloudPredictor[TimeSeriesEndpoint]):
     """Train and deploy AutoGluon time series forecasting models on Amazon SageMaker.
 
     Wraps :class:`autogluon.timeseries.TimeSeriesPredictor` (`docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_)
@@ -23,6 +25,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
     predictor_file_name = "TimeSeriesCloudPredictor.pkl"
     backend_map = {SAGEMAKER: TIMESERIES_SAGEMAKER}
+    _endpoint_cls = TimeSeriesEndpoint
 
     @property
     def predictor_type(self):
@@ -167,6 +170,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
 
         return self
 
+    @deprecated(_DEPRECATED_REAL_TIME, category=None)
     def predict_real_time(
         self,
         data: str | pd.DataFrame,
@@ -179,6 +183,11 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         Predict with the deployed SageMaker endpoint. A deployed SageMaker endpoint is required.
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
+
+        :meta private:
+
+        .. deprecated::
+            Use ``predict()`` of the endpoint returned by :meth:`deploy` instead.
 
         ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.
 
@@ -208,6 +217,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
           limited to 6 MB (4 MB for serverless endpoints).
         """
+        self._warn_deprecated_real_time("predict_real_time")
         return self.backend.predict_real_time(
             test_data=data,
             static_features=static_features,
@@ -241,7 +251,7 @@ class TimeSeriesCloudPredictor(CloudPredictor):
         """
         Predict using SageMaker batch transform.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, use `predict_real_time()` instead.
+        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
         To learn more: https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html
 
         ``data`` must use the same ``id_column`` / ``timestamp_column`` names that were passed to ``fit()``.

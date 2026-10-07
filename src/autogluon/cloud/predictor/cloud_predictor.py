@@ -4,13 +4,15 @@ import io
 import logging
 import os
 import tarfile
+import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Generic, Literal, TypeVar
 
 import boto3
 import pandas as pd
+from typing_extensions import deprecated
 
 from autogluon.common.loaders import load_pkl
 from autogluon.common.savers import save_pkl
@@ -21,6 +23,7 @@ from autogluon.common.utils.utils import setup_outputdir
 from ..backend.backend import Backend
 from ..backend.backend_factory import BackendFactory
 from ..backend.constant import SAGEMAKER
+from ..endpoint.endpoint import Endpoint
 from ..utils.aws_utils import resolve_cloud_output_path
 from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE
 from ..utils.sagemaker_api import reject_legacy_kwargs
@@ -28,10 +31,17 @@ from ..utils.utils import safe_unpack_archive
 
 logger = logging.getLogger(__name__)
 
+EndpointT = TypeVar("EndpointT", bound=Endpoint)
 
-class CloudPredictor(ABC):
+# Marks methods as deprecated for IDEs and type checkers only (category=None); the methods emit their own
+# FutureWarning at runtime, naming the concrete predictor and endpoint classes.
+_DEPRECATED_REAL_TIME = "Deploy an endpoint with `deploy()` and call `predict()` / `predict_proba()` on it instead."
+
+
+class CloudPredictor(ABC, Generic[EndpointT]):
     predictor_file_name = "CloudPredictor.pkl"
     backend_map = {}
+    _endpoint_cls: type[EndpointT]
 
     def __init__(
         self,
@@ -396,9 +406,12 @@ class CloudPredictor(ABC):
         inference_mode: Literal["realtime", "serverless"] = "realtime",
         inference_config: dict[str, Any] | None = None,
         backend_overrides: dict[str, dict[str, Any]] | None = None,
-    ) -> None:
+    ) -> EndpointT:
         """
         Deploy a predictor to an inference endpoint.
+
+        Returns a handle to the endpoint; call its ``predict()`` for low-latency inference, then
+        ``delete_endpoint()`` to tear it down.
 
         Parameters
         ----------
@@ -442,6 +455,11 @@ class CloudPredictor(ABC):
               built by AutoGluon-Cloud; lists and other non-dict values replace the generated ones.
             * Example: ``{"ProductionVariant": {"ModelDataDownloadTimeoutInSeconds": 1200}}``
 
+        Returns
+        -------
+        TabularEndpoint | TimeSeriesEndpoint | MultiModalEndpoint
+            Handle to the deployed endpoint, matching the predictor type.
+
         SageMaker API
         -------------
         * :sm-api:`CreateModel`: registers the model artifact and inference image as a SageMaker model.
@@ -449,12 +467,13 @@ class CloudPredictor(ABC):
           count, or the serverless settings.
         * :sm-api:`CreateEndpoint`: launches the endpoint.
 
-        The endpoint is billed until :meth:`cleanup_deployment` deletes it.
+        The endpoint is billed until ``delete_endpoint()`` of the returned endpoint deletes it.
         """
         if inference_mode == "serverless" and instance_type is not None:
             raise ValueError("`instance_type` must not be set when `inference_mode='serverless'`.")
         if instance_type is None and inference_mode == "realtime":
             instance_type = "ml.m5.2xlarge"
+        self._warn_if_endpoint_active()
         self.backend.deploy(
             predictor_path=predictor_path,
             endpoint_name=endpoint_name,
@@ -468,29 +487,90 @@ class CloudPredictor(ABC):
             inference_config=inference_config,
             backend_overrides=backend_overrides,
         )
+        return self._endpoint_cls(
+            endpoint_name=self.backend.endpoint_name,
+            session=self.backend.sagemaker_session.boto_session,
+        )
 
+    def _warn_if_endpoint_active(self) -> None:
+        # The predictor only remembers the name of its last endpoint, which may since have been deleted through the
+        # returned endpoint handle, so ask SageMaker before warning.
+        previous_endpoint = self.backend.endpoint_name
+        if previous_endpoint is None:
+            return
+        try:
+            status = self.backend.sagemaker_session.sagemaker_client.describe_endpoint(EndpointName=previous_endpoint)[
+                "EndpointStatus"
+            ]
+        except Exception:
+            return
+        if status not in ("Deleting", "Failed"):
+            logger.warning(
+                f"This predictor already deployed endpoint {previous_endpoint} (status: {status}). Deploying a new "
+                f"endpoint; {previous_endpoint} keeps running and incurring charges until you delete it with "
+                f"`{self._endpoint_cls.__name__}('{previous_endpoint}').delete_endpoint()`."
+            )
+
+    def _warn_deprecated(self, method: str, replacement: str, stacklevel: int = 3) -> None:
+        warnings.warn(
+            f"`{type(self).__name__}.{method}` is deprecated and will be removed in a future release. {replacement}",
+            FutureWarning,
+            stacklevel=stacklevel,
+        )
+
+    def _warn_deprecated_real_time(self, method: str) -> None:
+        endpoint_method = method.removesuffix("_real_time")
+        self._warn_deprecated(
+            method,
+            f"Use the endpoint returned by `deploy()` instead: `endpoint = predictor.deploy()`, then "
+            f"`endpoint.{endpoint_method}(...)`.",
+            stacklevel=4,
+        )
+
+    @deprecated("Construct the endpoint class directly from the endpoint name instead.", category=None)
     def attach_endpoint(self, endpoint: str) -> None:
         """
         Attach the current CloudPredictor to an existing endpoint.
+
+        :meta private:
+
+        .. deprecated::
+            Construct the endpoint class directly to get a handle to an existing endpoint instead, e.g.
+            ``TabularEndpoint(endpoint_name)``.
 
         Parameters
         ----------
         endpoint: str
             Name of the endpoint being attached to.
         """
+        self._warn_deprecated(
+            "attach_endpoint",
+            f"Use `{self._endpoint_cls.__name__}(endpoint_name)` to get a handle to an existing endpoint instead.",
+        )
         self.backend.attach_endpoint(endpoint)
 
+    @deprecated("The endpoint returned by `deploy()` is independent of the predictor.", category=None)
     def detach_endpoint(self) -> str:
         """
         Detach the current endpoint and return its name.
+
+        :meta private:
+
+        .. deprecated::
+            The endpoint returned by :meth:`deploy` is independent of the predictor, so there is nothing to detach.
 
         Returns
         -------
         str
             Name of the detached endpoint. Pass it to :meth:`attach_endpoint` to attach it again.
         """
+        self._warn_deprecated(
+            "detach_endpoint",
+            "The endpoint returned by `deploy()` is independent of the predictor, so there is nothing to detach.",
+        )
         return self.backend.detach_endpoint()
 
+    @deprecated(_DEPRECATED_REAL_TIME, category=None)
     def predict_real_time(
         self,
         test_data: str | pd.DataFrame,
@@ -502,6 +582,11 @@ class CloudPredictor(ABC):
         Predict with the deployed endpoint. A deployed endpoint is required.
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict()` instead.
+
+        :meta private:
+
+        .. deprecated::
+            Use ``predict()`` of the endpoint returned by :meth:`deploy` instead.
 
         Parameters
         ----------
@@ -527,11 +612,13 @@ class CloudPredictor(ABC):
         * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
           limited to 6 MB (4 MB for serverless endpoints).
         """
+        self._warn_deprecated_real_time("predict_real_time")
         self._validate_inference_kwargs(inference_kwargs=kwargs)
         return self.backend.predict_real_time(
             test_data=test_data, test_data_image_column=test_data_image_column, accept=accept, inference_kwargs=kwargs
         )
 
+    @deprecated(_DEPRECATED_REAL_TIME, category=None)
     def predict_proba_real_time(
         self,
         test_data: str | pd.DataFrame,
@@ -544,6 +631,11 @@ class CloudPredictor(ABC):
         This is intended to provide a low latency inference.
         If you want to inference on a large dataset, use `predict_proba()` instead.
         If your problem_type is regression, this functions identically to `predict_real_time`, returning the same output.
+
+        :meta private:
+
+        .. deprecated::
+            Use ``predict_proba(..., include_predict=False)`` of the endpoint returned by :meth:`deploy` instead.
 
         Parameters
         ----------
@@ -569,9 +661,10 @@ class CloudPredictor(ABC):
         * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
           limited to 6 MB (4 MB for serverless endpoints).
         """
+        self._warn_deprecated_real_time("predict_proba_real_time")
         self._validate_inference_kwargs(inference_kwargs=kwargs)
         return self.backend.predict_proba_real_time(
-            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept
+            test_data=test_data, test_data_image_column=test_data_image_column, accept=accept, inference_kwargs=kwargs
         )
 
     @reject_legacy_kwargs
@@ -592,7 +685,7 @@ class CloudPredictor(ABC):
         """
         Batch inference.
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, use `predict_real_time()` instead.
+        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
 
         Parameters
         ----------
@@ -678,7 +771,7 @@ class CloudPredictor(ABC):
         """
         Batch inference
         When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, use `predict_real_time()` instead.
+        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
 
         Parameters
         ----------
@@ -780,15 +873,24 @@ class CloudPredictor(ABC):
         """
         return self.backend.get_batch_inference_job_status(job_name)
 
+    @deprecated("Call `delete_endpoint()` on the endpoint returned by `deploy()` instead.", category=None)
     def cleanup_deployment(self) -> None:
         """
         Delete the deployed endpoint and other artifacts
+
+        :meta private:
+
+        .. deprecated::
+            Use ``delete_endpoint()`` of the endpoint returned by :meth:`deploy` instead.
 
         SageMaker API
         -------------
         * :sm-api:`DeleteEndpoint`, :sm-api:`DeleteEndpointConfig` and :sm-api:`DeleteModel`: delete the endpoint and
           the endpoint config and model created with it.
         """
+        self._warn_deprecated(
+            "cleanup_deployment", "Use `delete_endpoint()` of the endpoint returned by `deploy()` instead."
+        )
         self.backend.cleanup_deployment()
 
     def _download_predictor(self, path, save_path):
