@@ -110,7 +110,7 @@ class TabularEndpoint(Endpoint):
         label: str | None, default = None
             Name of the label column in ``train_data``. Required if and only if ``train_data`` is passed.
         **inference_kwargs: Any
-            Additional args passed to the prediction call of the ``TabularPredictor`` on the endpoint, e.g. ``model``.
+            Additional args passed to ``TabularPredictor.predict`` on the endpoint.
 
         Returns
         -------
@@ -157,7 +157,7 @@ class TabularEndpoint(Endpoint):
         include_predict: bool, default = True
             Whether to return the predictions along with the probabilities. Both are computed in the same request.
         **inference_kwargs: Any
-            Additional args passed to the prediction call of the ``TabularPredictor`` on the endpoint, e.g. ``model``.
+            Additional args passed to ``TabularPredictor.predict_proba`` on the endpoint.
 
         Returns
         -------
