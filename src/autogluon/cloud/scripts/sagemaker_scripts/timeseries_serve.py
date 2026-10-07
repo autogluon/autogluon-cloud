@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 
+import numpy as np
 from autogluon.timeseries import TimeSeriesPredictor
 
 from serving_utils.timeseries import parse_payload, render_response
@@ -51,7 +52,11 @@ def _check_fit_time_args(model, inference_kwargs):
             if not isinstance(value, (list, tuple)):
                 raise ValueError(f"`quantile_levels` must be a list of floats, got {value!r}.")
             value = sorted(value)
-        if value != fit_time_value:
+            # Tolerance absorbs float32 / serialization round-off; the length check guards against broadcasting.
+            matches = len(value) == len(fit_time_value) and np.allclose(value, fit_time_value)
+        else:
+            matches = value == fit_time_value
+        if not matches:
             raise ValueError(
                 f"This endpoint serves a predictor fit with {key}={fit_time_value!r}, but the request has "
                 f"{key}={value!r}. Omit `{key}` from the request, or fit a new predictor."
