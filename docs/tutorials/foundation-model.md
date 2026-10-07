@@ -11,6 +11,12 @@ Run pretrained foundation models on SageMaker — zero-shot inference with no tr
   Forecast with pretrained models like {py:class}`~autogluon.cloud.TimeSeriesFoundationModel` (Chronos-2, Chronos-Bolt).
 :::
 
+:::{grid-item-card} Tabular
+  :link: foundation-model-tabular.html
+
+  Classify or regress with pretrained models like {py:class}`~autogluon.cloud.TabularFoundationModel` (Mitra, TabICLv2).
+:::
+
 ::::
 
 ```{toctree}
@@ -18,4 +24,5 @@ Run pretrained foundation models on SageMaker — zero-shot inference with no tr
 :maxdepth: 1
 
 Time Series <foundation-model-timeseries>
+Tabular <foundation-model-tabular>
 ```

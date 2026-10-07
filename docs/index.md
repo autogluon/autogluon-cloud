@@ -40,7 +40,7 @@ AutoGluon-Cloud lets you train and deploy state-of-the-art ML models for classif
 
 - **Works like local [AutoGluon](https://auto.gluon.ai/stable/index.html).** Pass in DataFrames, get predictions back — as convenient as working locally, with the compute handled by AWS.
 - **No boilerplate.** No training scripts, inference handlers, or serialization code to write and maintain.
-- **Official AWS containers.** Everything runs in the [AutoGluon Deep Learning Containers](https://aws.github.io/deep-learning-containers/), maintained and security-patched by AWS.
+- **Official AWS containers.** Everything runs in the [AutoGluon Deep Learning Container](container/index.md), maintained and security-patched by AWS.
 - **Sensible defaults, fully configurable.** Under the hood it's just SageMaker running in your AWS account, so you stay in full control.
 
 ## {octicon}`package` Installation
@@ -81,42 +81,36 @@ endpoint.delete_endpoint()
 → [Full walkthrough](tutorials/foundation-model-timeseries.md)
 :::
 
-
-## {octicon}`gear` Train your own predictor
-
-:::{dropdown} Tabular
+:::{dropdown} Tabular (Mitra)
 :animate: fade-in-slide-down
 :color: primary
 
-Train a classification or regression model on tabular data.
+Classification and regression with a pretrained model — labeled rows are passed as context, no training required.
 
 ```python
-from autogluon.cloud import TabularCloudPredictor
+import pandas as pd
+from autogluon.cloud import TabularFoundationModel
 
 # `train_data` and `test_data` can be a local path, S3 URL, or pandas DataFrame
-train_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv"
-test_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv"
+train_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv").sample(2000)  # labeled context
+test_data = pd.read_csv("https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv").head(100)
 
-# Train
-cloud_predictor = TabularCloudPredictor()
-cloud_predictor.fit(
-    train_data=train_data,
-    predictor_init_args={"label": "class"},  # passed to TabularPredictor()
-    predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
-)
+model = TabularFoundationModel("mitra-classifier")
 
 # Batch prediction
-result = cloud_predictor.predict(test_data)
+predictions = model.predict(test_data=test_data, train_data=train_data, label="class")
 
 # Real-time inference endpoint
-endpoint = cloud_predictor.deploy()
-result = endpoint.predict(test_data)
+endpoint = model.deploy()
+predictions = endpoint.predict(data=test_data, train_data=train_data, label="class")
 endpoint.delete_endpoint()
 ```
 
-→ [Full walkthrough](tutorials/predictor-tabular.md)
+→ [Full walkthrough](tutorials/foundation-model-tabular.md)
 :::
 
+
+## {octicon}`gear` Train your own predictor
 
 :::{dropdown} Time Series
 :animate: fade-in-slide-down
@@ -151,6 +145,41 @@ endpoint.delete_endpoint()
 :::
 
 
+:::{dropdown} Tabular
+:animate: fade-in-slide-down
+:open:
+:color: primary
+
+Train a classification or regression model on tabular data.
+
+```python
+from autogluon.cloud import TabularCloudPredictor
+
+# `train_data` and `test_data` can be a local path, S3 URL, or pandas DataFrame
+train_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/train.csv"
+test_data = "https://autogluon.s3.amazonaws.com/datasets/Inc/test.csv"
+
+# Train
+cloud_predictor = TabularCloudPredictor()
+cloud_predictor.fit(
+    train_data=train_data,
+    predictor_init_args={"label": "class"},  # passed to TabularPredictor()
+    predictor_fit_args={"time_limit": 120},  # passed to TabularPredictor.fit()
+)
+
+# Batch prediction
+result = cloud_predictor.predict(test_data)
+
+# Real-time inference endpoint
+endpoint = cloud_predictor.deploy()
+result = endpoint.predict(test_data)
+endpoint.delete_endpoint()
+```
+
+→ [Full walkthrough](tutorials/predictor-tabular.md)
+:::
+
+
 ```{toctree}
 ---
 caption: Tutorials
@@ -165,14 +194,26 @@ Foundation Models <tutorials/foundation-model>
 
 ```{toctree}
 ---
+caption: AutoGluon Container
+maxdepth: 1
+hidden:
+---
+
+Overview <container/index>
+Custom Scripts <container/custom-scripts>
+Reference <container/reference>
+```
+
+```{toctree}
+---
 caption: API
 maxdepth: 1
 hidden:
 ---
 
 Setup <api/setup>
-Tabular <api/tabular>
 Time Series <api/timeseries>
+Tabular <api/tabular>
 ```
 
 ```{toctree}

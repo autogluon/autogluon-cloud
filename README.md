@@ -55,7 +55,7 @@ endpoint.delete_endpoint()
 
 ## ⚙️ Train your own predictor
 
-Train an AutoGluon predictor on your data and serve it from SageMaker. Full walkthrough: [tabular](https://auto.gluon.ai/cloud/stable/tutorials/predictor-tabular.html), [time series](https://auto.gluon.ai/cloud/stable/tutorials/predictor-timeseries.html).
+Train an AutoGluon predictor on your data and serve it from SageMaker. Full walkthrough: [time series](https://auto.gluon.ai/cloud/stable/tutorials/predictor-timeseries.html), [tabular](https://auto.gluon.ai/cloud/stable/tutorials/predictor-tabular.html).
 
 ```python
 from autogluon.cloud import TabularCloudPredictor
