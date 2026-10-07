@@ -181,5 +181,5 @@ for resource in (endpoint, config, model):
 
 - **GPU.** Use the `1.6-cu133-amzn2023` image with GPU instances. GPU endpoints also need `inference_ami_version="al2023-ami-sagemaker-inference-gpu-4-1"` in the `ProductionVariant`.
 - **Local testing.** Pass `training_mode=Mode.LOCAL_CONTAINER` (from `sagemaker.train.model_trainer`) and `instance_type="local_cpu"` to run the training job in Docker on your machine. Requires Docker Compose.
-- **More handler examples.** AutoGluon-Cloud's own [inference handlers](https://github.com/autogluon/autogluon-cloud/tree/master/src/autogluon/cloud/scripts/sagemaker_scripts) (`tabular_serve.py`, `timeseries_serve.py`, ...) follow the same `model_fn` / `transform_fn` contract and handle CSV, JSON and parquet payloads.
+- **More handler examples.** AutoGluon-Cloud's own [inference handlers](https://github.com/autogluon/autogluon-cloud/tree/v0.6.0/src/autogluon/cloud/scripts/sagemaker_scripts) (`tabular_serve.py`, `timeseries_serve.py`, ...) follow the same `model_fn` / `transform_fn` contract and handle CSV, JSON and parquet payloads.
 - **More training examples.** Any of the AutoGluon tutorials for [tabular](https://auto.gluon.ai/stable/tutorials/tabular/index.html) and [time series](https://auto.gluon.ai/stable/tutorials/timeseries/index.html) data can go into `train.py` with a matching `inference.py`.

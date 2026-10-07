@@ -47,7 +47,7 @@ Foundation model weights are not baked into the image. They are downloaded from 
 
 ## How AutoGluon-Cloud uses the image
 
-AutoGluon-Cloud picks the image for you based on the `framework_version` argument of `fit()`, `predict()` and `deploy()` (default `"1.6"`), the AWS region, and whether the instance type has a GPU. It then supplies its own [training and inference scripts](https://github.com/autogluon/autogluon-cloud/tree/master/src/autogluon/cloud/scripts/sagemaker_scripts) — the same kind of scripts you would write yourself following [Custom Scripts](custom-scripts.md).
+AutoGluon-Cloud picks the image for you based on the `framework_version` argument of `fit()`, `predict()` and `deploy()` (default `"1.6"`), the AWS region, and whether the instance type has a GPU. It then supplies its own [training and inference scripts](https://github.com/autogluon/autogluon-cloud/tree/v0.6.0/src/autogluon/cloud/scripts/sagemaker_scripts) — the same kind of scripts you would write yourself following [Custom Scripts](custom-scripts.md).
 
 To run AutoGluon-Cloud on a different image — for example, one you extended with extra packages — pass `custom_image_uri`:
 
