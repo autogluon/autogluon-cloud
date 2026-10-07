@@ -48,6 +48,8 @@ def _check_fit_time_args(model, inference_kwargs):
             continue
         value = inference_kwargs[key]
         if key == "quantile_levels":
+            if not isinstance(value, (list, tuple)):
+                raise ValueError(f"`quantile_levels` must be a list of floats, got {value!r}.")
             value = sorted(value)
         if value != fit_time_value:
             raise ValueError(

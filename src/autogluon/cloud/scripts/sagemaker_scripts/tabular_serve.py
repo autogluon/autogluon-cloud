@@ -63,6 +63,11 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
             raise ValueError(f"Unsupported x-autogluon payload version: {payload.get('version')}. Expected 1.")
         data = pd.read_parquet(BytesIO(base64.b64decode(payload["data"])))
         inference_kwargs = payload.get("inference_kwargs", {})
+        if payload.get("train_data") is not None or "label" in (inference_kwargs or {}):
+            raise ValueError(
+                "This endpoint serves a trained predictor; `train_data` and `label` are only used by foundation "
+                "model endpoints. Omit them from the request."
+            )
         data = _align_columns(data, column_names)
 
     else:

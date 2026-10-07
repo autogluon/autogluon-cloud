@@ -1187,7 +1187,8 @@ class SagemakerBackend(Backend):
                     "The invocation of endpoint failed with Error Code 413. This is likely due to pay load size being too large."
                 )
                 logger.warning(
-                    "SageMaker endpoint could only take maximum 5MB. Please consider reduce test data size or use `predict()` instead."
+                    "SageMaker endpoints accept at most 6 MB per request (4 MB for serverless endpoints). Please "
+                    "send smaller batches, or use `predict()` for batch inference instead."
                 )
             raise e
 
