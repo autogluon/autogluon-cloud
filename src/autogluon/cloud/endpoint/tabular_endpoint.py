@@ -110,7 +110,7 @@ class TabularEndpoint(Endpoint):
         label: str | None, default = None
             Name of the label column in ``train_data``. Required if and only if ``train_data`` is passed.
         **inference_kwargs: Any
-            Additional args passed to the ``predict`` call of the AutoGluon predictor on the endpoint.
+            Additional args passed to the prediction call of the ``TabularPredictor`` on the endpoint, e.g. ``model``.
 
         Returns
         -------
@@ -157,7 +157,7 @@ class TabularEndpoint(Endpoint):
         include_predict: bool, default = True
             Whether to return the predictions along with the probabilities. Both are computed in the same request.
         **inference_kwargs: Any
-            Additional args passed to the ``predict_proba`` call of the AutoGluon predictor on the endpoint.
+            Additional args passed to the prediction call of the ``TabularPredictor`` on the endpoint, e.g. ``model``.
 
         Returns
         -------
