@@ -110,9 +110,7 @@ class TabularEndpoint(Endpoint):
         label: str | None, default = None
             Name of the label column in ``train_data``. Required if and only if ``train_data`` is passed.
         **inference_kwargs: Any
-            Additional args passed to the ``predict`` call of the AutoGluon predictor on the endpoint. For trained
-            predictor endpoints with an image feature, pass ``image_column`` to name the column of ``data`` with
-            absolute paths to local images; the images are encoded and sent with the request.
+            Additional args passed to the ``predict`` call of the AutoGluon predictor on the endpoint.
 
         Returns
         -------
@@ -159,9 +157,7 @@ class TabularEndpoint(Endpoint):
         include_predict: bool, default = True
             Whether to return the predictions along with the probabilities. Both are computed in the same request.
         **inference_kwargs: Any
-            Additional args passed to the ``predict_proba`` call of the AutoGluon predictor on the endpoint. For trained
-            predictor endpoints with an image feature, pass ``image_column`` to name the column of ``data`` with
-            absolute paths to local images; the images are encoded and sent with the request.
+            Additional args passed to the ``predict_proba`` call of the AutoGluon predictor on the endpoint.
 
         Returns
         -------
