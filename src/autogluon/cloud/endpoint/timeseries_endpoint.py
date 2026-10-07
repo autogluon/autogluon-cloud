@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -24,9 +25,9 @@ class TimeSeriesEndpoint(Endpoint):
 
     def predict(
         self,
-        data: str | pd.DataFrame,
-        known_covariates: str | pd.DataFrame | None = None,
-        static_features: str | pd.DataFrame | None = None,
+        data: str | Path | pd.DataFrame,
+        known_covariates: str | Path | pd.DataFrame | None = None,
+        static_features: str | Path | pd.DataFrame | None = None,
         prediction_length: int | None = None,
         target: str | None = None,
         id_column: str | None = None,
@@ -34,54 +35,55 @@ class TimeSeriesEndpoint(Endpoint):
         quantile_levels: list[float] | None = None,
     ) -> pd.DataFrame:
         """
-        Run real-time prediction on the deployed endpoint.
+        Forecast the future values of ``data`` with the deployed endpoint.
+
+        On trained predictor endpoints, ``prediction_length``, ``target``, ``id_column``, ``timestamp_column``, and
+        ``quantile_levels`` default to the values set at fit time, and setting ``prediction_length``, ``target``, or
+        ``quantile_levels`` to a different value raises an error.
 
         Parameters
         ----------
-        data: str | pd.DataFrame
+        data: str | pathlib.Path | pd.DataFrame
             Historical time series to forecast from, in long format, as a ``pd.DataFrame`` or local/S3 path to a data file.
             See the `TimeSeriesPredictor docs <https://auto.gluon.ai/stable/api/autogluon.timeseries.TimeSeriesPredictor.html>`_
             for the expected format.
-        known_covariates: str | pd.DataFrame | None, default = None
-            Future values of the known covariates over the forecast horizon.
-        static_features: str | pd.DataFrame | None, default = None
-            Static (time-independent) features describing each individual time series.
+        known_covariates: str | pathlib.Path | pd.DataFrame | None, default = None
+            Future values of the known covariates over the forecast horizon, as a ``pd.DataFrame`` or local/S3 path to
+            a data file.
+        static_features: str | pathlib.Path | pd.DataFrame | None, default = None
+            Static (time-independent) features describing each individual time series, as a ``pd.DataFrame`` or
+            local/S3 path to a data file.
         prediction_length: int | None, default = None
-            Forecast horizon: how many time steps into the future the model should predict. Defaults to 1 on
-            foundation model endpoints; trained predictor endpoints use the value set at fit time.
+            Number of time steps to forecast. Defaults to 1 on foundation model endpoints.
         target: str | None, default = None
-            Name of the column that contains the target values to forecast. Defaults to ``"target"`` on foundation
-            model endpoints; trained predictor endpoints use the value set at fit time.
+            Name of the column with the values to forecast. Defaults to ``"target"`` on foundation model endpoints.
         id_column: str | None, default = None
-            Name of the column with the unique identifier of each time series (item). Defaults to ``"item_id"`` on
-            foundation model endpoints; trained predictor endpoints use the column set at fit time.
+            Name of the column with the ID of each time series. Defaults to ``"item_id"`` on foundation model
+            endpoints.
         timestamp_column: str | None, default = None
             Name of the column with the observation timestamps. Defaults to ``"timestamp"`` on foundation model
-            endpoints; trained predictor endpoints use the column set at fit time.
+            endpoints.
         quantile_levels: list[float] | None, default = None
-            List of increasing decimals between 0 and 1 specifying which quantiles to estimate. Defaults to
-            ``[0.1, 0.2, ..., 0.9]`` on foundation model endpoints; trained predictor endpoints use the value set at
-            fit time.
-
-        Trained predictor endpoints raise an error if ``prediction_length``, ``target``, or ``quantile_levels`` is
-        set to a value different from the one used at fit time.
+            Quantiles to forecast, as floats between 0 and 1. Defaults to ``[0.1, 0.2, ..., 0.9]`` on foundation
+            model endpoints.
 
         Returns
         -------
         pd.DataFrame
-            Predicted forecasts.
+            Forecasts with ``item_id`` and ``timestamp`` columns, a ``mean`` column, and one column per quantile
+            level.
 
         SageMaker API
         -------------
         * :sm-runtime-api:`InvokeEndpoint`: sends the data to the endpoint and returns the predictions. The payload is
           limited to 6 MB (4 MB for serverless endpoints).
         """
-        if isinstance(data, str):
-            data = load_pd.load(data)
-        if isinstance(known_covariates, str):
-            known_covariates = load_pd.load(known_covariates)
-        if isinstance(static_features, str):
-            static_features = load_pd.load(static_features)
+        if isinstance(data, (str, Path)):
+            data = load_pd.load(str(data))
+        if isinstance(known_covariates, (str, Path)):
+            known_covariates = load_pd.load(str(known_covariates))
+        if isinstance(static_features, (str, Path)):
+            static_features = load_pd.load(str(static_features))
 
         # Only send the args that were set: the endpoint falls back to its own defaults for the rest.
         inference_kwargs: dict[str, Any] = {

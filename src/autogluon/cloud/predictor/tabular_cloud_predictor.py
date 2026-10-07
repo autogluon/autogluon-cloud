@@ -30,7 +30,7 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
     @property
     def predictor_type(self):
         """
-        Type of the underneath AutoGluon Predictor
+        Type of the underlying AutoGluon predictor.
         """
         return "tabular"
 
@@ -62,10 +62,9 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
         """
         Fit and predict in a single SageMaker training job.
 
-        Fits a ``TabularPredictor`` on ``train_data`` and runs batch prediction on ``test_data`` inside the same
-        training container. This avoids the overhead of a separate batch-transform job (one cold start, one data
-        upload, no predictor-tarball round-trip). The predictor is left fitted afterward, so ``deploy()`` /
-        ``predict()`` still work.
+        Fits a ``TabularPredictor`` on ``train_data`` and predicts on ``test_data`` in the same job, which is faster
+        than :meth:`fit` followed by :meth:`predict`. The predictor stays fitted, so :meth:`deploy` and
+        :meth:`predict` still work afterward.
 
         Parameters
         ----------
@@ -75,30 +74,29 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
             Data to predict on, as a ``pd.DataFrame`` or local/S3 path to a data file. Must contain every feature
             column present in ``train_data`` (the label column is not required).
         predictor_init_args: dict
-            Init args for the predictor.
+            Arguments forwarded to ``TabularPredictor()``, e.g. ``{"label": "target"}``.
         predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to ``TabularPredictor.fit()``. Must NOT contain ``train_data`` or
             ``tuning_data``.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact.
         framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance type the predictor will be trained on with SageMaker.
+            AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
+            Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-tabular`` is generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the training job.
         instance_count: int, default = 1
-            Number of instances used to fit the predictor.
+            Number of training instances. Only single-instance training is supported.
         volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training.
+            Size in GB of the EBS volume that stores the training data and model artifacts.
         custom_image_uri: str | None, default = None
-            Custom container image URI. If set, ``framework_version`` is ignored.
+            Custom training container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
-            Whether the call should wait until the job completes.
-        predictions_path: str | None
-            S3 URL where predictions will be written by the training container (e.g.
-            ``s3://my-bucket/runs/2024-05-01/predictions.csv``). Defaults to
+            Whether to block until the job completes. If ``False``, returns ``None`` once the job is launched.
+        predictions_path: str | None, default = None
+            S3 URL of the predictions file, ending in ``.csv`` or ``.parquet``. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
@@ -111,8 +109,7 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
         Returns
         -------
         pd.Series | None
-            Predictions as a ``pd.Series``. Returns ``None`` when ``wait`` is False; fetch later via
-            ``get_fit_predict_results()``.
+            Predictions, or ``None`` if ``wait=False``; fetch them later with :meth:`get_fit_predict_results`.
 
         SageMaker API
         -------------
@@ -164,41 +161,42 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
         """
         Fit and predict probabilities in a single SageMaker training job.
 
-        Fits a ``TabularPredictor`` on ``train_data`` and predicts class probabilities for ``test_data`` inside the
-        same training container. For regression the probabilities are identical to the predictions.
+        Same as :meth:`fit_predict`, but returns class probabilities. For regression, the "probabilities" are
+        identical to the predictions.
 
         Parameters
         ----------
         train_data: str | pathlib.Path | pd.DataFrame
             Training data, as a ``pd.DataFrame`` or local/S3 path to a data file.
         test_data: str | pathlib.Path | pd.DataFrame
-            Data to predict on. Must contain every feature column present in ``train_data``.
+            Data to predict on, as a ``pd.DataFrame`` or local/S3 path to a data file. Must contain every feature
+            column present in ``train_data``.
         predictor_init_args: dict
-            Init args for the predictor.
+            Arguments forwarded to ``TabularPredictor()``, e.g. ``{"label": "target"}``.
         predictor_fit_args: dict | None, default = None
-            Additional fit args forwarded to ``TabularPredictor.fit()``.
+            Additional fit args forwarded to ``TabularPredictor.fit()``. Must NOT contain ``train_data`` or
+            ``tuning_data``.
         include_predict: bool, default = True
-            Whether to return the predictions along with the probabilities. Comes for free — the job always
-            computes both.
+            Whether to also return the predictions. The job always computes both, so this adds no cost.
         leaderboard: bool, default = True
             Whether to include the leaderboard in the output artifact.
         framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job. If None, CloudPredictor creates one with prefix ``ag-cloud-tabular``.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance type the predictor will be trained on with SageMaker.
+            AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
+            Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-tabular`` is generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the training job.
         instance_count: int, default = 1
-            Number of instances used to fit the predictor.
+            Number of training instances. Only single-instance training is supported.
         volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training.
+            Size in GB of the EBS volume that stores the training data and model artifacts.
         custom_image_uri: str | None, default = None
-            Custom container image URI. If set, ``framework_version`` is ignored.
+            Custom training container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
-            Whether the call should wait until the job completes.
-        predictions_path: str | None
-            S3 URL where predictions will be written by the training container. Defaults to
+            Whether to block until the job completes. If ``False``, returns ``None`` once the job is launched.
+        predictions_path: str | None, default = None
+            S3 URL of the predictions file, ending in ``.csv`` or ``.parquet``. Defaults to
             ``{cloud_output_path}/{job_name}/predictions.csv``.
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
@@ -211,9 +209,8 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
         Returns
         -------
         tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None
-            If ``include_predict`` is True, returns ``(prediction, predict_probability)``; otherwise just
-            ``predict_probability``. Returns ``None`` when ``wait`` is False; fetch later via
-            ``get_fit_predict_proba_results()``.
+            ``(prediction, predict_probability)`` if ``include_predict=True``, otherwise ``predict_probability``.
+            Returns ``None`` if ``wait=False``; fetch them later with :meth:`get_fit_predict_proba_results`.
 
         SageMaker API
         -------------
@@ -255,7 +252,7 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
 
     def get_fit_predict_results(self) -> pd.Series:
         """
-        Retrieve predictions produced by a completed ``fit_predict`` job.
+        Retrieve the predictions of a completed :meth:`fit_predict` or :meth:`fit_predict_proba` job.
 
         Returns
         -------
@@ -267,7 +264,7 @@ class TabularCloudPredictor(CloudPredictor[TabularEndpoint]):
 
     def get_fit_predict_proba_results(self) -> tuple[pd.Series, pd.DataFrame | pd.Series]:
         """
-        Retrieve predictions and probabilities produced by a completed ``fit_predict_proba`` job.
+        Retrieve the predictions and probabilities of a completed :meth:`fit_predict` or :meth:`fit_predict_proba` job.
 
         Returns
         -------

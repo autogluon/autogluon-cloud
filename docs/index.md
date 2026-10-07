@@ -214,6 +214,7 @@ hidden:
 Setup <api/setup>
 Time Series <api/timeseries>
 Tabular <api/tabular>
+Utilities <api/utilities>
 ```
 
 ```{toctree}

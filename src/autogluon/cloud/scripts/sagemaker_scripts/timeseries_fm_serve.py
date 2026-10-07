@@ -40,6 +40,8 @@ def model_fn(model_dir):
     )
     model.fit(train_data=dummy_df)
     model.persist()
+    # Requests that don't set quantile_levels must get the defaults, not the levels of a previous request
+    model._default_quantile_levels = list(model.quantile_levels)
     return model
 
 
@@ -55,8 +57,7 @@ def transform_fn(model, request_body, input_content_type, output_content_type="a
     model.target = inference_kwargs.get("target", "target")
     model.freq = inference_kwargs.get("freq", "D")
     model.prediction_length = inference_kwargs.get("prediction_length", 1)
-    if "quantile_levels" in inference_kwargs:
-        model.quantile_levels = sorted(inference_kwargs["quantile_levels"])
+    model.quantile_levels = sorted(inference_kwargs.get("quantile_levels", model._default_quantile_levels))
 
     predictions = model.predict(tsdf, known_covariates=known_covariates)
     return render_response(predictions, output_content_type)

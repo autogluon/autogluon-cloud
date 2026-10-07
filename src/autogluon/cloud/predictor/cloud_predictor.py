@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import posixpath
 import tarfile
 import warnings
 from abc import ABC, abstractmethod
@@ -55,12 +56,9 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         Parameters
         ----------
         local_output_path: str | None, default = None
-            Path to directory where downloaded trained predictor, batch transform results, and intermediate outputs should be saved
-            If unspecified, a time-stamped folder called "AutogluonCloudPredictor/ag-[TIMESTAMP]"
-            will be created in the working directory to store all downloaded trained predictor, batch transform results, and intermediate outputs.
-            Note: To call `fit()` twice and save all results of each fit,
-            you must specify different `local_output_path` locations or don't specify `local_output_path` at all.
-            Otherwise files from first `fit()` will be overwritten by second `fit()`.
+            Local directory for the saved predictor, downloaded artifacts, and intermediate files. If ``None``, a
+            timestamped folder ``AutogluonCloudPredictor/ag-<timestamp>`` is created in the working directory.
+            Reusing the same path for two predictors overwrites the files of the first one.
         cloud_output_path: str | None, default = None
             S3 location where intermediate artifacts and trained models are stored. Accepts:
 
@@ -72,17 +70,13 @@ class CloudPredictor(ABC, Generic[EndpointT]):
               by :func:`autogluon.cloud.bootstrap` / :func:`autogluon.cloud.register`) and
               append a timestamped subfolder. Raises if no bucket is configured.
         backend: str, default = "sagemaker"
-            The backend to use. Currently only "sagemaker" is supported.
-            SageMaker backend supports training, deploying and batch inference on Amazon SageMaker. Only single instance training is supported.
+            Cloud backend to use. Currently only ``"sagemaker"`` is supported.
         role: str | None, default = None
             ARN of the SageMaker execution role used to run training and inference jobs. If ``None``, falls back to
             ``role_arn`` in ``~/.autogluon/cloud.yaml`` (set by :func:`autogluon.cloud.bootstrap` /
             :func:`autogluon.cloud.register`), and finally to the role of the current AWS identity.
         verbosity: int, default = 2
-            Verbosity levels range from 0 to 4 and control how much information is printed.
-            Higher levels correspond to more detailed print statements (you can set verbosity = 0 to suppress warnings).
-            If using logging, you can alternatively control amount of information printed via `logger.setLevel(L)`,
-            where `L` ranges from 0 to 50 (Note: higher values of `L` correspond to fewer print statements, opposite of verbosity levels).
+            Logging verbosity from 0 (errors only) to 4 (debug).
         """
         self.verbosity = verbosity
         cloud_logger = logging.getLogger("autogluon.cloud")
@@ -105,27 +99,27 @@ class CloudPredictor(ABC, Generic[EndpointT]):
     @abstractmethod
     def predictor_type(self) -> str:
         """
-        Type of the underneath AutoGluon Predictor
+        Type of the underlying AutoGluon predictor.
         """
         raise NotImplementedError
 
     @property
     def is_fit(self) -> bool:
         """
-        Whether this CloudPredictor is fitted already
+        Whether the training job has completed successfully.
         """
         return self.backend.is_fit
 
     @property
     def endpoint_name(self) -> str | None:
         """
-        Return the CloudPredictor deployed endpoint name
+        Name of the most recent endpoint deployed by this predictor, or ``None``.
         """
         return self.backend.endpoint_name
 
     def info(self) -> dict[str, Any]:
         """
-        Return general info about CloudPredictor
+        Return a summary of the predictor: output paths, the training job, batch inference jobs, and the endpoint.
         """
         info = dict(
             local_output_path=self.local_output_path,
@@ -138,11 +132,21 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         return info
 
     def leaderboard(self) -> pd.DataFrame:
-        info = self.backend.get_fit_job_info()
-        cloud_output_path = self.cloud_output_path
-        path = os.path.join(cloud_output_path, "model", info["name"], "output/output.tar.gz")
-        assert is_s3_url(path), "Please provide a valid s3 path to the leaderboard result."
-        bucket, key = s3_path_to_bucket_prefix(path)
+        """
+        Return the leaderboard of models trained by the completed ``fit()`` job.
+
+        Returns
+        -------
+        pd.DataFrame
+            Output of the underlying predictor's ``leaderboard()``. Empty if the leaderboard can't be read, e.g.
+            when the job hasn't finished or was fit with ``leaderboard=False``.
+        """
+        model_path = self.backend.get_fit_job_output_path()
+        if model_path is None:
+            return pd.DataFrame()
+        # SageMaker writes the output data (incl. the leaderboard) to output.tar.gz next to model.tar.gz
+        bucket, key = s3_path_to_bucket_prefix(model_path)
+        key = posixpath.join(posixpath.dirname(key), "output.tar.gz")
         s3 = boto3.client("s3")
         try:
             wholefile = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
@@ -166,7 +170,7 @@ class CloudPredictor(ABC, Generic[EndpointT]):
             os.makedirs(util_path)
         except FileExistsError:
             logger.warning(
-                f"Warning: path already exists! This predictor may overwrite an existing predictor! path='{path!r}'"
+                f"Warning: path already exists! This predictor may overwrite an existing predictor! path={path!r}"
             )
         return os.path.abspath(path)
 
@@ -201,32 +205,31 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         tuning_data: str | pathlib.Path | pd.DataFrame | None, default = None
             Optional tuning data.
         predictor_init_args: dict
-            Init args for the predictor.
+            Arguments forwarded to the underlying predictor's constructor, e.g. ``{"label": "target"}``.
         predictor_fit_args: dict | None, default = None
             Additional fit args forwarded to the underlying predictor's ``fit()``. Must NOT contain
             ``train_data`` or ``tuning_data`` — pass those as explicit arguments above.
         leaderboard: bool, default = True
-            Whether to include the leaderboard in the output artifact
+            Whether to save the leaderboard in the output artifact, so that :meth:`leaderboard` can read it.
         framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Training uses the official AutoGluon DLC image for this version.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job.
-            If None, CloudPredictor creates one with a predictor-specific prefix.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance type the predictor will be trained on with SageMaker.
+            AutoGluon version, e.g. ``"1.6"``. Training uses the official AutoGluon DLC image for this version.
+            Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the training job. If ``None``, a unique name with prefix ``ag-cloud-<predictor_type>`` is
+            generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the training job.
         instance_count: int | str, default = "auto"
-            Number of instances used to fit the predictor.
-            If "auto", the backend decides the instance count.
+            Number of training instances. Only single-instance training is supported, so this is always 1.
         volume_size: int, default = 100
-            Size in GB of the EBS volume to use for storing input data during training.
-            Must be large enough to store training data if File Mode is used (which is the default).
+            Size in GB of the EBS volume that stores the training data and model artifacts.
+        custom_image_uri: str | None, default = None
+            Custom training container image URI. If set, ``framework_version`` is ignored.
         timeout: int, default = 24*60*60
-            Timeout in seconds for training. This timeout doesn't include time for pre-processing or launching up the training job.
+            Maximum training job runtime in seconds.
         wait: bool, default = True
-            Whether the call should wait until the job completes
-            To be noticed, the function won't return immediately because there are some preparations needed prior fit.
-            Use `get_fit_job_status` to get job status.
+            Whether to block until the job completes. If ``False``, returns once the job is launched; use
+            :meth:`get_fit_job_status` to poll it.
         backend_overrides: dict[str, dict[str, Any]] | None, default = None
             Raw SageMaker request fields for settings without a dedicated argument.
 
@@ -292,13 +295,12 @@ class CloudPredictor(ABC, Generic[EndpointT]):
 
     def attach_job(self, job_name: str) -> None:
         """
-        Attach to a sagemaker training job.
-        This is useful when the local process crashed and you want to reattach to the previous job
+        Attach to an existing SageMaker training job, e.g. after the local process that launched it crashed.
 
         Parameters
         ----------
         job_name: str
-            The name of the job being attached
+            Name of the training job.
 
         SageMaker API
         -------------
@@ -308,13 +310,12 @@ class CloudPredictor(ABC, Generic[EndpointT]):
 
     def get_fit_job_status(self) -> str:
         """
-        Get the status of the training job.
-        This is useful when the user made an asynchronous call to the `fit()` function
+        Get the status of the training job, e.g. after calling ``fit(wait=False)``.
 
         Returns
         -------
         str
-            Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+            One of ``InProgress``, ``Completed``, ``Failed``, ``Stopping``, ``Stopped``, or ``NotCreated``.
 
         SageMaker API
         -------------
@@ -324,32 +325,31 @@ class CloudPredictor(ABC, Generic[EndpointT]):
 
     def get_fit_job_output_path(self) -> str:
         """
-        Get the output path in the cloud of the trained artifact
+        Get the S3 path of the trained predictor artifact (``model.tar.gz``).
 
         Returns
         -------
-        str
-            Output path of the job
+        str | None
+            S3 path of the artifact, or ``None`` if the training job hasn't completed.
         """
         return self.backend.get_fit_job_output_path()
 
     def download_trained_predictor(self, predictor_path: str | None = None, save_path: str | None = None) -> str:
         """
-        Download the trained predictor from the cloud.
+        Download and extract the trained predictor.
 
         Parameters
         ----------
         predictor_path: str | None, default = None
-            The s3 predictor path you want to download from.
-            If None, CloudPredictor will try to find the predictor that's being trained by it and will raise an error if there's none.
+            S3 path of the predictor tarball. If ``None``, uses the artifact of this predictor's training job.
         save_path: str | None, default = None
-            Path to save the model.
-            If None, CloudPredictor will create a folder 'AutogluonModels' for the model under `local_output_path`.
+            Local directory to download to. The predictor is extracted to ``<save_path>/AutoGluonModels``.
+            Defaults to ``local_output_path``.
 
         Returns
         -------
         str
-            Path to the saved model.
+            Path to the extracted predictor directory.
         """
         path = predictor_path
         if not path:
@@ -370,23 +370,21 @@ class CloudPredictor(ABC, Generic[EndpointT]):
 
     def to_local_predictor(self, predictor_path: str | None = None, save_path: str | None = None, **kwargs):
         """
-        Convert the Cloud trained predictor to a local AutoGluon Predictor.
+        Download the trained predictor and load it as a local AutoGluon predictor.
 
         Parameters
         ----------
         predictor_path: str | None, default = None
-            The s3 predictor path you want to download from.
-            If None, CloudPredictor will try to find the predictor that's being trained by it and will raise an error if there's none.
+            S3 path of the predictor tarball. If ``None``, uses the artifact of this predictor's training job.
         save_path: str | None, default = None
-            Path to save the model.
-            If None, CloudPredictor will create a folder for the model.
+            Local directory to download to. Defaults to ``local_output_path``.
         **kwargs: Any
-            Additional args to be passed to `load` call of the underneath predictor
+            Additional args forwarded to the underlying predictor's ``load()``.
 
         Returns
         -------
-        TabularPredictor | MultiModalPredictor
-            TabularPredictor or MultiModalPredictor based on `predictor_type`
+        TabularPredictor | TimeSeriesPredictor
+            The loaded local predictor, matching the predictor type.
         """
         predictor_cls = self._get_local_predictor_cls()
         local_model_path = self.download_trained_predictor(predictor_path=predictor_path, save_path=save_path)
@@ -408,40 +406,32 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         backend_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> EndpointT:
         """
-        Deploy a predictor to an inference endpoint.
+        Deploy a predictor to a real-time inference endpoint.
 
         Returns a handle to the endpoint; call its ``predict()`` for low-latency inference, then
         ``delete_endpoint()`` to tear it down.
 
         Parameters
         ----------
-        predictor_path: str
-            Path to the predictor tarball you want to deploy.
-            Path can be both a local path or a S3 location.
-            If None, will deploy the most recent trained predictor trained with `fit()`.
-        endpoint_name: str
-            The endpoint name to use for the deployment.
-            If None, CloudPredictor creates one with a predictor-specific prefix.
-        framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
-            Defaults to the version used by `fit()`.
-            If `custom_image_uri` is set, this argument will be ignored.
+        predictor_path: str | None, default = None
+            Local or S3 path of the predictor tarball to deploy. If ``None``, deploys the predictor trained by
+            :meth:`fit`.
+        endpoint_name: str | None, default = None
+            Name of the endpoint. If ``None``, a unique name with prefix ``ag-cloud-<predictor_type>`` is generated.
+        framework_version: str | None, default = None
+            AutoGluon version, e.g. ``"1.6"``. Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by :meth:`fit`. Ignored if ``custom_image_uri`` is set.
         instance_type: str | None, default = None
-            Instance to be deployed for the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None``
-            when ``inference_mode="serverless"``.
-        initial_instance_count: int, default = 1,
-            Initial number of instances to be deployed for the endpoint. Ignored when
+            Instance type of the endpoint. Defaults to ``ml.m5.2xlarge``. Must be ``None`` when
             ``inference_mode="serverless"``.
-        custom_image_uri: str | None, default = None,
-            Custom image to use to deploy endpoint with.
-            If not specified, with use official DLC image:
-            https://github.com/aws/deep-learning-containers/blob/master/available_images.md#autogluon-inference-containers
-        volume_size: int, default = None
-            Size in GB of the EBS volume to use for the endpoint.
-            SageMaker GPU instance endpoint currently doesn't support specifying volume_size. Will ignore in such cases.
-        wait: Bool, default = True,
-            Whether to wait for the endpoint to be deployed.
-            To be noticed, the function won't return immediately because there are some preparations needed prior deployment.
+        initial_instance_count: int, default = 1
+            Initial number of endpoint instances. Ignored when ``inference_mode="serverless"``.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
+        volume_size: int | None, default = None
+            Size in GB of the endpoint's EBS volume. Ignored for GPU instances (``ml.g*`` / ``ml.p*``).
+        wait: bool, default = True
+            Whether to block until the endpoint is in service.
         inference_mode: {"realtime", "serverless"}, default = "realtime"
             Endpoint type. ``"serverless"`` provisions a SageMaker Serverless Inference endpoint
             (no instance management, scales to zero).
@@ -683,35 +673,33 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         backend_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> pd.Series | None:
         """
-        Batch inference.
-        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
+        Predict with a SageMaker batch transform job.
+
+        Suited for large datasets. For low-latency predictions, deploy an endpoint with :meth:`deploy` instead.
 
         Parameters
         ----------
         test_data: str | pd.DataFrame
-            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to a csv.
-        test_data_image_column: str, default = None
-            If test_data involves image modality, you must specify the column name corresponding to image paths.
-            The path MUST be an abspath
-        predictor_path: str
-            Path to the predictor tarball you want to use to predict.
-            Path can be both a local path or a S3 location.
-            If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
-            Defaults to the version used by `fit()`.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job.
-            If None, CloudPredictor creates one with a predictor-specific prefix.
-        instance_count: int, default = 1,
-            Number of instances used to do batch transform.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance to be used for batch transform.
+            Data to predict on, as a ``pd.DataFrame`` or local path to a data file.
+        test_data_image_column: str | None, default = None
+            Name of the column containing absolute paths to images, if the data contains images.
+        predictor_path: str | None, default = None
+            Local or S3 path of the predictor tarball. If ``None``, uses the predictor trained by :meth:`fit`.
+        framework_version: str | None, default = None
+            AutoGluon version, e.g. ``"1.6"``. Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by :meth:`fit`. Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the batch transform job. If ``None``, a unique name with prefix ``ag-cloud-<predictor_type>`` is
+            generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the batch transform job.
+        instance_count: int, default = 1
+            Number of batch transform instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
-            Whether to wait for batch transform to complete.
-            To be noticed, the function won't return immediately because there are some preparations needed prior transform.
+            Whether to block until the job completes and return the predictions. If ``False``, returns ``None`` once
+            the job is launched; use :meth:`get_batch_inference_job_status` to poll it.
         predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
@@ -726,8 +714,7 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         Returns
         -------
         pd.Series | None
-            Predict results in ``pd.Series`` if `wait` is True
-            None if `wait` is False
+            Predictions, or ``None`` if ``wait=False``.
 
         SageMaker API
         -------------
@@ -769,38 +756,36 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         backend_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None:
         """
-        Batch inference
-        When minimizing latency isn't a concern, then the batch transform functionality may be easier, more scalable, and more appropriate.
-        If you want to minimize latency, deploy an endpoint with `deploy()` instead.
+        Predict class probabilities with a SageMaker batch transform job.
+
+        Suited for large datasets. For low-latency predictions, deploy an endpoint with :meth:`deploy` instead.
+        For regression, the "probabilities" are identical to the predictions.
 
         Parameters
         ----------
         test_data: str | pd.DataFrame
-            The test data to be inferenced. Can be a ``pd.DataFrame``, or a local path to a csv.
-        test_data_image_column: str, default = None
-            If test_data involves image modality, you must specify the column name corresponding to image paths.
-            The path MUST be an abspath
+            Data to predict on, as a ``pd.DataFrame`` or local path to a data file.
+        test_data_image_column: str | None, default = None
+            Name of the column containing absolute paths to images, if the data contains images.
         include_predict: bool, default = True
-            Whether to include predict result along with predict_proba results.
-            This flag can save you time from making two calls to get both the prediction and the probability as batch inference involves noticeable overhead.
-        predictor_path: str
-            Path to the predictor tarball you want to use to predict.
-            Path can be both a local path or a S3 location.
-            If None, will use the most recent trained predictor trained with `fit()`.
-        framework_version: str, optional
-            AutoGluon version, e.g. "1.6". Inference uses the official AutoGluon DLC image for this version.
-            Defaults to the version used by `fit()`.
-            If `custom_image_uri` is set, this argument will be ignored.
-        job_name: str, default = None
-            Name of the launched training job.
-            If None, CloudPredictor creates one with a predictor-specific prefix.
-        instance_count: int, default = 1,
-            Number of instances used to do batch transform.
-        instance_type: str, default = 'ml.m5.2xlarge'
-            Instance to be used for batch transform.
+            Whether to also return the predictions, saving a second batch transform job.
+        predictor_path: str | None, default = None
+            Local or S3 path of the predictor tarball. If ``None``, uses the predictor trained by :meth:`fit`.
+        framework_version: str | None, default = None
+            AutoGluon version, e.g. ``"1.6"``. Inference uses the official AutoGluon DLC image for this version.
+            Defaults to the version used by :meth:`fit`. Ignored if ``custom_image_uri`` is set.
+        job_name: str | None, default = None
+            Name of the batch transform job. If ``None``, a unique name with prefix ``ag-cloud-<predictor_type>`` is
+            generated.
+        instance_type: str, default = "ml.m5.2xlarge"
+            Instance type of the batch transform job.
+        instance_count: int, default = 1
+            Number of batch transform instances.
+        custom_image_uri: str | None, default = None
+            Custom inference container image URI. If set, ``framework_version`` is ignored.
         wait: bool, default = True
-            Whether to wait for batch transform to complete.
-            To be noticed, the function won't return immediately because there are some preparations needed prior transform.
+            Whether to block until the job completes and return the predictions. If ``False``, returns ``None`` once
+            the job is launched; use :meth:`get_batch_inference_job_status` to poll it.
         predictions_path: str | None, default = None
             S3 prefix under which the batch transform job writes its results (``<predictions_path>/<input file>.out``).
             Defaults to ``{cloud_output_path}/batch_transform/<timestamp>/results``.
@@ -815,10 +800,9 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         Returns
         -------
         tuple[pd.Series, pd.DataFrame | pd.Series] | pd.DataFrame | pd.Series | None
-            If `wait` is False, will return None or (None, None) if `include_predict` is True
-            If `wait` is True and `include_predict` is True,
-            will return (prediction, predict_probability), where prediction is a ``pd.Series`` and predict_probability is a ``pd.DataFrame``
-            or a ``pd.Series`` that's identical to prediction when it's a regression problem.
+            ``(prediction, predict_probability)`` if ``include_predict=True``, otherwise ``predict_probability``.
+            ``predict_probability`` is a ``pd.DataFrame`` with one column per class, or a ``pd.Series`` for
+            regression. If ``wait=False``, returns ``(None, None)`` or ``None``, respectively.
 
         SageMaker API
         -------------
@@ -846,26 +830,33 @@ class CloudPredictor(ABC, Generic[EndpointT]):
 
     def get_batch_inference_job_info(self, job_name: str | None = None) -> dict[str, Any]:
         """
-        Get general info of the batch inference job.
-        If job_name not specified, return the info of the most recent batch inference job
+        Get info about a batch inference job launched by this predictor.
+
+        Parameters
+        ----------
+        job_name: str | None, default = None
+            Name of the job. If ``None``, uses the most recent job.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            Job name, status, and result path, or ``None`` if no such job exists.
         """
         return self.backend.get_batch_inference_job_info(job_name)
 
     def get_batch_inference_job_status(self, job_name: str | None = None) -> str:
         """
-        Get the status of the batch inference job.
-        This is useful when the user made an asynchronous call to the `predict()` function
+        Get the status of a batch inference job, e.g. after calling ``predict(wait=False)``.
 
         Parameters
         ----------
-        job_name: str
-            The name of the job being checked.
-            If None, will check the most recent job status.
+        job_name: str | None, default = None
+            Name of the job. If ``None``, uses the most recent job.
 
         Returns
         -------
         str
-            Valid Values: InProgress | Completed | Failed | Stopping | Stopped | NotCreated
+            One of ``InProgress``, ``Completed``, ``Failed``, ``Stopping``, ``Stopped``, or ``NotCreated``.
 
         SageMaker API
         -------------
@@ -906,7 +897,12 @@ class CloudPredictor(ABC, Generic[EndpointT]):
 
     def save(self, silent: bool = False) -> None:
         """
-        Save the CloudPredictor so that user can later reload the predictor to gain access to deployed endpoint.
+        Save the predictor to ``local_output_path``, so it can be restored later with :meth:`load`.
+
+        Parameters
+        ----------
+        silent: bool, default = False
+            Whether to suppress the log message.
         """
         path = self.local_output_path
         predictor_file_name = self.predictor_file_name
@@ -915,18 +911,20 @@ class CloudPredictor(ABC, Generic[EndpointT]):
         if not silent:
             logger.log(
                 20,
-                f"{type(self).__name__} saved. To load, use: predictor = {type(self).__name__}.load('{self.local_output_path!r}')",
+                f"{type(self).__name__} saved. To load, use: predictor = {type(self).__name__}.load({self.local_output_path!r})",
             )
 
     @classmethod
     def load(cls, path: str, verbosity: int | None = None) -> CloudPredictor:
         """
-        Load the CloudPredictor
+        Load a predictor saved with :meth:`save`.
 
         Parameters
         ----------
         path: str
-            The path to directory in which this Predictor was previously saved
+            The ``local_output_path`` of the saved predictor.
+        verbosity: int | None, default = None
+            If set, overrides the logging verbosity.
 
         Returns
         -------
