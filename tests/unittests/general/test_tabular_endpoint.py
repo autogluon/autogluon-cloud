@@ -116,6 +116,16 @@ def test_image_column_is_encoded_and_not_forwarded(make_endpoint, invoke_endpoin
     assert payload.inference_kwargs == {}
 
 
+def test_image_column_with_train_data_raises(make_endpoint, invoke_endpoint):
+    endpoint = make_endpoint(pd.DataFrame({"label": ["a"]}))
+    train_data = pd.DataFrame({"image": ["/abs/img.png"], "label": ["a"]})
+
+    with pytest.raises(ValueError, match="`image_column` is only supported"):
+        endpoint.predict(pd.DataFrame({"image": ["/abs/img.png"]}), train_data, "label", image_column="image")
+
+    invoke_endpoint.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "train_data, label", [(None, None), (pd.DataFrame({"feature": [0], "label": ["a"]}), "label")]
 )

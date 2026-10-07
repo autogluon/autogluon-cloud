@@ -52,6 +52,11 @@ class TabularEndpoint(Endpoint):
                 "and neither for endpoints deployed with `TabularCloudPredictor.deploy`."
             )
         if train_data is not None:
+            if image_column is not None:
+                raise ValueError(
+                    "`image_column` is only supported by endpoints deployed with `TabularCloudPredictor.deploy`; "
+                    "foundation model endpoints do not support image features."
+                )
             train_data = self._load_data(train_data)
             if label not in train_data.columns:
                 raise ValueError(f"Label column {label!r} is not present in `train_data`.")
