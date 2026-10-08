@@ -36,14 +36,18 @@ def add_requirements_to_tar(tar: tarfile.TarFile, requirements: list[str] | None
 def upload_training_code(
     entry_point: str, sagemaker_session, s3_uri_prefix: str, requirements: list[str] | None = None
 ) -> str:
-    """Bundle the training entry point (plus an optional ``requirements.txt``) as ``sourcedir.tar.gz`` and upload it.
+    """Bundle the training entry point, ``serving_utils/`` (shared helpers) and an optional ``requirements.txt`` as
+    ``sourcedir.tar.gz`` and upload it.
 
     Returns the S3 URI of the uploaded tarball.
     """
+    from ..scripts import ScriptManager  # deferred: importing scripts pulls in the backend package
+
     with tempfile.TemporaryDirectory(prefix="ag_train_code_") as tmpdir:
         tarball_path = os.path.join(tmpdir, SOURCE_DIR_TARBALL_NAME)
         with tarfile.open(tarball_path, "w:gz") as tar:
             tar.add(entry_point, arcname=os.path.basename(entry_point))
+            tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="serving_utils")
             add_requirements_to_tar(tar, requirements, "requirements.txt")
         bucket, key_prefix = s3_path_to_bucket_prefix(s3_uri_prefix)
         return sagemaker_session.upload_data(path=tarball_path, bucket=bucket, key_prefix=key_prefix)
