@@ -267,6 +267,8 @@ class FoundationModel:
             "hyperparameters": merged_hp,
             "problem_type": self._config.problem_type,
         }
+        if self._config.optional_dependencies:
+            fm_serve_config["optional_dependencies"] = self._config.optional_dependencies
 
         # FM deploys never repack: predictor_path is either None (script-only tarball is built locally) or a
         # pre-bundled cache artifact that already contains the serve script.
@@ -1031,6 +1033,8 @@ class TabularFoundationModel(FoundationModel):
         tuning_data = train_data.iloc[:2].copy()
 
         extra_ag_args: dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
+        if self._config.optional_dependencies:
+            extra_ag_args["optional_dependencies"] = self._config.optional_dependencies
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
         kwargs["leaderboard"] = False

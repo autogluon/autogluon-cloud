@@ -6,6 +6,8 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 from pprint import pprint
 
@@ -17,6 +19,47 @@ from autogluon.common.savers import save_pd
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.tabular import TabularPredictor, TabularDataset
 from autogluon.timeseries import TimeSeriesDataFrame
+
+
+# Duplicated from serving_utils/mitra.py: the training entry point can't import serving_utils.
+# TODO: drop the index override once mitra-finetune is released on PyPI.
+_OPTIONAL_DEPENDENCIES_INDEX_URL = "https://test.pypi.org/simple/"
+
+
+def install_optional_dependencies(specs):
+    """pip-install the registry's ``optional_dependencies`` (without their dependencies) into the container."""
+    if specs:
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--no-deps",
+                "--index-url",
+                _OPTIONAL_DEPENDENCIES_INDEX_URL,
+                *specs,
+            ]
+        )
+
+
+def patch_mitra_regressor(hyperparameters):
+    """Patch AutoGluon's Mitra to run the v2 regressor, if ``mitra_finetune`` is installed and this is a Mitra regressor."""
+    from huggingface_hub import snapshot_download
+
+    source = hyperparameters.get("hf_reg_model")
+    if source is None:
+        return
+    try:
+        from mitra_finetune.patches import install_d2h_sync_patch, install_reg_ce_patches, install_use_hf_patch
+    except ImportError:
+        return
+    config_dir = source if os.path.isdir(source) else snapshot_download(repo_id=source, allow_patterns=["config.json"])
+    with open(os.path.join(config_dir, "config.json")) as f:
+        n_bins = int(json.load(f)["dim_output"])
+    install_d2h_sync_patch()
+    install_reg_ce_patches(n_bins)
+    install_use_hf_patch()
 
 
 def get_input_path(path):
@@ -163,6 +206,11 @@ if __name__ == "__main__":
 
     if predict_after_fit and predictor_type == "tabular":
         assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
+
+    install_optional_dependencies(ag_args.get("optional_dependencies"))
+    for model_hyperparameters in predictor_fit_args.get("hyperparameters", {}).values():
+        if isinstance(model_hyperparameters, dict):
+            patch_mitra_regressor(model_hyperparameters)
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 

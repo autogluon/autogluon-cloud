@@ -13,6 +13,7 @@ from io import BytesIO
 
 import pandas as pd
 from huggingface_hub import snapshot_download
+from serving_utils.mitra import install_optional_dependencies, patch_mitra_regressor
 
 from autogluon.tabular import TabularPredictor
 
@@ -32,6 +33,8 @@ def model_fn(model_dir):
                 allow_patterns=["config.json", "model.safetensors"],
             )
             break
+    install_optional_dependencies(model_config.get("optional_dependencies"))
+    patch_mitra_regressor(hyperparameters)
     return model_config
 
 
