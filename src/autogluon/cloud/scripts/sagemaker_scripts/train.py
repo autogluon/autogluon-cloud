@@ -17,6 +17,7 @@ from autogluon.common.savers import save_pd
 from autogluon.common.utils.s3_utils import s3_path_to_bucket_prefix
 from autogluon.tabular import TabularPredictor, TabularDataset
 from autogluon.timeseries import TimeSeriesDataFrame
+from serving_utils.mitra import patch_mitra_regressor
 
 
 def get_input_path(path):
@@ -163,6 +164,10 @@ if __name__ == "__main__":
 
     if predict_after_fit and predictor_type == "tabular":
         assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
+
+    for model_hyperparameters in predictor_fit_args.get("hyperparameters", {}).values():
+        if isinstance(model_hyperparameters, dict):
+            patch_mitra_regressor(model_hyperparameters)
 
     predictor = predictor_cls(**predictor_init_args).fit(training_data, tuning_data=tuning_data, **predictor_fit_args)
 

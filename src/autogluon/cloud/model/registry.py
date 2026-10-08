@@ -22,6 +22,8 @@ class FoundationModelConfig:
     fine_tunable: bool = False  # whether .fit() is supported
     # Oldest AutoGluon version that supports the model. Not checked when a custom image is used.
     min_framework_version: str = "1.5"
+    # Lines of a requirements.txt that the container pip-installs before the model is used.
+    requirements: list[str] = field(default_factory=list)
 
 
 FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
@@ -120,6 +122,19 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         predict_instance_type="ml.m5.4xlarge",
         deploy_instance_type="ml.m5.4xlarge",
         min_framework_version="1.6",
+    ),
+    "mitra-v2-regressor": FoundationModelConfig(
+        problem_type="regression",
+        ag_model_key="MITRA",
+        model_source_uri="autogluon/mitra-regressor-2",
+        model_source_hyperparameter="hf_reg_model",
+        inference_hyperparameters={"fine_tune": False},
+        predict_instance_type="ml.m5.4xlarge",
+        deploy_instance_type="ml.m5.4xlarge",
+        min_framework_version="1.6",
+        # Patches AutoGluon's Mitra to run the v2 regression (cross-entropy bin head) checkpoint.
+        # TODO: drop the index once mitra-finetune is released on PyPI.
+        requirements=["--extra-index-url https://test.pypi.org/simple/", "mitra-finetune==0.3.0"],
     ),
     # TabICL, TabDPT-Turbo and Nori download weights pinned by AutoGluon / the model library at fit time, so they
     # have no weights-source hyperparameter and don't support `cache_model_artifact`.
