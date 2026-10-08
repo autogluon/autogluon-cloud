@@ -1,35 +1,13 @@
-"""Optional-dependency install and Mitra regressor patching, shared by the tabular FM serve script."""
+"""Patch AutoGluon's Mitra for the v2 regressor checkpoint, using the optional ``mitra-finetune`` package."""
 
 import json
 import os
-import subprocess
-import sys
-
-from huggingface_hub import snapshot_download
-
-# TODO: drop the index override once mitra-finetune is released on PyPI.
-_OPTIONAL_DEPENDENCIES_INDEX_URL = "https://test.pypi.org/simple/"
-
-
-def install_optional_dependencies(specs):
-    """pip-install the registry's ``optional_dependencies`` (without their dependencies) into the container."""
-    if specs:
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--no-deps",
-                "--index-url",
-                _OPTIONAL_DEPENDENCIES_INDEX_URL,
-                *specs,
-            ]
-        )
 
 
 def patch_mitra_regressor(hyperparameters):
     """Patch AutoGluon's Mitra to run the v2 regressor, if ``mitra_finetune`` is installed and this is a Mitra regressor."""
+    from huggingface_hub import snapshot_download
+
     source = hyperparameters.get("hf_reg_model")
     if source is None:
         return

@@ -6,6 +6,7 @@ the SageMaker training and inference toolkits, which locate user code through th
 ``SAGEMAKER_SUBMIT_DIRECTORY`` environment variables (inference).
 """
 
+import io
 import json
 import os
 import shutil
@@ -21,8 +22,21 @@ from .utils import safe_unpack_archive
 SOURCE_DIR_TARBALL_NAME = "sourcedir.tar.gz"
 
 
-def upload_training_code(entry_point: str, sagemaker_session, s3_uri_prefix: str) -> str:
-    """Bundle the training entry point as ``sourcedir.tar.gz`` and upload it.
+def add_requirements_to_tar(tar: tarfile.TarFile, requirements: list[str] | None, arcname: str) -> None:
+    """Write ``requirements`` as a ``requirements.txt`` at ``arcname``, which the DLC pip-installs before running the
+    script (the training toolkit for the submit directory, the serving entrypoint for ``code/``)."""
+    if not requirements:
+        return
+    data = ("\n".join(requirements) + "\n").encode()
+    info = tarfile.TarInfo(arcname)
+    info.size = len(data)
+    tar.addfile(info, io.BytesIO(data))
+
+
+def upload_training_code(
+    entry_point: str, sagemaker_session, s3_uri_prefix: str, requirements: list[str] | None = None
+) -> str:
+    """Bundle the training entry point (plus an optional ``requirements.txt``) as ``sourcedir.tar.gz`` and upload it.
 
     Returns the S3 URI of the uploaded tarball.
     """
@@ -30,6 +44,7 @@ def upload_training_code(entry_point: str, sagemaker_session, s3_uri_prefix: str
         tarball_path = os.path.join(tmpdir, SOURCE_DIR_TARBALL_NAME)
         with tarfile.open(tarball_path, "w:gz") as tar:
             tar.add(entry_point, arcname=os.path.basename(entry_point))
+            add_requirements_to_tar(tar, requirements, "requirements.txt")
         bucket, key_prefix = s3_path_to_bucket_prefix(s3_uri_prefix)
         return sagemaker_session.upload_data(path=tarball_path, bucket=bucket, key_prefix=key_prefix)
 

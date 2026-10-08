@@ -23,6 +23,7 @@ from ..endpoint.prediction_future import JobPredictionFuture
 from ..endpoint.tabular_endpoint import TabularEndpoint
 from ..endpoint.timeseries_endpoint import TimeSeriesEndpoint
 from ..scripts.script_manager import ScriptManager
+from ..utils.ag_sagemaker import add_requirements_to_tar
 from ..utils.aws_utils import resolve_cloud_output_path
 from ..utils.constants import DEFAULT_FRAMEWORK_VERSION
 from ..utils.sagemaker_api import (
@@ -267,8 +268,6 @@ class FoundationModel:
             "hyperparameters": merged_hp,
             "problem_type": self._config.problem_type,
         }
-        if self._config.optional_dependencies:
-            fm_serve_config["optional_dependencies"] = self._config.optional_dependencies
 
         # FM deploys never repack: predictor_path is either None (script-only tarball is built locally) or a
         # pre-bundled cache artifact that already contains the serve script.
@@ -285,6 +284,7 @@ class FoundationModel:
             inference_config=inference_config,
             repack=False,
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            requirements=self._config.requirements,
             **kwargs,
         )
         assert self._backend.endpoint_name is not None
@@ -394,6 +394,7 @@ class FoundationModel:
                     tar.add(weights_dir, arcname="weights")
                     tar.add(serve_script, arcname=f"code/{serve_script.name}")
                     tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
+                    add_requirements_to_tar(tar, self._config.requirements, "code/requirements.txt")
                 logger.info(f"Uploading to {cache_key}")
                 s3.upload_file(
                     str(tarball),
@@ -703,6 +704,7 @@ class TimeSeriesFoundationModel(FoundationModel):
             backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            requirements=self._config.requirements,
             **kwargs,
         )
 
@@ -1033,8 +1035,6 @@ class TabularFoundationModel(FoundationModel):
         tuning_data = train_data.iloc[:2].copy()
 
         extra_ag_args: dict[str, Any] = {"predict_after_fit": True, "save_predictor": False}
-        if self._config.optional_dependencies:
-            extra_ag_args["optional_dependencies"] = self._config.optional_dependencies
         if predictions_path is not None:
             extra_ag_args["predictions_path"] = predictions_path
         kwargs["leaderboard"] = False
@@ -1049,6 +1049,7 @@ class TabularFoundationModel(FoundationModel):
             backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
             extra_tags=[{"Key": "autogluon-cloud-model-id", "Value": self.model_id}],
+            requirements=self._config.requirements,
             **kwargs,
         )
 

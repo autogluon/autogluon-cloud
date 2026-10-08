@@ -6,8 +6,6 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
-import sys
 import tempfile
 from pprint import pprint
 
@@ -22,25 +20,6 @@ from autogluon.timeseries import TimeSeriesDataFrame
 
 
 # Duplicated from serving_utils/mitra.py: the training entry point can't import serving_utils.
-# TODO: drop the index override once mitra-finetune is released on PyPI.
-_OPTIONAL_DEPENDENCIES_INDEX_URL = "https://test.pypi.org/simple/"
-
-
-def install_optional_dependencies(specs):
-    """pip-install the registry's ``optional_dependencies`` (without their dependencies) into the container."""
-    if specs:
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--no-deps",
-                "--index-url",
-                _OPTIONAL_DEPENDENCIES_INDEX_URL,
-                *specs,
-            ]
-        )
 
 
 def patch_mitra_regressor(hyperparameters):
@@ -207,7 +186,6 @@ if __name__ == "__main__":
     if predict_after_fit and predictor_type == "tabular":
         assert args.test_dir is not None, "`test_data` channel is required for tabular fit_predict."
 
-    install_optional_dependencies(ag_args.get("optional_dependencies"))
     for model_hyperparameters in predictor_fit_args.get("hyperparameters", {}).values():
         if isinstance(model_hyperparameters, dict):
             patch_mitra_regressor(model_hyperparameters)
