@@ -224,6 +224,7 @@ def test_cache_model_artifact_rejects_models_without_weights_source_hyperparamet
         ("tabdpt-turbo-classifier", {}),
         ("nori-30m-regressor", {"model": "nori-30m"}),
         ("mitra-v2-classifier", {"fine_tune": False, "hf_cls_model": "autogluon/mitra-classifier-2"}),
+        ("mitra-v2-regressor", {"fine_tune": False, "hf_reg_model": "autogluon/mitra-regressor-2"}),
     ],
 )
 def test_inference_hyperparameters_for_new_models(model_id, expected_hp):
