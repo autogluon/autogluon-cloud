@@ -36,6 +36,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
         backend_overrides: dict[str, dict[str, Any]] | None = None,
         extra_ag_args: dict[str, Any] | None = None,
         extra_tags: list[dict[str, str]] | None = None,
+        requirements: list[str] | None = None,
     ) -> None:
         """Fit a TimeSeriesPredictor in SageMaker.
 
@@ -68,6 +69,7 @@ class TimeSeriesSagemakerBackend(SagemakerBackend):
             backend_overrides=backend_overrides,
             extra_ag_args=extra_ag_args,
             extra_tags=extra_tags,
+            requirements=requirements,
         )
 
     def predict_real_time(
