@@ -17,6 +17,7 @@ from ..job import SageMakerBatchTransformationJob, SageMakerFitJob
 from ..scripts import ScriptManager
 from ..utils.ag_sagemaker import (
     SOURCE_DIR_TARBALL_NAME,
+    add_requirements_to_tar,
     repack_model_with_serving_code,
     script_mode_environment,
     staged_serving_code,
@@ -215,6 +216,7 @@ class SagemakerBackend(Backend):
         backend_overrides: dict[str, dict[str, Any]] | None = None,
         extra_ag_args: dict[str, Any] | None = None,
         extra_tags: list[dict[str, str]] | None = None,
+        requirements: list[str] | None = None,
     ) -> None:
         """
         Fit the predictor with SageMaker.
@@ -334,6 +336,7 @@ class SagemakerBackend(Backend):
             entry_point=entry_point,
             sagemaker_session=self.sagemaker_session,
             s3_uri_prefix=f"{self.cloud_output_path}/code/{job_name}/source",
+            requirements=requirements,
         )
 
         request: dict[str, Any] = {
@@ -455,6 +458,7 @@ class SagemakerBackend(Backend):
         inference_config: dict[str, Any] | None = None,
         repack: bool = True,
         extra_tags: list[dict[str, str]] | None = None,
+        requirements: list[str] | None = None,
     ) -> None:
         """
         Deploy a predictor as a SageMaker endpoint, which can be used to do real-time inference later.
@@ -561,7 +565,7 @@ class SagemakerBackend(Backend):
         # Decide whether the tarball already contains the entry_point script — if yes, use it as-is;
         # if no, repack the script into it.
         if predictor_path is None:
-            model_data = self._create_serve_script_tarball(entry_point, endpoint_name)
+            model_data = self._create_serve_script_tarball(entry_point, endpoint_name, requirements)
         else:
             is_default_fit_output = (
                 self._fit_job is not None
@@ -646,14 +650,17 @@ class SagemakerBackend(Backend):
             client.get_waiter("endpoint_in_service").wait(EndpointName=self.endpoint_name)
             logger.log(20, f"Endpoint `{self.endpoint_name}` is in service")
 
-    def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
-        """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/."""
+    def _create_serve_script_tarball(
+        self, serve_script_path: str, endpoint_name: str, requirements: list[str] | None = None
+    ) -> str:
+        """Create a minimal model.tar.gz containing the serve script + serving_utils/ (+ requirements.txt) under code/."""
 
         tarball_dir = tempfile.mkdtemp(prefix="ag_serve_")
         tarball_path = os.path.join(tarball_dir, "model.tar.gz")
         with tarfile.open(tarball_path, "w:gz") as tar:
             tar.add(serve_script_path, arcname=f"code/{os.path.basename(serve_script_path)}")
             tar.add(ScriptManager.SAGEMAKER_SERVING_UTILS_DIR, arcname="code/serving_utils")
+            add_requirements_to_tar(tar, requirements, "code/requirements.txt")
         s3_key = f"endpoints/{endpoint_name}/model/model.tar.gz"
         s3_path = self._upload_predictor(tarball_path, s3_key)
         return s3_path
