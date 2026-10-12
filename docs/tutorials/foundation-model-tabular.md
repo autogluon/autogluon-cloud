@@ -135,7 +135,7 @@ predictions = future.result()  # blocks until the job finishes, returns a Series
 
 ## Real-time inference
 
-Deploy the model to a SageMaker endpoint with {py:meth}`~autogluon.cloud.TabularFoundationModel.deploy`, then send requests through the returned {py:class}`~autogluon.cloud.TabularEndpoint`. Pick an `instance_type` based on cost and latency requirements (defaults to `ml.g5.xlarge`):
+Deploy the model to a SageMaker endpoint with {py:meth}`~autogluon.cloud.TabularFoundationModel.deploy`, then send requests through the returned {py:class}`~autogluon.cloud.TabularEndpoint`. Pick an `instance_type` based on cost and latency requirements (defaults to `ml.m5.4xlarge` for Mitra v1 and `ml.g5.xlarge` for the other models):
 
 ```python
 endpoint = model.deploy(instance_type="ml.m5.4xlarge")  # takes a few minutes
