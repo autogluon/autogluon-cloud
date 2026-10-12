@@ -361,6 +361,11 @@ class SagemakerBackend(Backend):
 
         self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
         self._fit_job.run(training_job_request=request, framework_version=framework_version, wait=wait)
+        if wait:
+            if ag_args.get("save_predictor", True):
+                logger.log(20, f"Model artifacts saved to {self._fit_job.get_output_path()}")
+            if ag_args.get("predict_after_fit"):
+                logger.log(20, f"Predictions saved to {ag_args['predictions_path']}")
 
     def _default_inference_framework_version(self, framework_version: str | None, uses_fit_output: bool) -> str:
         """Default to the version of the fit job when serving its model, so training and inference containers match."""
@@ -398,9 +403,7 @@ class SagemakerBackend(Backend):
             "Tags": tags,
         }
         request = deep_merge(request, overrides.get("CreateModel", {}))
-        logger.log(20, "Creating inference model...")
         self.sagemaker_session.sagemaker_client.create_model(**request)
-        logger.log(20, "Inference model created successfully")
         return request["ModelName"]
 
     def _prepare_model_data(
@@ -609,7 +612,8 @@ class SagemakerBackend(Backend):
             overrides.get("CreateEndpoint", {}),
         )
 
-        logger.log(20, f"Deploying model to the endpoint (inference_mode={inference_mode})")
+        resources = f"instance_type={instance_type}" if inference_mode == "realtime" else "serverless"
+        logger.log(20, f"Creating SageMaker endpoint `{endpoint_request['EndpointName']}` ({resources})")
         client = self.sagemaker_session.sagemaker_client
         try:
             client.create_endpoint_config(**endpoint_config_request)
@@ -626,6 +630,7 @@ class SagemakerBackend(Backend):
         self.endpoint_name = endpoint_request["EndpointName"]
         if wait:
             client.get_waiter("endpoint_in_service").wait(EndpointName=self.endpoint_name)
+            logger.log(20, f"Endpoint `{self.endpoint_name}` is in service")
 
     def _create_serve_script_tarball(self, serve_script_path: str, endpoint_name: str) -> str:
         """Create a minimal model.tar.gz containing the serve script + serving_utils/ under code/."""
@@ -1049,8 +1054,9 @@ class SagemakerBackend(Backend):
         Returns the S3 URI of the uploaded file.
         """
         local_path = self._prepare_data(data, filename, output_type=output_type)
-        logger.log(20, f"Uploading {filename} data...")
-        return self.sagemaker_session.upload_data(path=local_path, bucket=bucket, key_prefix=key_prefix)
+        s3_uri = self.sagemaker_session.upload_data(path=local_path, bucket=bucket, key_prefix=key_prefix)
+        logger.log(20, f"Uploaded {filename} to {s3_uri}")
+        return s3_uri
 
     def _find_common_path_and_replace_image_column(self, data, image_column):
         common_path = os.path.commonpath(data[image_column].tolist())
@@ -1090,7 +1096,6 @@ class SagemakerBackend(Backend):
             inputs[channel_name] = self._prepare_and_upload_data(
                 channel_data, channel_name, cloud_bucket, util_key_prefix
             )
-            logger.log(20, f"{channel_name} uploaded successfully")
 
         inputs["ag_args"] = self.sagemaker_session.upload_data(
             path=ag_args, bucket=cloud_bucket, key_prefix=util_key_prefix
@@ -1127,13 +1132,12 @@ class SagemakerBackend(Backend):
             logger.log(20, "Zipping images ...")
             zipfolder(image_zip_filename, image_dir_path)
             image_zip_filename += ".zip"
-            logger.log(20, "Uploading images ...")
             upload_image_path = self.sagemaker_session.upload_data(
                 path=image_zip_filename,
                 bucket=bucket,
                 key_prefix=key_prefix,
             )
-            logger.log(20, "Images uploaded successfully")
+            logger.log(20, f"Uploaded images to {upload_image_path}")
         return upload_image_path
 
     def _upload_predictor(self, predictor_path, key_prefix):
@@ -1144,6 +1148,7 @@ class SagemakerBackend(Backend):
                     predictor_path = self.sagemaker_session.upload_data(
                         path=predictor_path, bucket=cloud_bucket, key_prefix=key_prefix
                     )
+                    logger.log(20, f"Uploaded predictor to {predictor_path}")
                 else:
                     raise ValueError("Please provide a tarball containing the model")
             else:
@@ -1195,9 +1200,8 @@ class SagemakerBackend(Backend):
     def _upload_batch_predict_data(self, test_data, bucket, key_prefix):
         if isinstance(test_data, pd.DataFrame):
             test_data = self._prepare_data(test_data, "test", output_type="csv")
-        logger.log(20, "Uploading data...")
         test_input = self.sagemaker_session.upload_data(path=test_data, bucket=bucket, key_prefix=key_prefix + "/data")
-        logger.log(20, "Data uploaded successfully")
+        logger.log(20, f"Uploaded test data to {test_input}")
 
         return test_input
 

@@ -204,13 +204,14 @@ class SageMakerFitJob(SageMakerJob):
     ):
         """Create the training job from a ``CreateTrainingJob`` request and optionally wait for it to finish."""
         job_name = training_job_request["TrainingJobName"]
-        logger.log(20, f"Start sagemaker training job `{job_name}`")
+        logger.log(20, f"Creating SageMaker training job `{job_name}`")
         try:
             self.session.sagemaker_client.create_training_job(**training_job_request)
             self._job_name = job_name
             self._framework_version = framework_version
             if wait:
                 self._wait_until_completed()
+                logger.log(20, f"Training job `{job_name}` completed")
         except Exception as e:
             logger.error(f"Training failed. Please check sagemaker console training jobs {job_name} for details.")
             raise e
@@ -261,12 +262,12 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         """
         job_name = transform_job_request["TransformJobName"]
         try:
-            logger.log(20, "Transforming")
+            logger.log(20, f"Creating SageMaker batch transform job `{job_name}`")
             self.session.sagemaker_client.create_transform_job(**transform_job_request)
             self._job_name = job_name
             if wait:
                 self._wait_until_completed()
-            logger.log(20, "Transform done")
+                logger.log(20, f"Batch transform job `{job_name}` completed")
         except Exception as e:
             delete_quietly(self.session.sagemaker_client.delete_model, ModelName=model_name)
             raise e
