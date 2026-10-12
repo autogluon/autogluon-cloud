@@ -24,7 +24,14 @@ from ..utils.ag_sagemaker import (
     upload_training_code,
 )
 from ..utils.aws_utils import resolve_execution_role, setup_sagemaker_session
-from ..utils.constants import DEFAULT_FRAMEWORK_VERSION, DEFAULT_VOLUME_SIZE, LOCAL_MODE, LOCAL_MODE_GPU, VALID_ACCEPT
+from ..utils.constants import (
+    DEFAULT_FRAMEWORK_VERSION,
+    DEFAULT_VOLUME_SIZE,
+    LOCAL_MODE,
+    LOCAL_MODE_GPU,
+    MODEL_ARTIFACT_NAME,
+    VALID_ACCEPT,
+)
 from ..utils.deserializers import PandasDeserializer
 from ..utils.dlc_utils import infer_sagemaker_ami_version, parse_framework_version, retrieve_image_uri
 from ..utils.misc import MostRecentInsertedOrderedDict, sagemaker_timestamp, unique_name_from_base
@@ -359,13 +366,20 @@ class SagemakerBackend(Backend):
         }
         request = deep_merge(request, overrides.get("CreateTrainingJob", {}))
 
+        output_locations = {}
+        if ag_args.get("save_predictor", True):
+            model_output_path = request["OutputDataConfig"]["S3OutputPath"].rstrip("/")
+            output_locations["Predictor"] = f"{model_output_path}/{job_name}/output/{MODEL_ARTIFACT_NAME}"
+        if ag_args.get("predict_after_fit"):
+            output_locations["Predictions"] = ag_args["predictions_path"]
+
         self._fit_job = SageMakerFitJob(session=self.sagemaker_session)
-        self._fit_job.run(training_job_request=request, framework_version=framework_version, wait=wait)
-        if wait:
-            if ag_args.get("save_predictor", True):
-                logger.log(20, f"Model artifacts saved to {self._fit_job.get_output_path()}")
-            if ag_args.get("predict_after_fit"):
-                logger.log(20, f"Predictions saved to {ag_args['predictions_path']}")
+        self._fit_job.run(
+            training_job_request=request,
+            framework_version=framework_version,
+            wait=wait,
+            output_locations=output_locations,
+        )
 
     def _default_inference_framework_version(self, framework_version: str | None, uses_fit_output: bool) -> str:
         """Default to the version of the fit job when serving its model, so training and inference containers match."""

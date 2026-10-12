@@ -201,13 +201,20 @@ class SageMakerFitJob(SageMakerJob):
         training_job_request: dict[str, Any],
         framework_version: str | None,
         wait: bool,
+        output_locations: dict[str, str] | None = None,
     ):
-        """Create the training job from a ``CreateTrainingJob`` request and optionally wait for it to finish."""
+        """Create the training job from a ``CreateTrainingJob`` request and optionally wait for it to finish.
+
+        ``output_locations`` maps a description of each output (e.g. ``"Predictor"``) to the S3 location the job will
+        write it to; these are logged once the job is created.
+        """
         job_name = training_job_request["TrainingJobName"]
         logger.log(20, f"Creating SageMaker training job `{job_name}`")
         try:
             self.session.sagemaker_client.create_training_job(**training_job_request)
             self._job_name = job_name
+            for name, location in (output_locations or {}).items():
+                logger.log(20, f"{name} will be saved to {location}")
             self._framework_version = framework_version
             if wait:
                 self._wait_until_completed()
@@ -261,10 +268,14 @@ class SageMakerBatchTransformationJob(SageMakerJob):
         start. With ``wait=False`` the model is kept, since the job still needs it.
         """
         job_name = transform_job_request["TransformJobName"]
+        input_uri = transform_job_request["TransformInput"]["DataSource"]["S3DataSource"]["S3Uri"]
+        self._output_filename = input_uri.split("/")[-1] + ".out"
         try:
             logger.log(20, f"Creating SageMaker batch transform job `{job_name}`")
             self.session.sagemaker_client.create_transform_job(**transform_job_request)
             self._job_name = job_name
+            output_path = transform_job_request["TransformOutput"]["S3OutputPath"] + "/" + self._output_filename
+            logger.log(20, f"Predictions will be saved to {output_path}")
             if wait:
                 self._wait_until_completed()
                 logger.log(20, f"Batch transform job `{job_name}` completed")
@@ -272,12 +283,8 @@ class SageMakerBatchTransformationJob(SageMakerJob):
             delete_quietly(self.session.sagemaker_client.delete_model, ModelName=model_name)
             raise e
 
-        input_uri = transform_job_request["TransformInput"]["DataSource"]["S3DataSource"]["S3Uri"]
-        self._output_filename = input_uri.split("/")[-1] + ".out"
-
         if wait:
             self._delete_model(model_name)
-            logger.log(20, f"Predict results have been saved to {self.get_output_path()}")
         else:
             logger.log(
                 20,
