@@ -57,7 +57,7 @@ forecasts = cloud_predictor.fit_predict(
 By default predictions land at `{cloud_output_path}/{job_name}/predictions.csv`; pass `predictions_path` (ending in `.csv` or `.parquet`) to choose a destination. With `wait=False`, `fit_predict()` returns `None` right away; once {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.get_fit_job_status` reports `Completed`, fetch the forecast with {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.get_fit_predict_results`.
 
 ### Reattach to a training job
-If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (``Start sagemaker training job `ag-cloud-timeseries-...` ``) and also visible in the SageMaker console.
+If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TimeSeriesCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (``Creating SageMaker training job `ag-cloud-timeseries-...` ``) and also visible in the SageMaker console.
 
 ```python
 another_cloud_predictor = TimeSeriesCloudPredictor()

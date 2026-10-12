@@ -52,7 +52,7 @@ For class probabilities, use {py:meth}`~autogluon.cloud.TabularCloudPredictor.fi
 With `wait=False`, both methods return `None` right away; once {py:meth}`~autogluon.cloud.TabularCloudPredictor.get_fit_job_status` reports `Completed`, fetch the results with {py:meth}`~autogluon.cloud.TabularCloudPredictor.get_fit_predict_results` or {py:meth}`~autogluon.cloud.TabularCloudPredictor.get_fit_predict_proba_results`.
 
 ### Reattach to a training job
-If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (``Start sagemaker training job `ag-cloud-tabular-...` ``) and also visible in the SageMaker console.
+If your local connection drops, the training job keeps running on SageMaker. You can reattach with another `CloudPredictor` via {py:meth}`~autogluon.cloud.TabularCloudPredictor.attach_job` as long as you have the job name — it's logged when training starts (``Creating SageMaker training job `ag-cloud-tabular-...` ``) and also visible in the SageMaker console.
 
 ```python
 another_cloud_predictor = TabularCloudPredictor()
