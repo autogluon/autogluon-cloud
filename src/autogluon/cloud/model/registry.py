@@ -102,7 +102,6 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_hyperparameter="hf_cls_model",
         inference_hyperparameters={"fine_tune": False},
         predict_instance_type="ml.m5.4xlarge",
-        deploy_instance_type="ml.m5.4xlarge",
     ),
     "mitra-regressor": FoundationModelConfig(
         problem_type="regression",
@@ -111,7 +110,6 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_hyperparameter="hf_reg_model",
         inference_hyperparameters={"fine_tune": False},
         predict_instance_type="ml.m5.4xlarge",
-        deploy_instance_type="ml.m5.4xlarge",
     ),
     "mitra-v2-classifier": FoundationModelConfig(
         problem_type="multiclass",
@@ -120,7 +118,6 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_hyperparameter="hf_cls_model",
         inference_hyperparameters={"fine_tune": False},
         predict_instance_type="ml.m5.4xlarge",
-        deploy_instance_type="ml.m5.4xlarge",
         min_framework_version="1.6",
     ),
     "mitra-v2-regressor": FoundationModelConfig(
@@ -130,7 +127,6 @@ FOUNDATION_MODEL_REGISTRY: dict[str, FoundationModelConfig] = {
         model_source_hyperparameter="hf_reg_model",
         inference_hyperparameters={"fine_tune": False},
         predict_instance_type="ml.m5.4xlarge",
-        deploy_instance_type="ml.m5.4xlarge",
         min_framework_version="1.6",
         # Patches AutoGluon's Mitra to run the v2 regression (cross-entropy bin head) checkpoint.
         requirements=["mitra-finetune==0.3.0"],
