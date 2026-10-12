@@ -6,6 +6,7 @@ import os
 
 def patch_mitra_regressor(hyperparameters):
     """Patch AutoGluon's Mitra to run the v2 regressor, if ``mitra_finetune`` is installed and this is a Mitra regressor."""
+    # TODO(ag-1.7): remove once AutoGluon supports the v2 regressor natively.
     from huggingface_hub import snapshot_download
 
     source = hyperparameters.get("hf_reg_model")
